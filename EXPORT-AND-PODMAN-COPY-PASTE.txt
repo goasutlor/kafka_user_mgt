@@ -1,0 +1,37 @@
+# ========== Master: Export Path + Podman Run (นิ่งแล้ว — ใช้ชุดนี้หลัง load image) ==========
+# ใช้: แก้แค่ ROOT (และ OC_DIR ถ้า oc อยู่คนละที่) แล้ว copy ทั้งบล็อกไปรันทีเดียว
+# หลัง load image: podman load -i <file.tar> แล้วรันบล็อกด้านล่าง
+
+# --- 1) Export (แก้ ROOT ให้ตรงกับ path จริงที่ย้ายไป) ---
+export ROOT="${ROOT:-/opt/kafka-usermgmt}"
+export CONFIG_HOST="$ROOT/Docker/web.config.json"
+export BASE_HOST="$ROOT"
+export OC_DIR="${OC_DIR:-/usr/bin}"
+export SSL_DIR="$ROOT/Docker/ssl"
+export KUBE_DIR="$ROOT/.kube"
+export CONTAINER_NAME="${CONTAINER_NAME:-kafka-user-web}"
+export IMAGE_NAME="${IMAGE_NAME:-confluent-kafka-user-management:latest}"
+export PORT_MAP="${PORT_MAP:-443:3443}"
+
+# --- 2) Stop container เก่า (ถ้ามี) ---
+podman stop "$CONTAINER_NAME" 2>/dev/null || true
+podman rm "$CONTAINER_NAME" 2>/dev/null || true
+
+# --- 3) Start ---
+# ROOT ต้อง mount แบบเขียนได้ (ไม่มี :ro) เพื่อให้ script สร้าง .enc ใน user_output ได้
+podman run -d --name "$CONTAINER_NAME" --userns=keep-id --security-opt label=disable -p "$PORT_MAP" \
+  -v "$CONFIG_HOST:/app/config/web.config.json:ro,z" \
+  -v "$BASE_HOST:$BASE_HOST:z" \
+  -v "$OC_DIR:/host/usr/bin:ro,z" \
+  -v "$SSL_DIR/server.key:/app/ssl/server.key:ro,z" \
+  -v "$SSL_DIR/server.crt:/app/ssl/server.crt:ro,z" \
+  -v "$KUBE_DIR:/app/user2/.kube:z" \
+  -e CONFIG_PATH=/app/config/web.config.json \
+  "$IMAGE_NAME"
+
+# Optional: Auto OC Login (เอา # ออกแล้วใส่ token)
+#  -e OC_LOGIN_TOKEN="$OC_LOGIN_TOKEN" \
+#  ก่อน "$IMAGE_NAME"
+
+# เช็ค: podman ps && podman logs -f "$CONTAINER_NAME"
+# ========== จบ ==========

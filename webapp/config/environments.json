@@ -1,0 +1,34 @@
+{
+  "_comment": "One portal, multiple OCP namespaces (same cluster / same oc context). Copy and adapt for other systems.",
+  "enabled": true,
+  "defaultEnvironmentId": "dev",
+  "environments": [
+    {
+      "id": "dev",
+      "label": "Development",
+      "shortLabel": "DEV",
+      "badgeColor": "#238636",
+      "sites": [
+        { "name": "cwdc", "ocContext": "cwdc", "namespace": "esb-dev-cwdc" }
+      ]
+    },
+    {
+      "id": "sit",
+      "label": "System Integration Test",
+      "shortLabel": "SIT",
+      "badgeColor": "#9e6a03",
+      "sites": [
+        { "name": "cwdc", "ocContext": "cwdc", "namespace": "esb-sit-cwdc" }
+      ]
+    },
+    {
+      "id": "uat",
+      "label": "User Acceptance Test",
+      "shortLabel": "UAT",
+      "badgeColor": "#8250df",
+      "sites": [
+        { "name": "cwdc", "ocContext": "cwdc", "namespace": "esb-uat-cwdc" }
+      ]
+    }
+  ]
+}

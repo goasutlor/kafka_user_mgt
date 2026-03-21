@@ -1,0 +1,25 @@
+{
+  "_comment": "Single source of truth ใต้ /opt/kafka-usermgmt. path ใน config = path ที่ container เห็น (mount -v ROOT:ROOT; .kube อยู่ใต้ ROOT หรือ mount เป็น ROOT/.kube-external). ocPath /host/usr/bin = host oc.",
+  "gen": {
+    "rootDir": "/opt/kafka-usermgmt",
+    "ocPath": "/host/usr/bin",
+    "logFile": "/tmp/provisioning.log",
+    "k8sSecretName": "kafka-server-side-credentials",
+    "bootstrapServers": "kafka.apps.cwdc.esb-kafka-prod.intra.ais:443,kafka.apps.tls2.esb-kafka-prod.intra.ais:443",
+    "kubeconfigPath": "/opt/kafka-usermgmt/.kube/config-both",
+    "sites": [
+      { "name": "cwdc", "namespace": "esb-prod-cwdc", "ocContext": "cwdc" },
+      { "name": "tls2", "namespace": "esb-prod-tls2", "ocContext": "tls2" }
+    ],
+    "namespace": "esb-prod-cwdc",
+    "ocContext": "cwdc"
+  },
+  "server": {
+    "port": 3443,
+    "https": {
+      "enabled": true,
+      "keyPath": "/app/ssl/server.key",
+      "certPath": "/app/ssl/server.crt"
+    }
+  }
+}

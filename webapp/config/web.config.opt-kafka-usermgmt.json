@@ -1,0 +1,34 @@
+{
+  "_comment": "All paths under /opt/kafka-usermgmt. Copy to Docker/web.config.json and set bootstrapServers, sites, auth, ocAutoLogin as needed.",
+  "gen": {
+    "rootDir": "/opt/kafka-usermgmt",
+    "scriptPath": "/opt/kafka-usermgmt/confluent-usermanagement.sh",
+    "baseDir": "/opt/kafka-usermgmt",
+    "downloadDir": "/opt/kafka-usermgmt",
+    "kafkaBin": "/opt/kafka-usermgmt/kafka_2.13-3.6.1/bin",
+    "bootstrapServers": "host1:443,host2:443",
+    "ocPath": "/host/usr/bin",
+    "clientConfig": "/opt/kafka-usermgmt/configs/kafka-client.properties",
+    "adminConfig": "/opt/kafka-usermgmt/configs/kafka-client-master.properties",
+    "logFile": "/opt/kafka-usermgmt/provisioning.log",
+    "k8sSecretName": "kafka-server-side-credentials",
+    "kubeconfigPath": "/opt/kafka-usermgmt/.kube/config-both",
+    "sites": [
+      { "name": "cwdc", "namespace": "esb-prod-cwdc", "ocContext": "cwdc" },
+      { "name": "tls2", "namespace": "esb-prod-tls2", "ocContext": "tls2" }
+    ],
+    "namespace": "esb-prod-cwdc",
+    "ocContext": "cwdc"
+  },
+  "server": {
+    "port": 3443,
+    "https": {
+      "enabled": true,
+      "keyPath": "/app/ssl/server.key",
+      "certPath": "/app/ssl/server.crt"
+    },
+    "auth": {
+      "enabled": false
+    }
+  }
+}

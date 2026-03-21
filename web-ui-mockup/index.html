@@ -1,0 +1,3009 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Confluent Kafka User Management</title>
+  <!-- Font: use system stack to avoid ERR_NAME_NOT_RESOLVED on networks without internet -->
+  <style>
+    :root {
+      /* Confluent-style palette */
+      --header-bg: #0d1117;
+      --header-text: #ffffff;
+      --header-accent: #24b4e8;
+      --body-bg: #f6f8fa;
+      --sidebar-bg: #ffffff;
+      --content-bg: #ffffff;
+      --border: #e1e4e8;
+      --text: #24292f;
+      --text-muted: #57606a;
+      --link: #0969da;
+      --link-hover: #0550ae;
+      --active-bg: #e8f4fc;
+      --active-border: #24b4e8;
+      --code-bg: #f0f4f8;
+      --code-border: #d8dee4;
+      --btn-primary: #24b4e8;
+      --btn-primary-hover: #1a9bc9;
+      --term-highlight: #fff8e6;
+      --success: #1a7f37;
+      --danger: #cf222e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      background: var(--body-bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    /* Header — Confluent-style dark bar */
+    .header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .header-brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .header-logo {
+      width: 56px;
+      height: 56px;
+      border-radius: 6px;
+      display: block;
+      object-fit: contain;
+    }
+    .header-title {
+      font-weight: 600;
+      font-size: 15px;
+      letter-spacing: 0.02em;
+    }
+    .header-env-wrap {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      margin-left: 16px;
+      flex-wrap: wrap;
+    }
+    .header-env-wrap.visible { display: flex; }
+    .env-badge {
+      display: inline-flex;
+      align-items: center;
+      padding: 4px 12px;
+      border-radius: 6px;
+      font-weight: 700;
+      font-size: 11px;
+      letter-spacing: 0.06em;
+      color: #fff;
+      text-transform: uppercase;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.2);
+    }
+    .header-env-select {
+      font-size: 13px;
+      padding: 6px 10px;
+      border-radius: 6px;
+      border: 1px solid rgba(255,255,255,0.35);
+      background: rgba(255,255,255,0.12);
+      color: #fff;
+      max-width: 220px;
+    }
+    .header-env-select option { color: #24292f; background: #fff; }
+    .sr-only {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip: rect(0,0,0,0);
+      border: 0;
+    }
+    .header-nav {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .header-nav .nav-logout-wrap {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+    }
+    .header-nav a {
+      color: rgba(255,255,255,0.85);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .header-nav a:hover { color: #fff; background: rgba(255,255,255,0.08); }
+    .header-cta {
+      background: var(--header-accent);
+      color: #0d1117 !important;
+      font-weight: 600;
+    }
+    .header-cta:hover { background: #3bc0f0; color: #0d1117 !important; }
+
+    /* Breadcrumbs */
+    .breadcrumb-wrap {
+      background: var(--sidebar-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+    }
+    .breadcrumb {
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .breadcrumb a { color: var(--link); text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+    .breadcrumb span { color: var(--text-muted); margin: 0 6px; }
+
+    /* Layout: sidebar + main, max-width for balance on wide screens, centered */
+    .layout {
+      display: flex;
+      width: 100%;
+      max-width: 1600px;
+      margin: 0 auto;
+      min-height: calc(100vh - 57px);
+    }
+    .sidebar-left {
+      width: 260px;
+      min-width: 260px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      padding: 20px 0;
+      position: sticky;
+      top: 57px;
+      align-self: flex-start;
+      max-height: calc(100vh - 57px);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+    }
+    .sidebar-left .version {
+      font-size: 12px;
+      color: var(--text-muted);
+      padding: 0 20px 12px;
+      border-bottom: 1px solid var(--border);
+      margin-bottom: 12px;
+    }
+    .sidebar-left nav { padding: 0 12px; }
+    .sidebar-left .nav-section {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      padding: 8px 8px 4px;
+      margin-top: 12px;
+    }
+    .sidebar-left .nav-section:first-child { margin-top: 0; }
+    .sidebar-left a {
+      display: block;
+      padding: 8px 12px;
+      color: var(--text);
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+    .sidebar-left a:hover { background: var(--body-bg); color: var(--link); }
+    .sidebar-left a.active {
+      background: var(--active-bg);
+      color: var(--link);
+      font-weight: 500;
+      border-left: 3px solid var(--active-border);
+      margin-left: -3px;
+      padding-left: 15px;
+    }
+    .sidebar-left .sidebar-footer {
+      margin-top: auto;
+      padding: 16px 12px 20px;
+      border-top: 1px solid var(--border);
+    }
+    .sidebar-left .sidebar-logout-btn {
+      display: block;
+      width: 100%;
+      padding: 10px 14px;
+      text-align: center;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--danger);
+      background: rgba(207, 34, 46, 0.08);
+      border: 1px solid rgba(207, 34, 46, 0.3);
+      border-radius: 6px;
+      cursor: pointer;
+      text-decoration: none;
+    }
+    .sidebar-left .sidebar-logout-btn:hover {
+      background: rgba(207, 34, 46, 0.15);
+      border-color: var(--danger);
+      color: var(--danger);
+    }
+    .sidebar-left .sidebar-logout-btn:disabled {
+      opacity: 0.7;
+      cursor: not-allowed;
+    }
+
+    .main {
+      flex: 1;
+      min-width: 0;
+      width: 100%;
+      max-width: 100%;
+      padding: 32px 40px 48px;
+      background: var(--body-bg);
+    }
+    .main h1 {
+      font-size: 28px;
+      font-weight: 700;
+      margin: 0 0 16px;
+      color: var(--text);
+      letter-spacing: -0.02em;
+      scroll-margin-top: 80px;
+    }
+    .main .lead {
+      font-size: 16px;
+      color: var(--text-muted);
+      margin-bottom: 24px;
+      line-height: 1.6;
+    }
+    .main h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 24px 0 12px;
+      color: var(--text);
+      scroll-margin-top: 80px;
+    }
+    .section-card {
+      background: var(--content-bg);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 28px 36px 32px;
+      margin-bottom: 32px;
+      max-width: 100%;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .section-card:last-child { margin-bottom: 0; }
+    .section-card h1:first-child { margin-top: 0; }
+    .section-card h2:first-child { margin-top: 0; }
+    /* Page routing: one section visible at a time */
+    .section-card.page-card { display: none; }
+    .section-card.page-card.page-visible { display: block; }
+    .main .term {
+      background: var(--term-highlight);
+      padding: 0 4px;
+      border-radius: 3px;
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    .form-group label {
+      display: block;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      margin-bottom: 6px;
+    }
+    .form-group .hint {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    input[type="text"],
+    input[type="password"],
+    select {
+      width: 100%;
+      max-width: 400px;
+      padding: 8px 12px;
+      font-size: 14px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      font-family: inherit;
+    }
+    input:focus, select:focus {
+      outline: none;
+      border-color: var(--btn-primary);
+      box-shadow: 0 0 0 3px rgba(36, 180, 232, 0.15);
+    }
+    .form-row { display: flex; gap: 24px; flex-wrap: wrap; }
+    .form-row .form-group { flex: 1; min-width: 200px; }
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      padding: 8px 16px;
+      font-size: 14px;
+      font-weight: 500;
+      border-radius: 6px;
+      cursor: pointer;
+      border: none;
+      font-family: inherit;
+      text-decoration: none;
+    }
+    .btn-primary {
+      background: var(--btn-primary);
+      color: #fff;
+    }
+    .btn-primary:hover { background: var(--btn-primary-hover); }
+    .btn-secondary {
+      background: var(--sidebar-bg);
+      color: var(--text);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { background: var(--body-bg); }
+    .btn-group { display: flex; gap: 12px; margin-top: 24px; }
+    .code-block {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: 6px;
+      padding: 16px;
+      font-family: ui-monospace, 'SF Mono', monospace;
+      font-size: 13px;
+      line-height: 1.5;
+      overflow-x: auto;
+      margin: 16px 0;
+    }
+    .code-block .comment { color: var(--text-muted); }
+
+    pre.decrypt-pre {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 13px;
+      overflow-x: auto;
+      white-space: pre;
+    }
+
+    .sidebar-right {
+      width: 220px;
+      min-width: 220px;
+      background: var(--sidebar-bg);
+      border-left: 1px solid var(--border);
+      padding: 24px 20px;
+      position: sticky;
+      top: 57px;
+      align-self: flex-start;
+      max-height: calc(100vh - 57px);
+      overflow-y: auto;
+    }
+    .sidebar-right .title {
+      font-size: 12px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      margin-bottom: 12px;
+    }
+    .sidebar-right nav a {
+      display: block;
+      font-size: 13px;
+      color: var(--link);
+      text-decoration: none;
+      padding: 4px 0;
+      border-left: 2px solid transparent;
+      padding-left: 12px;
+      margin-left: -12px;
+    }
+    .sidebar-right nav a:hover { text-decoration: underline; }
+    .sidebar-right nav a.active {
+      border-left-color: var(--active-border);
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .footer-note {
+      font-size: 12px;
+      color: var(--text-muted);
+      margin-top: 48px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* Wizard: step-by-step Add User */
+    .wizard-wrap { max-width: 560px; }
+    .wizard-steps {
+      display: flex;
+      gap: 0;
+      margin-bottom: 28px;
+      border-bottom: 2px solid var(--border);
+      padding-bottom: 0;
+    }
+    .wizard-step {
+      flex: 1;
+      text-align: center;
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-muted);
+      padding: 10px 4px;
+      border-bottom: 3px solid transparent;
+      margin-bottom: -2px;
+      cursor: default;
+    }
+    .wizard-step.done { color: var(--success); }
+    .wizard-step.active { color: var(--link); border-bottom-color: var(--btn-primary); }
+    .wizard-panel { display: none; min-height: 200px; }
+    .wizard-panel.active { display: block; }
+    .wizard-panel h3 {
+      font-size: 18px;
+      font-weight: 600;
+      margin: 0 0 16px;
+      color: var(--text);
+    }
+    .wizard-panel .step-desc {
+      font-size: 14px;
+      color: var(--text-muted);
+      margin-bottom: 20px;
+      line-height: 1.5;
+    }
+    .wizard-actions {
+      display: flex;
+      gap: 12px;
+      margin-top: 24px;
+      align-items: center;
+    }
+    .wizard-actions .step-error {
+      color: var(--danger);
+      font-size: 13px;
+    }
+    .wizard-summary {
+      background: var(--code-bg);
+      border: 1px solid var(--code-border);
+      border-radius: 8px;
+      padding: 16px;
+      margin: 16px 0;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+    .wizard-summary strong { color: var(--text); }
+    .progress-wrap {
+      margin-top: 1rem;
+      display: none;
+    }
+    .progress-wrap.visible { display: block; }
+    .progress-wrap .progress-steps-list { min-height: 2.5em; }
+    .progress-bar-wrap {
+      height: 8px;
+      background: var(--border);
+      border-radius: 4px;
+      overflow: hidden;
+      margin-bottom: 8px;
+    }
+    .progress-bar {
+      height: 100%;
+      background: var(--btn-primary);
+      border-radius: 4px;
+      width: 0%;
+      transition: width 0.2s ease;
+    }
+    .progress-step-text {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .progress-step-text strong { color: var(--text); }
+    .progress-step-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .progress-percent { font-weight: 700; color: var(--text); font-size: 15px; min-width: 3.5em; }
+    .progress-steps-list {
+      margin-top: 10px;
+      font-size: 13px;
+      line-height: 1.8;
+      color: var(--text);
+      max-height: 240px;
+      overflow-y: auto;
+    }
+    .progress-steps-list .step-line {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .progress-steps-list .step-line .step-done {
+      color: var(--success);
+      font-weight: 600;
+      flex-shrink: 0;
+    }
+    .progress-steps-list .step-line .step-pending { color: var(--text-muted); flex-shrink: 0; }
+    .progress-steps-list .step-line .step-name { flex: 1; }
+    .result-error-wrap { margin-top: 4px; }
+    .result-error-wrap .btn-copy-error { margin-left: 8px; font-size: 12px; padding: 4px 10px; background: var(--code-bg); border: 1px solid var(--border); color: var(--link); cursor: pointer; border-radius: 6px; }
+    .result-error-wrap .btn-copy-error:hover { background: var(--border); }
+    .progress-wrap.indeterminate .progress-bar {
+      width: 36% !important;
+      animation: progress-indeterminate 1.4s ease-in-out infinite;
+    }
+    @keyframes progress-indeterminate {
+      0% { transform: translateX(0); }
+      100% { transform: translateX(280%); }
+    }
+    .topics-list, .users-list {
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+      margin-top: 8px;
+      font-size: 13px;
+      background: var(--body-bg);
+    }
+    .topics-list span, .users-list span { display: block; padding: 4px 8px; }
+    .topics-list span:hover, .users-list span:hover { background: var(--active-bg); cursor: pointer; }
+
+    /* Login screen — Enterprise */
+    #login-wrap {
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: linear-gradient(145deg, #0d1117 0%, #161b22 50%, #21262d 100%);
+      padding: 24px;
+    }
+    .login-card {
+      width: 100%;
+      max-width: 420px;
+      background: #ffffff;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 24px 48px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.05);
+    }
+    .login-card .login-logo {
+      width: 64px;
+      height: 64px;
+      margin: 0 auto 20px;
+      display: block;
+      border-radius: 12px;
+    }
+    .login-card h1 {
+      margin: 0 0 8px;
+      font-size: 22px;
+      font-weight: 600;
+      text-align: center;
+      color: var(--header-bg);
+    }
+    .login-card .lead {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin: 0 0 28px;
+      text-align: center;
+    }
+    .login-card .form-group { margin-bottom: 18px; }
+    .login-card select#login-environment {
+      width: 100%;
+      padding: 10px 12px;
+      border-radius: 8px;
+      border: 1px solid var(--border);
+      font-size: 14px;
+      background: #fff;
+    }
+    .login-card label { display: block; font-weight: 600; margin-bottom: 6px; font-size: 13px; color: var(--text); }
+    .login-card input[type="text"],
+    .login-card input[type="password"] {
+      width: 100%;
+      padding: 12px 14px;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      font-size: 14px;
+    }
+    .login-card .security-code-box {
+      background: var(--code-bg);
+      border: 1px dashed var(--active-border);
+      border-radius: 8px;
+      padding: 14px;
+      text-align: center;
+      margin-bottom: 12px;
+      font-size: 28px;
+      font-weight: 700;
+      letter-spacing: 6px;
+      color: var(--header-bg);
+    }
+    .login-card .btn { width: 100%; padding: 12px; margin-top: 8px; font-size: 15px; font-weight: 600; border-radius: 8px; }
+    .login-card .login-error { color: var(--danger); font-size: 13px; margin-top: 12px; }
+    .login-card .login-error:empty { display: none; }
+    #app-wrap { display: none; }
+    #app-wrap.authenticated { display: block; }
+    .audit-detail-table { background: var(--code-bg); border-radius: 6px; }
+    .audit-detail-table td:first-child { max-width: 140px; }
+    /* Audit Log: filter row + table styling */
+    .audit-filter-row {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+    }
+    .audit-filter-row label { font-size: 13px; font-weight: 500; color: var(--text-muted); margin-right: 4px; }
+    .audit-filter-row input { width: 11em; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; }
+    .audit-table-wrap {
+      overflow: auto;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+    }
+    .audit-table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 640px; }
+    .audit-table thead { background: var(--code-bg); position: sticky; top: 0; z-index: 1; }
+    .audit-table th { padding: 12px 16px; text-align: left; font-weight: 600; color: var(--text); border-bottom: 2px solid var(--border); }
+    .audit-table td { padding: 10px 16px; border-bottom: 1px solid var(--border); color: var(--text); }
+    .audit-table tbody tr:nth-child(even) { background: var(--body-bg); }
+    .audit-table tbody tr:hover { background: var(--active-bg); }
+    #logout-banner {
+      display: none;
+      padding: 12px 24px;
+      background: var(--active-bg);
+      border-bottom: 1px solid var(--active-border);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 500;
+      text-align: center;
+    }
+    #logout-banner.visible { display: block; }
+  </style>
+</head>
+<body>
+  <div id="login-wrap" class="login-screen">
+    <div class="login-card">
+      <img src="Confluent-Emblem.png" alt="" class="login-logo" />
+      <h1>Confluent Kafka User Management</h1>
+      <p class="lead">Sign in to manage Kafka users and ACLs.</p>
+      <form id="login-form" method="post" action="#" onsubmit="return false;">
+        <div class="form-group" id="login-environment-group" style="display:none;">
+          <label for="login-environment">Environment</label>
+          <select id="login-environment" name="environmentId" aria-label="Target environment">
+            <option value="">Loading…</option>
+          </select>
+          <p class="hint" style="margin-top:8px;font-size:12px;color:var(--text-muted);">Choose Dev, SIT, or UAT before signing in. The bar at the top shows the active environment after login.</p>
+        </div>
+        <div class="form-group" id="login-security-code-group" style="display:none;">
+          <label>Security code</label>
+          <div id="login-security-code-box" class="security-code-box">—</div>
+          <label for="login-security-code">Enter the code above</label>
+          <input type="text" id="login-security-code" name="securityCode" placeholder="e.g. 123456" autocomplete="off" maxlength="6" pattern="[0-9]*" inputmode="numeric" />
+        </div>
+        <div class="form-group" id="login-username-group">
+          <label for="login-username">Username</label>
+          <input type="text" id="login-username" name="username" placeholder="Username" autocomplete="username" />
+        </div>
+        <div class="form-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" name="password" placeholder="Password" autocomplete="current-password" />
+        </div>
+        <button type="submit" id="login-submit" class="btn btn-primary">Sign in</button>
+        <p id="login-error" class="login-error"></p>
+      </form>
+    </div>
+  </div>
+
+  <div id="app-wrap">
+  <div id="logout-banner" role="status" aria-live="polite">You have been logged out.</div>
+  <header class="header">
+    <div class="header-brand">
+      <img src="Confluent-Emblem-Header.png" alt="" class="header-logo" />
+      <span class="header-title">Confluent Kafka User Management</span>
+      <div id="header-env-wrap" class="header-env-wrap" aria-live="polite">
+        <span id="header-env-badge" class="env-badge" style="background:#238636;" title="Active environment"></span>
+        <label class="sr-only" for="header-environment">Switch environment</label>
+        <select id="header-environment" class="header-env-select"></select>
+      </div>
+    </div>
+    <nav class="header-nav">
+      <a href="#create-topic-onboard">Create Topic &amp; Onboard</a>
+      <a href="#add">Add User</a>
+      <a href="#add-acl-existing">Add ACL (existing)</a>
+      <a href="#test">Test User</a>
+      <a href="#remove">Remove User</a>
+      <a href="#change-password">Change Password</a>
+      <a href="#cleanup">Cleanup ACLs</a>
+      <a href="#audit-log">Audit Log</a>
+      <a href="#download-history">Download History</a>
+      <a href="docs.html" class="header-cta">Documentation</a>
+    </nav>
+  </header>
+
+  <div class="breadcrumb-wrap">
+    <div class="breadcrumb" id="breadcrumb-current">
+      <a href="#add">Home</a><span>›</span>
+      <span id="page-title">Add new user</span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <aside class="sidebar-left">
+      <div class="version" id="app-version">Confluent on OCP · CWDC + TLS2</div>
+      <nav>
+        <div class="nav-section">Provisioning</div>
+        <a href="#create-topic-onboard" class="nav-page" data-page="create-topic-onboard">Create Topic &amp; Onboard User</a>
+        <a href="#add" class="nav-page active" data-page="add">Add new user</a>
+        <a href="#add-acl-existing" class="nav-page" data-page="add-acl-existing">Add ACL to existing user</a>
+        <a href="#test" class="nav-page" data-page="test">Test existing user</a>
+        <div class="nav-section">User management</div>
+        <a href="#remove" class="nav-page" data-page="remove">Remove user(s) + ACL</a>
+        <a href="#change-password" class="nav-page" data-page="change-password">Change password</a>
+        <a href="#cleanup" class="nav-page" data-page="cleanup">Cleanup orphaned ACLs</a>
+        <div class="nav-section">Reports</div>
+        <a href="#audit-log" class="nav-page" data-page="audit-log">Audit Log</a>
+        <a href="#download-history" class="nav-page" data-page="download-history">Download History</a>
+      </nav>
+      <div class="sidebar-footer">
+        <button type="button" id="btn-logout" class="sidebar-logout-btn">Logout</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="section-card page-card page-visible" id="add">
+      <h1>Add new user</h1>
+      <p class="lead">
+        Step-by-step: validate each input before continuing. Same result as the <span class="term">shell script</span> (path in config) — user added to plain-users.json (CWDC + TLS2), ACL applied, pack for download.
+      </p>
+
+      <div class="wizard-wrap">
+        <div class="wizard-steps" role="tablist">
+          <div class="wizard-step active" data-step="1" id="wizard-tab-1">1. Identification</div>
+          <div class="wizard-step" data-step="2" id="wizard-tab-2">2. Username</div>
+          <div class="wizard-step" data-step="3" id="wizard-tab-3">3. Permission</div>
+          <div class="wizard-step" data-step="4" id="wizard-tab-4">4. Passphrase</div>
+          <div class="wizard-step" data-step="5" id="wizard-tab-5">5. Execute</div>
+        </div>
+
+        <div class="wizard-panel active" id="wizard-panel-1" data-step="1">
+          <h3>Identification &amp; Topic</h3>
+          <p class="step-desc">Client system name is used for the pack folder and filename. Topic must exist in the cluster.</p>
+          <div class="form-group">
+            <label for="system">Client System Name</label>
+            <input type="text" id="system" placeholder="e.g. TEST_System2" />
+            <span class="hint">Used for pack folder and filename.</span>
+          </div>
+          <div class="form-group">
+            <label for="topic">Topic name</label>
+            <input type="text" id="topic" placeholder="e.g. kotest002 or pick below" list="topic-list" />
+            <span class="hint">Must exist. Load list below or type the name.</span>
+            <button type="button" id="btn-load-topics" class="btn btn-secondary" style="margin-top:8px;">Load topic list</button>
+            <input type="text" id="filter-topics" placeholder="Filter topics… (type to filter list)" class="filter-input" style="margin-top:6px; width:100%; max-width:320px; padding:6px 10px; border:1px solid var(--border); border-radius:6px;" />
+            <div id="topics-list-box" class="topics-list" style="display:block;"></div>
+          </div>
+          <div class="wizard-actions">
+            <button type="button" id="wizard-next-1" class="btn btn-primary">Next</button>
+            <span class="step-error" id="step1-error"></span>
+          </div>
+        </div>
+
+        <div class="wizard-panel" id="wizard-panel-2" data-step="2">
+          <h3>Kafka username</h3>
+          <p class="step-desc">Must not already exist. See existing users below — do not reuse.</p>
+          <div class="form-group">
+            <label for="username">Username</label>
+            <input type="text" id="username" placeholder="e.g. ko001" />
+            <span class="hint">Letters, numbers, dots, underscores, hyphens only.</span>
+            <button type="button" id="btn-load-users" class="btn btn-secondary" style="margin-top:8px;">Load existing users</button>
+            <input type="text" id="filter-users" placeholder="Filter users… (type to filter list)" class="filter-input" style="margin-top:6px; width:100%; max-width:320px; padding:6px 10px; border:1px solid var(--border); border-radius:6px;" />
+            <div id="users-list-box" class="users-list" style="display:block;"></div>
+          </div>
+          <div class="wizard-actions">
+            <button type="button" id="wizard-back-2" class="btn btn-secondary">Back</button>
+            <button type="button" id="wizard-next-2" class="btn btn-primary">Next</button>
+            <span class="step-error" id="step2-error"></span>
+          </div>
+        </div>
+
+        <div class="wizard-panel" id="wizard-panel-3" data-step="3">
+          <h3>Permission (ACL)</h3>
+          <p class="step-desc">Topic ACL and optional Consumer Group permissions. Consumer Group <strong>Read</strong> is added by default (required for consume/produce).</p>
+
+          <div class="form-group">
+            <label for="acl">Topic ACL</label>
+            <select id="acl">
+              <option value="read">Read — consume only (Read, Describe, DescribeConfigs)</option>
+              <option value="client" selected>Client — Produce + Consume + Describe (recommended; no admin rights)</option>
+              <option value="all">All — full access (includes Create, Alter, Delete topic; admin-level)</option>
+            </select>
+            <p class="hint" style="margin-top:4px; font-size:12px;">Read = consume messages. Write = produce messages. Describe = view metadata. Client = Read + Write + Describe + DescribeConfigs.</p>
+          </div>
+
+          <div class="form-group" style="margin-top:14px; padding:10px 12px; background:var(--code-bg); border:1px solid var(--border); border-radius:6px;">
+            <strong style="display:block; margin-bottom:6px;">Consumer Group ACL</strong>
+            <p class="hint" style="font-size:12px; margin-bottom:8px;">Consumer Group <strong>Read</strong> is added automatically (required for consume and typical produce flows). Optionally add:</p>
+            <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:6px; font-size:13px; font-weight:normal;">
+              <input type="checkbox" id="acl-group-describe" />
+              <span><strong>Describe</strong> — View consumer group metadata (members, offsets). Useful for monitoring.</span>
+            </label>
+            <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; font-weight:normal;">
+              <input type="checkbox" id="acl-group-delete" />
+              <span><strong>Delete</strong> — Allow deleting the consumer group. Grant only if the client must delete groups.</span>
+            </label>
+          </div>
+
+          <details class="acl-reference" style="margin-top:12px; padding:10px 12px; background:var(--code-bg); border:1px solid var(--border); border-radius:6px; font-size:12px;">
+            <summary style="cursor:pointer; font-weight:600;">Kafka ACL reference (English)</summary>
+            <table style="margin-top:8px; width:100%; border-collapse:collapse;">
+              <thead><tr style="border-bottom:1px solid var(--border);"><th style="text-align:left; padding:4px 8px;">Resource</th><th style="text-align:left; padding:4px 8px;">Operation</th><th style="text-align:left; padding:4px 8px;">Description</th></tr></thead>
+              <tbody>
+                <tr style="border-bottom:1px solid var(--border);"><td rowspan="6" style="padding:4px 8px; vertical-align:top;">Topic</td><td style="padding:4px 8px;">Read</td><td style="padding:4px 8px;">Consume messages from the topic. Required for consumers.</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">Write</td><td style="padding:4px 8px;">Produce messages to the topic. Required for producers.</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">Describe</td><td style="padding:4px 8px;">View topic metadata (partitions, offsets). Usually needed with Read/Write.</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">DescribeConfigs</td><td style="padding:4px 8px;">View topic configuration.</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">Create, Alter, AlterConfigs, Delete</td><td style="padding:4px 8px;">Admin-level: create/alter/delete topics. Do not grant to normal clients.</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">All</td><td style="padding:4px 8px;">All of the above.</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">Consumer Group</td><td style="padding:4px 8px;">Read</td><td style="padding:4px 8px;">Join group and consume. <strong>Added by default</strong> (required for consume).</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;"></td><td style="padding:4px 8px;">Describe</td><td style="padding:4px 8px;">View group metadata (members, offsets). Optional.</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;"></td><td style="padding:4px 8px;">Delete</td><td style="padding:4px 8px;">Delete the consumer group. Optional; grant only if needed.</td></tr>
+              </tbody>
+            </table>
+          </details>
+          <div class="wizard-actions">
+            <button type="button" id="wizard-back-3" class="btn btn-secondary">Back</button>
+            <button type="button" id="wizard-next-3" class="btn btn-primary">Next</button>
+          </div>
+        </div>
+
+        <div class="wizard-panel" id="wizard-panel-4" data-step="4">
+          <h3>Passphrase for .enc file</h3>
+          <p class="step-desc">Used to encrypt the credential pack. You need this to decrypt on your machine.</p>
+          <div class="form-group">
+            <label for="passphrase">Passphrase</label>
+            <input type="password" id="passphrase" placeholder="Set passphrase" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label for="passphrase-confirm">Confirm passphrase</label>
+            <input type="password" id="passphrase-confirm" placeholder="Confirm" autocomplete="off" />
+          </div>
+          <div class="wizard-actions">
+            <button type="button" id="wizard-back-4" class="btn btn-secondary">Back</button>
+            <button type="button" id="wizard-next-4" class="btn btn-primary">Next</button>
+            <span class="step-error" id="step4-error"></span>
+          </div>
+        </div>
+
+        <div class="wizard-panel" id="wizard-panel-5" data-step="5">
+          <h3>Execute</h3>
+          <p class="step-desc">Review and create. Backend will call the shell script (path in config) with your inputs.</p>
+          <div id="wizard-summary" class="wizard-summary"></div>
+          <div class="wizard-actions">
+            <button type="button" id="wizard-back-5" class="btn btn-secondary">Back</button>
+            <button type="button" id="btn-create" class="btn btn-primary">Create user + ACL and download pack</button>
+            <button type="button" id="btn-execute-cancel" class="btn btn-secondary" title="ยกเลิกและกลับไปขั้นตอนแรก">Cancel / ยกเลิก</button>
+            <button type="button" id="btn-cancel-add" class="btn btn-secondary" style="display:none;">ยกเลิกการรัน (Cancel)</button>
+          </div>
+          <div id="progress-wrap" class="progress-wrap">
+            <div class="progress-bar-wrap"><div id="progress-bar" class="progress-bar"></div></div>
+            <div class="progress-step-row">
+              <div id="progress-step-text" class="progress-step-text">กำลังสร้าง user และ pack...</div>
+              <span id="progress-percent" class="progress-percent">0%</span>
+            </div>
+            <div id="progress-steps-list" class="progress-steps-list"></div>
+            <div id="progress-hint-add" class="hint" style="display:none; margin-top:6px; font-size:13px;">ขั้นนี้อาจใช้เวลา 30–60 วินาที (รอ broker reload / ทดสอบ auth + consume)</div>
+          </div>
+          <div id="api-result" class="form-group" style="display:none; margin-top:1rem;"></div>
+          <div id="api-download-block" class="form-group" style="display:none; margin-top:1rem;"></div>
+        </div>
+      </div>
+
+      <p class="footer-note">
+        Each step is validated before the next. Backend calls the <strong>shell script</strong> (path in <code>gen.scriptPath</code>) non-interactive on Execute.
+        The script is mounted from the host and run inside the container (not on the VM OS; not packed in the image).
+        <br><span class="hint">หลังสร้าง user สำเร็จและมีไฟล์ให้ดาวน์โหลด ฟอร์มจะถูกคืนค่าเปล่าอัตโนมัติ (พร้อมสร้าง user คนถัดไป). ก่อนกด Execute ค่าจะถูกจำไว้เมื่อเปลี่ยนขั้น. ถ้าหน้าค้างหรือเห็น error <code>getModifierState</code> ให้ลองปิด Browser extension หรือใช้โหมดไม่ระบุตัวตน (Incognito).</span>
+      </p>
+      </div>
+
+      <div class="section-card page-card" id="create-topic-onboard">
+      <h1>Create Topic &amp; Onboard User</h1>
+      <p class="lead">
+        End-to-end flow: create a new Kafka topic first, then onboard a user for that topic. Step 1 creates the topic; steps 2–6 are the same as Add user (system, username, ACL, passphrase, execute).
+      </p>
+      <div class="wizard-wrap" id="wizard-wrap-ct">
+        <div class="wizard-steps" role="tablist" id="wizard-steps-ct">
+          <div class="wizard-step active" data-step="1" id="ct-wizard-tab-1">1. Create Topic</div>
+          <div class="wizard-step" data-step="2" id="ct-wizard-tab-2">2. Identification</div>
+          <div class="wizard-step" data-step="3" id="ct-wizard-tab-3">3. Username</div>
+          <div class="wizard-step" data-step="4" id="ct-wizard-tab-4">4. Permission</div>
+          <div class="wizard-step" data-step="5" id="ct-wizard-tab-5">5. Passphrase</div>
+          <div class="wizard-step" data-step="6" id="ct-wizard-tab-6">6. Execute</div>
+        </div>
+        <div class="wizard-panel active" id="ct-wizard-panel-1" data-step="1">
+          <h3>Create new Kafka topic</h3>
+          <p class="step-desc">Topic name only. Partitions and replication factor use broker default (rack-aware placement). Topic must not already exist.</p>
+          <div class="form-group">
+            <label for="ct-topic-name">Topic name</label>
+            <input type="text" id="ct-topic-name" placeholder="e.g. my-new-topic" />
+            <span class="hint">Letters, numbers, dots, underscores, hyphens only.</span>
+          </div>
+          <div class="wizard-actions">
+            <button type="button" id="btn-ct-create-topic" class="btn btn-primary">Create topic</button>
+            <span class="step-error" id="ct-step1-error"></span>
+          </div>
+          <div id="ct-create-topic-result" class="form-group" style="display:none; margin-top:1rem;"></div>
+        </div>
+        <div class="wizard-panel" id="ct-wizard-panel-2" data-step="2">
+          <h3>Identification &amp; Topic</h3>
+          <p class="step-desc">Client system name and topic (pre-filled from step 1).</p>
+          <div class="form-group">
+            <label for="ct-system">Client System Name</label>
+            <input type="text" id="ct-system" placeholder="e.g. TEST_System2" />
+          </div>
+          <div class="form-group">
+            <label for="ct-topic">Topic name</label>
+            <input type="text" id="ct-topic" readonly placeholder="(created in step 1)" />
+          </div>
+          <div class="wizard-actions">
+            <button type="button" id="ct-wizard-back-2" class="btn btn-secondary">Back</button>
+            <button type="button" id="ct-wizard-next-2" class="btn btn-primary">Next</button>
+            <span class="step-error" id="ct-step2-error"></span>
+          </div>
+        </div>
+        <div class="wizard-panel" id="ct-wizard-panel-3" data-step="3">
+          <h3>Kafka username</h3>
+          <p class="step-desc">Must not already exist. Load existing users below — do not reuse.</p>
+          <div class="form-group">
+            <label for="ct-username">Username</label>
+            <input type="text" id="ct-username" placeholder="e.g. ko001" />
+            <button type="button" id="btn-ct-load-users" class="btn btn-secondary" style="margin-top:8px;">Load existing users</button>
+            <input type="text" id="ct-filter-users" placeholder="Filter users…" class="filter-input" style="margin-top:6px; width:100%; max-width:320px; padding:6px 10px; border:1px solid var(--border); border-radius:6px;" />
+            <div id="ct-users-list-box" class="users-list" style="display:block;"></div>
+          </div>
+          <div class="wizard-actions">
+            <button type="button" id="ct-wizard-back-3" class="btn btn-secondary">Back</button>
+            <button type="button" id="ct-wizard-next-3" class="btn btn-primary">Next</button>
+            <span class="step-error" id="ct-step3-error"></span>
+          </div>
+        </div>
+        <div class="wizard-panel" id="ct-wizard-panel-4" data-step="4">
+          <h3>Permission (ACL)</h3>
+          <p class="step-desc">Topic ACL and optional Consumer Group permissions.</p>
+          <div class="form-group">
+            <label for="ct-acl">Topic ACL</label>
+            <select id="ct-acl">
+              <option value="read">Read — consume only</option>
+              <option value="client" selected>Client — Produce + Consume + Describe (recommended)</option>
+              <option value="all">All — full access (admin-level)</option>
+            </select>
+          </div>
+          <div class="form-group" style="margin-top:14px; padding:10px 12px; background:var(--code-bg); border:1px solid var(--border); border-radius:6px;">
+            <strong style="display:block; margin-bottom:6px;">Consumer Group ACL</strong>
+            <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:6px; font-size:13px; font-weight:normal;">
+              <input type="checkbox" id="ct-acl-group-describe" />
+              <span>Describe</span>
+            </label>
+            <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; font-weight:normal;">
+              <input type="checkbox" id="ct-acl-group-delete" />
+              <span>Delete</span>
+            </label>
+          </div>
+          <div class="wizard-actions">
+            <button type="button" id="ct-wizard-back-4" class="btn btn-secondary">Back</button>
+            <button type="button" id="ct-wizard-next-4" class="btn btn-primary">Next</button>
+          </div>
+        </div>
+        <div class="wizard-panel" id="ct-wizard-panel-5" data-step="5">
+          <h3>Passphrase for .enc file</h3>
+          <p class="step-desc">Used to encrypt the credential pack.</p>
+          <div class="form-group">
+            <label for="ct-passphrase">Passphrase</label>
+            <input type="password" id="ct-passphrase" placeholder="Set passphrase" autocomplete="off" />
+          </div>
+          <div class="form-group">
+            <label for="ct-passphrase-confirm">Confirm passphrase</label>
+            <input type="password" id="ct-passphrase-confirm" placeholder="Confirm" autocomplete="off" />
+          </div>
+          <div class="wizard-actions">
+            <button type="button" id="ct-wizard-back-5" class="btn btn-secondary">Back</button>
+            <button type="button" id="ct-wizard-next-5" class="btn btn-primary">Next</button>
+            <span class="step-error" id="ct-step5-error"></span>
+          </div>
+        </div>
+        <div class="wizard-panel" id="ct-wizard-panel-6" data-step="6">
+          <h3>Execute</h3>
+          <p class="step-desc">Review and create user + ACL. Backend will call the shell script with your inputs.</p>
+          <div id="ct-wizard-summary" class="wizard-summary"></div>
+          <div class="wizard-actions">
+            <button type="button" id="ct-wizard-back-6" class="btn btn-secondary">Back</button>
+            <button type="button" id="btn-ct-execute" class="btn btn-primary">Create user + ACL and download pack</button>
+          </div>
+          <div id="ct-progress-wrap" class="progress-wrap">
+            <div class="progress-bar-wrap"><div id="ct-progress-bar" class="progress-bar"></div></div>
+            <div class="progress-step-row">
+              <div id="ct-progress-step-text" class="progress-step-text">กำลังสร้าง user และ pack...</div>
+              <span id="ct-progress-percent" class="progress-percent">0%</span>
+            </div>
+            <div id="ct-progress-steps-list" class="progress-steps-list"></div>
+          </div>
+          <div id="ct-api-result" class="form-group" style="display:none; margin-top:1rem;"></div>
+          <div id="ct-api-download-block" class="form-group" style="display:none; margin-top:1rem;"></div>
+        </div>
+      </div>
+      <p class="footer-note">Topic is created via <code>kafka-topics.sh --create</code>. User onboarding uses the same backend as Add user.</p>
+      </div>
+
+      <div class="section-card page-card" id="add-acl-existing">
+      <h1>Add ACL to existing user</h1>
+      <p class="lead">เพิ่มสิทธิ์ (topic + ACL) ให้ user ที่มีอยู่แล้ว โดยไม่สร้าง credential ใหม่. สรุปสิทธิ์เดิมก่อน แล้วยืนยันก่อน process.</p>
+      <div class="form-group">
+        <label for="acl-existing-username">Existing user</label>
+        <input type="text" id="acl-existing-username" placeholder="Username (or pick below)" />
+        <button type="button" id="btn-acl-existing-load-users" class="btn btn-secondary" style="margin-top:6px;">Load users</button>
+        <input type="text" id="filter-users-acl-existing" placeholder="Filter users…" class="filter-input" style="margin-top:6px; width:100%; max-width:320px; padding:6px 10px; border:1px solid var(--border); border-radius:6px;" />
+        <div id="users-list-box-acl-existing" class="users-list" style="display:block; margin-top:6px;"></div>
+      </div>
+      <div class="form-group">
+        <button type="button" id="btn-acl-existing-load-acls" class="btn btn-secondary">Load existing permissions (ACL summary)</button>
+        <pre id="acl-existing-summary" class="code-block" style="display:none; margin-top:8px; max-height:200px; overflow:auto; font-size:12px;"></pre>
+      </div>
+      <div class="form-group">
+        <label for="acl-existing-topic">Topic to add</label>
+        <input type="text" id="acl-existing-topic" placeholder="Topic name (or pick below)" list="acl-existing-topic-list" />
+        <button type="button" id="btn-acl-existing-load-topics" class="btn btn-secondary" style="margin-top:6px;">Load topics</button>
+        <div id="topics-list-box-acl-existing" class="topics-list" style="display:block; margin-top:6px;"></div>
+      </div>
+      <div class="form-group">
+        <label for="acl-existing-acl">Permission (ACL)</label>
+        <select id="acl-existing-acl">
+          <option value="1">Read — consume only</option>
+          <option value="2" selected>Client — Produce + Consume + Describe</option>
+          <option value="3">All — full access</option>
+        </select>
+      </div>
+      <div class="form-group" id="acl-existing-confirm-wrap" style="display:none;">
+        <p class="step-desc"><strong id="acl-existing-confirm-msg"></strong></p>
+        <p class="hint">กดยืนยันด้านล่างเพื่อเพิ่มสิทธิ์ให้ user นี้จริงๆ</p>
+        <button type="button" id="btn-acl-existing-confirm" class="btn btn-primary">Confirm and add permission</button>
+        <button type="button" id="btn-acl-existing-cancel" class="btn btn-secondary">Cancel</button>
+      </div>
+      <div class="form-group">
+        <button type="button" id="btn-acl-existing-prepare" class="btn btn-primary">Show summary and confirm</button>
+      </div>
+      <div id="acl-existing-result" class="form-group" style="display:none; margin-top:1rem;"></div>
+      </div>
+
+      <div class="section-card page-card" id="test">
+      <h1>Test existing user</h1>
+      <p class="lead">Verify auth only (no patch). Pick from lists to avoid typos.</p>
+      <div class="form-group">
+        <label for="test-username">Kafka username</label>
+        <input type="text" id="test-username" placeholder="Username (or pick below)" />
+        <button type="button" id="btn-load-users-test" class="btn btn-secondary" style="margin-top:6px;">Load users</button>
+        <input type="text" id="filter-users-test" placeholder="Filter users…" class="filter-input" style="margin-top:6px; width:100%; max-width:320px; padding:6px 10px; border:1px solid var(--border); border-radius:6px;" />
+        <div id="users-list-box-test" class="users-list" style="display:block; margin-top:6px;"></div>
+      </div>
+      <div class="form-group">
+        <label for="test-password">Password</label>
+        <input type="password" id="test-password" placeholder="Password" />
+      </div>
+      <div class="form-group">
+        <label for="test-topic">Topic (for auth test)</label>
+        <input type="text" id="test-topic" placeholder="Topic (or pick below)" />
+        <button type="button" id="btn-load-topics-test" class="btn btn-secondary" style="margin-top:6px;">Load topics</button>
+        <input type="text" id="filter-topics-test" placeholder="Filter topics…" class="filter-input" style="margin-top:6px; width:100%; max-width:320px; padding:6px 10px; border:1px solid var(--border); border-radius:6px;" />
+        <div id="topics-list-box-test" class="topics-list" style="display:block; margin-top:6px;"></div>
+      </div>
+      <button type="button" id="btn-test" class="btn btn-primary">Test auth</button>
+      <button type="button" id="btn-cancel-test" class="btn btn-secondary" style="display:none;">Cancel</button>
+      <div id="progress-wrap-test" class="progress-wrap">
+        <div class="progress-bar-wrap"><div id="progress-bar-test" class="progress-bar"></div></div>
+        <div id="progress-step-text-test" class="progress-step-text">กำลังทดสอบ auth...</div>
+      </div>
+      <div id="test-result" class="form-group" style="display:none; margin-top:1rem;"></div>
+      </div>
+
+      <div class="section-card page-card" id="remove">
+      <h1>Remove user(s) + ACL</h1>
+      <p class="lead">ลบ user และ ACL ออกจาก secret ทุก site และ Kafka. เลือกจาก list ด้านล่าง.</p>
+      <div class="form-group">
+        <label for="remove-users">Users (comma-separated)</label>
+        <input type="text" id="remove-users" placeholder="user1, user2" />
+        <span class="hint">Or load list below and click to add.</span>
+        <button type="button" id="btn-load-users-remove" class="btn btn-secondary" style="margin-top:8px;">Load existing users</button>
+        <input type="text" id="filter-users-remove" placeholder="Filter users… (type to filter list)" class="filter-input" style="margin-top:6px; width:100%; max-width:320px; padding:6px 10px; border:1px solid var(--border); border-radius:6px;" />
+        <div id="users-list-box-remove" class="users-list" style="display:block; margin-top:8px;"></div>
+      </div>
+      <button type="button" id="btn-remove" class="btn btn-primary">Remove user(s) and ACL</button>
+      <button type="button" id="btn-cancel-remove" class="btn btn-secondary" style="display:none;">Cancel</button>
+      <div id="progress-wrap-remove" class="progress-wrap">
+        <div class="progress-bar-wrap"><div id="progress-bar-remove" class="progress-bar"></div></div>
+        <div class="progress-step-row">
+          <div id="progress-step-text-remove" class="progress-step-text">กำลังลบ user และ ACL...</div>
+          <span id="progress-percent-remove" class="progress-percent">0%</span>
+        </div>
+        <div id="progress-steps-list-remove" class="progress-steps-list"></div>
+      </div>
+      <div id="remove-result" class="form-group" style="display:none; margin-top:1rem;"></div>
+      </div>
+
+      <div class="section-card page-card" id="change-password">
+      <h1>Change password</h1>
+      <p class="lead">เปลี่ยนรหัสผ่านของ user ที่มีอยู่แล้ว (patch secret ทุก site).</p>
+      <div class="form-group">
+        <label for="chg-username">Username</label>
+        <input type="text" id="chg-username" placeholder="Username (or pick below)" />
+        <button type="button" id="btn-load-users-chg" class="btn btn-secondary" style="margin-top:6px;">Load users</button>
+        <input type="text" id="filter-users-chg" placeholder="Filter users…" class="filter-input" style="margin-top:6px; width:100%; max-width:320px; padding:6px 10px; border:1px solid var(--border); border-radius:6px;" />
+        <div id="users-list-box-chg" class="users-list" style="display:block; margin-top:6px;"></div>
+      </div>
+      <div class="form-group">
+        <label for="chg-password">New password</label>
+        <input type="password" id="chg-password" placeholder="New password" />
+      </div>
+      <button type="button" id="btn-chg" class="btn btn-primary">Change password</button>
+      <button type="button" id="btn-cancel-chg" class="btn btn-secondary" style="display:none;">Cancel</button>
+      <div id="progress-wrap-chg" class="progress-wrap">
+        <div class="progress-bar-wrap"><div id="progress-bar-chg" class="progress-bar"></div></div>
+        <div class="progress-step-row">
+          <div id="progress-step-text-chg" class="progress-step-text">กำลังเปลี่ยนรหัสผ่าน...</div>
+          <span id="progress-percent-chg" class="progress-percent">0%</span>
+        </div>
+        <div id="progress-steps-list-chg" class="progress-steps-list"></div>
+      </div>
+      <div id="chg-result" class="form-group" style="display:none; margin-top:1rem;"></div>
+      </div>
+
+      <div class="section-card page-card" id="cleanup">
+      <h1>Cleanup orphaned ACLs</h1>
+      <p class="lead">ลบ ACL ที่ไม่มี user ใน secret แล้ว (user ถูกลบไปแล้วแต่ ACL ยังค้าง).</p>
+      <button type="button" id="btn-cleanup" class="btn btn-secondary">Run cleanup</button>
+      <button type="button" id="btn-cancel-cleanup" class="btn btn-secondary" style="display:none;">Cancel</button>
+      <div id="progress-wrap-cleanup" class="progress-wrap">
+        <div class="progress-bar-wrap"><div id="progress-bar-cleanup" class="progress-bar"></div></div>
+        <div class="progress-step-row">
+          <div id="progress-step-text-cleanup" class="progress-step-text">กำลัง cleanup ACL ที่ไม่ใช้...</div>
+          <span id="progress-percent-cleanup" class="progress-percent">0%</span>
+        </div>
+        <div id="progress-steps-list-cleanup" class="progress-steps-list"></div>
+      </div>
+      <div id="cleanup-result" class="form-group" style="display:none; margin-top:1rem;"></div>
+      </div>
+
+      <div class="section-card page-card" id="audit-log" lang="en">
+      <h1>Audit Log</h1>
+      <p class="lead">Activity log of user and ACL operations. Filter by date range.</p>
+      <div class="audit-filter-row">
+        <span><label for="audit-from">From</label> <input type="text" id="audit-from" placeholder="YYYY-MM-DD" lang="en" title="Date from (YYYY-MM-DD)" /></span>
+        <span><label for="audit-to">To</label> <input type="text" id="audit-to" placeholder="YYYY-MM-DD" lang="en" title="Date to (YYYY-MM-DD)" /></span>
+        <button type="button" id="audit-refresh" class="btn btn-primary">Refresh</button>
+      </div>
+      <div class="audit-table-wrap">
+        <table class="audit-table">
+          <thead><tr><th>Time (GMT+7)</th><th>Action</th><th>Who</th><th>Client System</th><th>Topic</th><th>Target</th></tr></thead>
+          <tbody id="audit-tbody"></tbody>
+        </table>
+      </div>
+      <p id="audit-empty" class="hint" style="display:none; margin-top:12px;">No entries. Run Create topic, Add user, Add ACL (existing user), Remove user, Change password, Test user, or Cleanup ACL to see entries.</p>
+      </div>
+
+      <div class="section-card page-card" id="download-history">
+      <h1>Download History</h1>
+      <p class="lead">Generated credential packs by day. Only days with activity are listed.</p>
+      <div id="download-history-content"></div>
+      <p id="download-history-empty" class="hint" style="display:none; margin-top:12px;">No download history yet. Add user to generate packs.</p>
+      </div>
+    </main>
+  </div>
+    <script>
+      var currentUser = null;
+      var authRequired = false;
+      var loginEnvironmentsEnabled = false;
+      var loginEnvironmentsList = [];
+      var loginDefaultEnvironmentId = '';
+
+      function fillEnvironmentSelect(selectEl, list, selectedId) {
+        if (!selectEl) return;
+        selectEl.innerHTML = '';
+        list.forEach(function (e) {
+          var opt = document.createElement('option');
+          opt.value = e.id;
+          opt.textContent = e.label || e.shortLabel || e.id;
+          if (e.id === selectedId) opt.selected = true;
+          selectEl.appendChild(opt);
+        });
+      }
+
+      function loadLoginEnvironments(cb) {
+        fetch('/api/environments', { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            loginEnvironmentsEnabled = j.enabled === true && Array.isArray(j.environments) && j.environments.length > 0;
+            loginEnvironmentsList = loginEnvironmentsEnabled ? j.environments : [];
+            loginDefaultEnvironmentId = j.defaultEnvironmentId || (loginEnvironmentsList[0] && loginEnvironmentsList[0].id) || '';
+            var grp = document.getElementById('login-environment-group');
+            var sel = document.getElementById('login-environment');
+            if (grp && sel) {
+              if (loginEnvironmentsEnabled) {
+                grp.style.display = 'block';
+                fillEnvironmentSelect(sel, loginEnvironmentsList, loginDefaultEnvironmentId);
+                sel.required = true;
+              } else {
+                grp.style.display = 'none';
+                sel.required = false;
+                sel.innerHTML = '<option value="">—</option>';
+              }
+            }
+            var hsel = document.getElementById('header-environment');
+            if (hsel && loginEnvironmentsList.length) {
+              fillEnvironmentSelect(hsel, loginEnvironmentsList, loginDefaultEnvironmentId);
+            }
+            if (typeof cb === 'function') cb();
+          })
+          .catch(function () {
+            loginEnvironmentsEnabled = false;
+            var grp = document.getElementById('login-environment-group');
+            var sel = document.getElementById('login-environment');
+            if (grp) grp.style.display = 'none';
+            if (sel) { sel.required = false; }
+            if (typeof cb === 'function') cb();
+          });
+      }
+
+      function applyHeaderEnvironmentFromMe(me) {
+        var wrap = document.getElementById('header-env-wrap');
+        var badge = document.getElementById('header-env-badge');
+        var hsel = document.getElementById('header-environment');
+        if (!wrap || !badge || !hsel) return;
+        if (!me || !me.environment) {
+          wrap.classList.remove('visible');
+          return;
+        }
+        var env = me.environment;
+        var label = env.shortLabel || env.label || env.id || 'ENV';
+        badge.textContent = label;
+        badge.title = (env.label || env.id) + (env.namespaces && env.namespaces.length ? ' · ' + env.namespaces.join(', ') : '');
+        if (env.badgeColor) badge.style.background = env.badgeColor;
+        if (loginEnvironmentsList.length) {
+          fillEnvironmentSelect(hsel, loginEnvironmentsList, env.id);
+          hsel.value = env.id;
+        }
+        wrap.classList.add('visible');
+      }
+
+      function postSessionEnvironment(environmentId, cb) {
+        fetch('/api/session/environment', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify({ environmentId: environmentId })
+        })
+          .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+          .then(function (x) {
+            if (x.status === 200 && x.body.ok) {
+              fetch('/api/me', { credentials: 'same-origin' })
+                .then(function (r) { return r.json(); })
+                .then(function (m) { applyHeaderEnvironmentFromMe(m); });
+            }
+            if (typeof cb === 'function') cb(x);
+          })
+          .catch(function () { if (typeof cb === 'function') cb(null); });
+      }
+      function showApp() {
+        document.getElementById('login-wrap').style.display = 'none';
+        var wrap = document.getElementById('app-wrap');
+        wrap.style.display = 'block';
+        wrap.classList.add('authenticated');
+        fetch('/api/me', { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (m) { applyHeaderEnvironmentFromMe(m); })
+          .catch(function () {});
+        var btn = document.getElementById('btn-logout');
+        if (btn) btn.style.display = 'block';
+        var banner = document.getElementById('logout-banner');
+        if (banner && (window.location.search.indexOf('logout=1') !== -1)) {
+          banner.classList.add('visible');
+          var s = window.location.search.replace(/([?&])logout=1&?|&?logout=1/g, '').replace(/^&/, '?') || '';
+          var clean = window.location.pathname + s + (window.location.hash || '');
+          history.replaceState(null, '', clean);
+          setTimeout(function () { banner.classList.remove('visible'); }, 4000);
+        } else if (banner) banner.classList.remove('visible');
+      }
+      function showLogin() {
+        document.getElementById('login-wrap').style.display = 'flex';
+        document.getElementById('app-wrap').style.display = 'none';
+        document.getElementById('app-wrap').classList.remove('authenticated');
+        var btn = document.getElementById('btn-logout');
+        if (btn) { btn.style.display = 'none'; btn.textContent = 'Logout'; btn.disabled = false; }
+        loadLoginEnvironments(function () {
+          updateLoginFormAuthMode(function (showCode) {
+            if (showCode) loadLoginChallenge();
+          });
+        });
+      }
+      function checkAuth(cb) {
+        fetch('/api/me', { credentials: 'same-origin' })
+          .then(function (r) {
+            if (r.ok) return r.json();
+            if (r.status === 401) throw new Error('Unauthorized');
+            throw new Error('Auth check failed');
+          })
+          .then(function (j) {
+            authRequired = j.authRequired === true;
+            if (j.authRequired === false || j.user) {
+              currentUser = j.user || null;
+              showApp();
+            } else {
+              showLogin();
+            }
+            if (typeof cb === 'function') cb();
+          })
+          .catch(function () {
+            showLogin();
+            if (typeof cb === 'function') cb();
+          });
+      }
+      var currentLoginChallenge = '';
+      document.getElementById('login-form').addEventListener('submit', function (e) {
+        e.preventDefault();
+        var username = document.getElementById('login-username').value.trim();
+        var password = document.getElementById('login-password').value;
+        var securityCode = (document.getElementById('login-security-code').value || '').trim();
+        var errEl = document.getElementById('login-error');
+        var btn = document.getElementById('login-submit');
+        errEl.textContent = '';
+        if (!password) { errEl.textContent = 'Please enter password.'; return; }
+        var codeGroup = document.getElementById('login-security-code-group');
+        if (codeGroup && codeGroup.style.display !== 'none' && securityCode !== currentLoginChallenge) {
+          errEl.textContent = 'Please enter the security code shown above.';
+          return;
+        }
+        btn.disabled = true;
+        var envSelect = document.getElementById('login-environment');
+        var envPayload = {};
+        if (loginEnvironmentsEnabled && envSelect && envSelect.value) {
+          envPayload.environmentId = envSelect.value;
+        }
+        fetch('/api/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'same-origin',
+          body: JSON.stringify(Object.assign({
+            username: username || undefined,
+            password: password,
+            securityCode: securityCode || undefined
+          }, envPayload))
+        })
+          .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
+          .then(function (x) {
+            if (x.status === 200 && x.body.ok) {
+              currentUser = x.body.user;
+              showApp();
+            } else {
+              errEl.textContent = x.body.error || 'Invalid username or password.';
+              btn.disabled = false;
+            }
+          })
+          .catch(function () {
+            errEl.textContent = 'Request failed. Try again.';
+            btn.disabled = false;
+          });
+      });
+      document.getElementById('btn-logout').addEventListener('click', function () {
+        var btn = document.getElementById('btn-logout');
+        if (btn) { btn.disabled = true; btn.textContent = 'Logging out...'; }
+        try { localStorage.removeItem('kafka-user-mgmt-wizard'); } catch (_) {}
+        fetch('/api/logout', { method: 'POST', credentials: 'same-origin' })
+          .finally(function () {
+            currentUser = null;
+            var url = window.location.pathname + '?logout=1' + (window.location.hash || '#add');
+            window.location.href = url;
+          });
+      });
+      function updateLoginFormAuthMode(cb) {
+        var usernameGroup = document.getElementById('login-username-group');
+        var codeGroup = document.getElementById('login-security-code-group');
+        fetch('/api/auth-mode', { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (usernameGroup) usernameGroup.style.display = (j.authRequired && j.authMode === 'password_only') ? 'none' : 'block';
+            var showCode = j.authRequired && j.authMode !== 'password_only';
+            if (codeGroup) codeGroup.style.display = showCode ? 'block' : 'none';
+            if (typeof cb === 'function') cb(showCode);
+          })
+          .catch(function () {
+            if (usernameGroup) usernameGroup.style.display = 'block';
+            if (codeGroup) codeGroup.style.display = 'block';
+            if (typeof cb === 'function') cb(true);
+          });
+      }
+      function loadLoginChallenge() {
+        var box = document.getElementById('login-security-code-box');
+        var group = document.getElementById('login-security-code-group');
+        if (!group || group.style.display === 'none') return;
+        if (box) box.textContent = '…';
+        fetch('/api/login-challenge', { credentials: 'same-origin' })
+          .then(function (r) {
+            if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || 'Request failed'); });
+            return r.json();
+          })
+          .then(function (j) {
+            currentLoginChallenge = (j.code || '').toString();
+            if (box) {
+              box.textContent = currentLoginChallenge || '—';
+              box.title = currentLoginChallenge ? '' : 'Code not received. Refresh the page.';
+            }
+          })
+          .catch(function () {
+            if (box) {
+              box.textContent = '—';
+              box.title = 'Could not load code. Refresh the page.';
+            }
+          });
+      }
+      // When URL has ?logout=1: force login screen and banner so Logout always "goes" to login (cookie may not clear in some setups).
+      if (window.location.search.indexOf('logout=1') !== -1) {
+        currentUser = null;
+        showLogin();
+        var banner = document.getElementById('logout-banner');
+        if (banner) banner.classList.add('visible');
+        var s = window.location.search.replace(/([?&])logout=1&?|&?logout=1/g, '').replace(/^&/, '?') || '';
+        var clean = window.location.pathname + s + (window.location.hash || '');
+        history.replaceState(null, '', clean);
+        setTimeout(function () { if (banner) banner.classList.remove('visible'); }, 4000);
+        loadLoginEnvironments(function () {
+          updateLoginFormAuthMode(function (showCode) {
+            if (showCode) loadLoginChallenge();
+          });
+        });
+      } else {
+        checkAuth(function () {
+          loadLoginEnvironments(function () {
+            if (document.getElementById('login-wrap').style.display === 'flex') {
+              updateLoginFormAuthMode(function (showCode) {
+                if (showCode) loadLoginChallenge();
+              });
+            }
+          });
+        });
+      }
+
+      (function () {
+        var hsel = document.getElementById('header-environment');
+        if (!hsel) return;
+        hsel.addEventListener('change', function () {
+          var v = hsel.value;
+          if (!v) return;
+          postSessionEnvironment(v);
+        });
+      })();
+      function escapeHtml(s) { var d = document.createElement('div'); if (s == null) return ''; d.textContent = s; return d.innerHTML; }
+      // fetch with timeout (AbortController). Returns { promise, abort } so caller can Cancel.
+      function fetchWithTimeout(url, options, timeoutMs) {
+        var c = new AbortController();
+        var id = setTimeout(function () { c.abort(); }, timeoutMs);
+        options = options || {};
+        options.signal = c.signal;
+        var promise = fetch(url, options).finally(function () { clearTimeout(id); });
+        return {
+          promise: promise,
+          abort: function () { clearTimeout(id); c.abort(); }
+        };
+      }
+      // Build error HTML for API responses (step, phase, exitCode, stderr) for production tracing
+      function formatApiError(j) {
+        if (!j) return 'Unknown error';
+        var msg = escapeHtml(j.error || (j.errors && j.errors.join(', ')) || 'Failed');
+        if (j.step || j.phase || (j.exitCode != null)) {
+          var parts = [];
+          if (j.step) parts.push('Step: ' + escapeHtml(j.step));
+          if (j.phase) parts.push('Phase: ' + escapeHtml(j.phase));
+          if (j.exitCode != null) parts.push('Exit code: ' + j.exitCode);
+          msg += '<br><small style="color:var(--text-muted)">' + parts.join(' · ') + '</small>';
+        }
+        if (j.stderr && j.stderr.trim())
+          msg += '<br><details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;">Details (stderr)</summary><pre style="margin-top:4px;font-size:11px;white-space:pre-wrap;max-height:200px;overflow:auto;background:var(--code-bg);padding:8px;">' + escapeHtml(j.stderr.trim().slice(-2000)) + '</pre></details>';
+        else if (j.stdout && j.stdout.trim())
+          msg += '<br><details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;">Details (stdout)</summary><pre style="margin-top:4px;font-size:11px;white-space:pre-wrap;max-height:120px;overflow:auto;background:var(--code-bg);padding:8px;">' + escapeHtml(j.stdout.trim().slice(-1000)) + '</pre></details>';
+        return msg;
+      }
+      // Plain-text error summary from API response (for log copy)
+      function getPlainErrorFromApi(j) {
+        if (!j) return 'Unknown error';
+        var msg = (j.error || (j.errors && j.errors.join(', ')) || 'Failed');
+        if (j.step) msg += ' | Step: ' + j.step;
+        if (j.phase) msg += ' | Phase: ' + j.phase;
+        if (j.exitCode != null) msg += ' | Exit code: ' + j.exitCode;
+        return msg;
+      }
+      // Build copyable error log for Day2 support (timestamp, action, error, step/phase/stderr/stdout)
+      function buildErrorLog(action, message, detail) {
+        var lines = [
+          '--- Kafka User Management - Error Log (for Day2 support) ---',
+          'Timestamp: ' + new Date().toISOString(),
+          'Action: ' + action,
+          'Error: ' + message
+        ];
+        if (detail && typeof detail === 'object' && !detail.clientError) {
+          if (detail.step) lines.push('Step: ' + detail.step);
+          if (detail.phase) lines.push('Phase: ' + detail.phase);
+          if (detail.exitCode != null) lines.push('Exit code: ' + detail.exitCode);
+          if (detail.stderr && detail.stderr.trim()) lines.push('Stderr:\n' + detail.stderr.trim().slice(-2000));
+          if (detail.stdout && detail.stdout.trim()) lines.push('Stdout:\n' + detail.stdout.trim().slice(-1000));
+        }
+        return lines.join('\n');
+      }
+      function showResult(el, ok, msg, opts) {
+        el.style.display = 'block';
+        opts = opts || {};
+        if (ok) {
+          el.innerHTML = '<span style="color:var(--success)">' + escapeHtml(msg) + '</span>';
+          return;
+        }
+        var copyPayload = null;
+        if (opts.action) {
+          var plainMsg = (opts.errorDetail && getPlainErrorFromApi(opts.errorDetail)) || opts.errorMessage || (typeof msg === 'string' ? msg.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim() : 'Error');
+          copyPayload = buildErrorLog(opts.action, plainMsg, opts.errorDetail);
+        }
+        var html = '<div class="result-error-wrap"><span style="color:var(--danger)">' + msg + '</span>';
+        if (copyPayload) {
+          try {
+            console.error('[Kafka User Mgmt]', copyPayload);
+            var b64 = btoa(unescape(encodeURIComponent(copyPayload)));
+            html += ' <button type="button" class="btn btn-copy-error" data-error-b64="' + escapeHtml(b64) + '" title="Copy full error log for support">Copy error for support</button>';
+          } catch (_) {}
+        }
+        html += '</div>';
+        el.innerHTML = html;
+      }
+      document.body.addEventListener('click', function (e) {
+        if (!e.target.classList.contains('btn-copy-error')) return;
+        var b64 = e.target.getAttribute('data-error-b64');
+        if (!b64) return;
+        try {
+          var text = decodeURIComponent(escape(atob(b64)));
+          if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(function () { e.target.textContent = 'Copied!'; setTimeout(function () { e.target.textContent = 'Copy error for support'; }, 2000); }).catch(function () { fallbackCopy(text, e.target); });
+          } else { fallbackCopy(text, e.target); }
+        } catch (err) { e.target.textContent = 'Copy failed'; }
+      });
+      function fallbackCopy(text, btn) {
+        var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.left = '-9999px'; document.body.appendChild(ta); ta.select();
+        try { document.execCommand('copy'); btn.textContent = 'Copied!'; setTimeout(function () { btn.textContent = 'Copy error for support'; }, 2000); } catch (_) { btn.textContent = 'Copy failed'; }
+        document.body.removeChild(ta);
+      }
+      var cachedTopicsList = [], cachedUsersList = [], cachedRemoveUsersList = [];
+      var cachedTestTopicsList = [], cachedTestUsersList = [], cachedChgUsersList = [];
+      var currentAbort = { add: null, test: null, remove: null, chg: null, cleanup: null };
+      (function () {
+        fetch('/api/setup/status', { credentials: 'same-origin' })
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            if (j && j.setupRequired) location.replace('/setup.html');
+          })
+          .catch(function () {});
+      })();
+      (function () {
+        fetch('/api/version').then(function(r){ return r.json(); }).then(function(j){
+          if (j.ok && j.version) {
+            var el = document.getElementById('app-version');
+            if (el) el.textContent = (el.textContent.trim() + ' · v' + j.version);
+          }
+        }).catch(function(){});
+      })();
+      (function () {
+        var pageTitles = { add: 'Add new user', 'create-topic-onboard': 'Create Topic & Onboard User', 'add-acl-existing': 'Add ACL to existing user', test: 'Test existing user', remove: 'Remove user(s) + ACL', 'change-password': 'Change password', cleanup: 'Cleanup orphaned ACLs', 'audit-log': 'Audit Log', 'download-history': 'Download History' };
+        function showPage(id) {
+          document.querySelectorAll('.section-card.page-card').forEach(function (el) {
+            el.classList.toggle('page-visible', el.id === id);
+          });
+          document.querySelectorAll('.nav-page').forEach(function (a) {
+            var p = a.getAttribute('data-page') || (a.getAttribute('href') || '#').slice(1);
+            a.classList.toggle('active', p === id);
+          });
+          var titleEl = document.getElementById('page-title');
+          if (titleEl) titleEl.textContent = pageTitles[id] || id;
+          if (id === 'audit-log') loadAuditLog();
+          if (id === 'download-history') loadDownloadHistory();
+          if (id === 'add-acl-existing') {
+            try {
+              var prefill = sessionStorage.getItem('addAclExistingPrefill');
+              if (prefill) {
+                var data = JSON.parse(prefill);
+                sessionStorage.removeItem('addAclExistingPrefill');
+                if (data.username && document.getElementById('acl-existing-username')) document.getElementById('acl-existing-username').value = data.username;
+                if (data.topic && document.getElementById('acl-existing-topic')) document.getElementById('acl-existing-topic').value = data.topic;
+              }
+            } catch (_) {}
+          }
+        }
+        function applyRoute() {
+          var hash = (location.hash || '#add').trim().toLowerCase();
+          var page = hash.slice(1) || 'add';
+          if (!pageTitles[page]) page = 'add';
+          showPage(page);
+        }
+        window.addEventListener('hashchange', applyRoute);
+        applyRoute();
+        function loadAuditLog() {
+          var from = (document.getElementById('audit-from').value || '').trim();
+          var to = (document.getElementById('audit-to').value || '').trim();
+          var q = (from || to) ? '?' + [from && ('from=' + encodeURIComponent(from)), to && ('to=' + encodeURIComponent(to))].filter(Boolean).join('&') : '';
+          fetch('/api/audit-log' + q, { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+              var tbody = document.getElementById('audit-tbody');
+              var empty = document.getElementById('audit-empty');
+              if (!j.ok || !j.entries || !j.entries.length) {
+                tbody.innerHTML = '';
+                if (empty) empty.style.display = 'block';
+                return;
+              }
+              if (empty) empty.style.display = 'none';
+              var actionLabels = { 'add-user': 'Add user', 'create-topic': 'Create topic', 'remove-user': 'Remove user', 'change-password': 'Change password', 'test-user': 'Test user', 'cleanup-acl': 'Cleanup ACL', 'add-acl-existing': 'Add ACL (existing user)' };
+              var prevKey = '';
+              tbody.innerHTML = j.entries.map(function (e) {
+                var key = (e.time || '') + '|' + (e.action || '') + '|' + (e.who || '');
+                var showTime = key !== prevKey;
+                prevKey = key;
+                var time = showTime && e.time ? escapeHtml(e.time.replace('T', ' ').slice(0, 19)) : '—';
+                var action = escapeHtml(actionLabels[e.action] || e.action || '—');
+                var who = escapeHtml(e.who || '—');
+                var system = escapeHtml(e.system || '—');
+                var topic = escapeHtml(e.topic || '—');
+                var target = escapeHtml(e.target || '—');
+                return '<tr><td style="padding:10px 12px; border-top:1px solid var(--border);">' + time + '</td><td style="padding:10px 12px; border-top:1px solid var(--border);">' + action + '</td><td style="padding:10px 12px; border-top:1px solid var(--border);">' + who + '</td><td style="padding:10px 12px; border-top:1px solid var(--border);">' + system + '</td><td style="padding:10px 12px; border-top:1px solid var(--border);">' + topic + '</td><td style="padding:10px 12px; border-top:1px solid var(--border);">' + target + '</td></tr>';
+              }).join('');
+            })
+            .catch(function () {
+              document.getElementById('audit-tbody').innerHTML = '<tr><td colspan="6" style="padding:12px; color:var(--danger);">Failed to load audit log.</td></tr>';
+              document.getElementById('audit-empty').style.display = 'none';
+            });
+        }
+        function loadDownloadHistory() {
+          fetch('/api/download-history', { credentials: 'same-origin' })
+            .then(function (r) { return r.json(); })
+            .then(function (j) {
+              var wrap = document.getElementById('download-history-content');
+              var empty = document.getElementById('download-history-empty');
+              if (!j.ok || !j.days || !j.days.length) {
+                wrap.innerHTML = '';
+                if (empty) empty.style.display = 'block';
+                return;
+              }
+              if (empty) empty.style.display = 'none';
+              var html = '';
+              j.days.forEach(function (day) {
+                var items = j.byDay[day] || [];
+                var dayLabel = day;
+                if (day.length >= 10) {
+                  var d = new Date(day + 'T12:00:00');
+                  dayLabel = d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+                }
+                html += '<div class="download-day-block" style="margin-bottom:24px; border:1px solid var(--border); border-radius:8px; overflow:hidden;">';
+                html += '<div style="background:var(--code-bg); padding:10px 14px; font-weight:600; font-size:14px;">' + escapeHtml(dayLabel) + '</div>';
+                html += '<table style="width:100%; border-collapse:collapse; font-size:13px;"><tbody>';
+                items.forEach(function (it) {
+                  var time = (it.datetime || '').replace('T', ' ').slice(11, 19);
+                  var filename = (it.filename || 'pack.enc').toString();
+                  var link = it.downloadPath ? '<button type="button" class="btn btn-primary btn-download-history-dl" style="padding:4px 10px; font-size:12px;" data-path="' + escapeHtml(it.downloadPath) + '" data-filename="' + escapeHtml(filename) + '">Download</button>' : '';
+                  html += '<tr style="border-top:1px solid var(--border);"><td style="padding:10px 14px; vertical-align:middle;">' + escapeHtml(it.packName || it.filename || '—') + '</td><td style="padding:10px 14px; width:140px; white-space:nowrap; vertical-align:middle; color:var(--text-muted); font-size:12px;">' + escapeHtml(time) + (it.user ? ' · ' + escapeHtml(it.user) : '') + '</td><td style="padding:10px 14px; width:100px; text-align:right; vertical-align:middle;">' + link + '</td></tr>';
+                });
+                html += '</tbody></table></div>';
+              });
+              wrap.innerHTML = html;
+            })
+            .catch(function () {
+              document.getElementById('download-history-content').innerHTML = '<p style="color:var(--danger);">Failed to load download history.</p>';
+              document.getElementById('download-history-empty').style.display = 'none';
+            });
+        }
+        document.getElementById('audit-refresh').addEventListener('click', loadAuditLog);
+        document.getElementById('download-history-content').addEventListener('click', function (e) {
+          var btn = e.target && e.target.closest && e.target.closest('.btn-download-history-dl');
+          if (!btn) return;
+          var path = btn.getAttribute('data-path');
+          var filename = btn.getAttribute('data-filename') || 'pack.enc';
+          if (!path) return;
+          btn.disabled = true;
+          var origText = btn.textContent;
+          btn.textContent = 'กำลังโหลด...';
+          fetch(path, { credentials: 'same-origin' })
+            .then(function (r) { if (!r.ok) throw new Error(r.status + ' ' + r.statusText); return r.blob(); })
+            .then(function (blob) {
+              var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+              URL.revokeObjectURL(a.href);
+              btn.textContent = 'Download';
+            })
+            .catch(function (err) {
+              btn.textContent = origText;
+              alert('ดาวน์โหลดไม่สำเร็จ: ' + (err.message || err));
+            })
+            .finally(function () { btn.disabled = false; });
+        });
+      })();
+      (function () {
+        var currentStep = 1;
+        var totalSteps = 5;
+
+        var WIZARD_STORAGE_KEY = 'kafka-user-mgmt-wizard';
+        function saveWizardState() {
+          try {
+            var el = document.getElementById('system');
+            var desc = document.getElementById('acl-group-describe');
+            var del = document.getElementById('acl-group-delete');
+            var data = {
+              system: el ? el.value.trim() : '',
+              topic: (document.getElementById('topic') || {}).value.trim() || '',
+              username: (document.getElementById('username') || {}).value.trim() || '',
+              acl: (document.getElementById('acl') || {}).value || 'client',
+              aclGroupDescribe: desc ? desc.checked : false,
+              aclGroupDelete: del ? del.checked : false,
+              step: currentStep
+            };
+            localStorage.setItem(WIZARD_STORAGE_KEY, JSON.stringify(data));
+          } catch (_) {}
+        }
+        function restoreWizardState() {
+          try {
+            var raw = localStorage.getItem(WIZARD_STORAGE_KEY);
+            if (!raw) return;
+            var s = JSON.parse(raw);
+            var sys = document.getElementById('system');
+            if (sys && s.system) sys.value = s.system;
+            var top = document.getElementById('topic');
+            if (top && s.topic) top.value = s.topic;
+            var user = document.getElementById('username');
+            if (user && s.username) user.value = s.username;
+            var aclEl = document.getElementById('acl');
+            if (aclEl && s.acl) aclEl.value = s.acl;
+            var desc = document.getElementById('acl-group-describe');
+            var del = document.getElementById('acl-group-delete');
+            if (desc) desc.checked = !!s.aclGroupDescribe;
+            if (del) del.checked = !!s.aclGroupDelete;
+            var step = parseInt(s.step, 10);
+            if (step >= 1 && step <= 5) { currentStep = step; showStep(step); if (step === 5) renderSummary(); }
+          } catch (_) {}
+        }
+        function resetWizardAfterSuccess() {
+          try {
+            localStorage.removeItem(WIZARD_STORAGE_KEY);
+            var sys = document.getElementById('system'); if (sys) sys.value = '';
+            var top = document.getElementById('topic'); if (top) top.value = '';
+            var user = document.getElementById('username'); if (user) user.value = '';
+            var aclEl = document.getElementById('acl'); if (aclEl) aclEl.value = 'client';
+            var desc = document.getElementById('acl-group-describe'); if (desc) desc.checked = false;
+            var del = document.getElementById('acl-group-delete'); if (del) del.checked = false;
+            document.getElementById('passphrase').value = '';
+            document.getElementById('passphrase-confirm').value = '';
+            document.getElementById('filter-topics').value = '';
+            document.getElementById('filter-users').value = '';
+            document.getElementById('wizard-summary').innerHTML = '';
+            currentStep = 1;
+            showStep(1);
+          } catch (_) {}
+        }
+        window.resetWizardAfterSuccess = resetWizardAfterSuccess;
+        function showStep(step) {
+          currentStep = step;
+          document.querySelectorAll('.wizard-step').forEach(function (el) {
+            var n = parseInt(el.getAttribute('data-step'), 10);
+            el.classList.remove('active', 'done');
+            if (n === step) el.classList.add('active');
+            else if (n < step) el.classList.add('done');
+          });
+          document.querySelectorAll('.wizard-panel').forEach(function (el) {
+            el.classList.toggle('active', parseInt(el.getAttribute('data-step'), 10) === step);
+          });
+          saveWizardState();
+        }
+
+        function setStepError(stepId, msg) {
+          var el = document.getElementById(stepId);
+          if (el) { el.textContent = msg || ''; el.style.visibility = msg ? 'visible' : 'hidden'; }
+        }
+
+        document.querySelectorAll('[id^="wizard-next-"]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var step = parseInt(btn.id.replace('wizard-next-', ''), 10);
+            var errId = 'step' + step + '-error';
+            setStepError(errId, '');
+
+            if (step === 1) {
+              var system = document.getElementById('system').value.trim();
+              var topic = document.getElementById('topic').value.trim();
+              if (!system) { setStepError(errId, 'Please enter client system name.'); return; }
+              if (!topic) { setStepError(errId, 'Please enter topic name.'); return; }
+              if (cachedTopicsList.length > 0 && cachedTopicsList.indexOf(topic) === -1) {
+                setStepError(errId, 'Topic not in list. Load topic list and pick from the list to avoid typos.'); return;
+              }
+            } else if (step === 2) {
+              var username = document.getElementById('username').value.trim();
+              if (!username) { setStepError(errId, 'Please enter username.'); return; }
+              if (!/^[a-zA-Z0-9._-]+$/.test(username)) { setStepError(errId, 'Username: only letters, numbers, dots, underscores, hyphens.'); return; }
+              if (cachedUsersList.length > 0 && cachedUsersList.indexOf(username) !== -1) {
+                var topicVal = (document.getElementById('topic') && document.getElementById('topic').value || '').trim();
+                try { sessionStorage.setItem('addAclExistingPrefill', JSON.stringify({ topic: topicVal, username: username })); } catch (_) {}
+                var errEl = document.getElementById(errId);
+                if (errEl) { errEl.innerHTML = 'Username already exists. Pick a different one, or <a href="#add-acl-existing">add this topic to this user</a>.'; errEl.style.visibility = 'visible'; }
+                return;
+              }
+            } else if (step === 4) {
+              var passphrase = (document.getElementById('passphrase').value || '').trim();
+              var passphraseConfirm = (document.getElementById('passphrase-confirm').value || '').trim();
+              if (!passphrase) { setStepError(errId, 'Please set a passphrase.'); return; }
+              if (passphrase !== passphraseConfirm) { setStepError(errId, 'Passphrase and confirm do not match.'); return; }
+            }
+            showStep(step + 1);
+            if (step + 1 === 5) renderSummary();
+          });
+        });
+
+        document.querySelectorAll('[id^="wizard-back-"]').forEach(function (btn) {
+          btn.addEventListener('click', function () {
+            var step = parseInt(btn.id.replace('wizard-back-', ''), 10);
+            showStep(step - 1);
+          });
+        });
+        var btnExecuteCancel = document.getElementById('btn-execute-cancel');
+        if (btnExecuteCancel) btnExecuteCancel.addEventListener('click', function () { showStep(1); });
+        ['system', 'topic', 'username', 'acl'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.addEventListener('input', saveWizardState);
+        });
+        ['acl-group-describe', 'acl-group-delete'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.addEventListener('change', function () { saveWizardState(); if (currentStep === 5) renderSummary(); });
+        });
+
+        function renderSummary() {
+          var system = document.getElementById('system').value.trim();
+          var topic = document.getElementById('topic').value.trim();
+          var username = document.getElementById('username').value.trim();
+          var acl = document.getElementById('acl').value;
+          var hasReadWrite = (acl === 'client' || acl === 'all');
+          var hasDescribe = true;
+          var hasAlterDelete = (acl === 'all');
+          var tick = '<span style="color:#1a7f37; font-weight:bold;">✓</span>';
+          var cross = '<span style="color:#cf222e; font-weight:bold;">✗</span>';
+          var rwCell = hasReadWrite ? tick : cross;
+          var descCell = hasDescribe ? tick : cross;
+          var alterCell = hasAlterDelete ? tick : cross;
+          var groupExtra = [];
+          if (document.getElementById('acl-group-describe') && document.getElementById('acl-group-describe').checked) groupExtra.push('Describe');
+          if (document.getElementById('acl-group-delete') && document.getElementById('acl-group-delete').checked) groupExtra.push('Delete');
+          var groupText = 'Read (default)'; if (groupExtra.length) groupText += ', ' + groupExtra.join(', ');
+          var html = '<div class="wizard-summary-block" style="margin-bottom:12px;"><strong style="color:var(--text-muted); font-size:12px; text-transform:uppercase;">Identification</strong><br>';
+          html += '<strong>Client System:</strong> ' + escapeHtml(system) + ' &nbsp;|&nbsp; <strong>Topic:</strong> ' + escapeHtml(topic) + ' &nbsp;|&nbsp; <strong>Username:</strong> ' + escapeHtml(username) + '</div>';
+          html += '<div class="wizard-summary-block" style="margin-bottom:12px;"><strong style="color:var(--text-muted); font-size:12px;">สรุปภาพรวมในรูปแบบตาราง</strong><br>';
+          html += '<table class="acl-summary-table" style="margin-top:8px; width:100%; max-width:560px; border-collapse:collapse; font-size:13px;">';
+          html += '<thead><tr style="border-bottom:2px solid var(--border); background:var(--code-bg);">';
+          html += '<th style="text-align:left; padding:8px 10px;">User</th>';
+          html += '<th style="text-align:center; padding:8px 10px;">Read/Write (รับ-ส่ง)</th>';
+          html += '<th style="text-align:center; padding:8px 10px;">Describe (ดูโครงสร้าง)</th>';
+          html += '<th style="text-align:center; padding:8px 10px;">Alter/Delete (แก้ไข/ลบ)</th></tr></thead>';
+          html += '<tbody><tr style="border-bottom:1px solid var(--border);">';
+          html += '<td style="padding:8px 10px;">' + escapeHtml(username || '—') + '</td>';
+          html += '<td style="text-align:center; padding:8px 10px;">' + rwCell + '</td>';
+          html += '<td style="text-align:center; padding:8px 10px;">' + descCell + '</td>';
+          html += '<td style="text-align:center; padding:8px 10px;">' + alterCell + '</td></tr></tbody></table>';
+          html += '<p class="hint" style="margin-top:6px; font-size:12px;"><strong>Consumer group:</strong> ' + escapeHtml(groupText) + '</p>';
+          html += '<p class="hint" style="margin:8px 0 0; font-size:12px;">Click "Create user + ACL and download pack" to apply.</p>';
+          html += '</div>';
+          document.getElementById('wizard-summary').innerHTML = html;
+        }
+        function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+        function filterMatches(item, q) {
+          if (!q || !q.trim()) return true;
+          return item.toLowerCase().indexOf(q.trim().toLowerCase()) !== -1;
+        }
+
+        function renderTopicsFiltered() {
+          var box = document.getElementById('topics-list-box');
+          var q = (document.getElementById('filter-topics') || {}).value || '';
+          if (!cachedTopicsList.length) return;
+          var list = cachedTopicsList.filter(function (t) { return filterMatches(t, q); });
+          if (list.length === 0) {
+            box.innerHTML = '<span class="hint">ไม่มี topic ที่ตรงกับ filter</span>';
+            return;
+          }
+          box.innerHTML = list.map(function (t) { return '<span data-topic="' + escapeHtml(t) + '">' + escapeHtml(t) + '</span>'; }).join('');
+          box.querySelectorAll('span').forEach(function (span) {
+            span.addEventListener('click', function () {
+              document.getElementById('topic').value = this.getAttribute('data-topic');
+            });
+          });
+        }
+
+        function renderUsersFiltered() {
+          var box = document.getElementById('users-list-box');
+          var q = (document.getElementById('filter-users') || {}).value || '';
+          if (!cachedUsersList.length) return;
+          var list = cachedUsersList.filter(function (u) { return filterMatches(u, q); });
+          if (list.length === 0) {
+            box.innerHTML = '<span class="hint">ไม่มี user ที่ตรงกับ filter</span>';
+            return;
+          }
+          box.innerHTML = '<span class="hint" style="display:block;padding:8px;">Existing users (do not reuse):</span>' +
+            list.map(function (u) { return '<span>' + escapeHtml(u) + '</span>'; }).join('');
+        }
+
+        function renderUsersFilteredRemove() {
+          var box = document.getElementById('users-list-box-remove');
+          if (!box) return;
+          var q = (document.getElementById('filter-users-remove') || {}).value || '';
+          if (!cachedRemoveUsersList.length) return;
+          var list = cachedRemoveUsersList.filter(function (u) { return filterMatches(u, q); });
+          if (list.length === 0) {
+            box.innerHTML = '<span class="hint">ไม่มี user ที่ตรงกับ filter</span>';
+            return;
+          }
+          box.innerHTML = '<span class="hint" style="display:block;padding:8px;">Click to add to list above:</span>' +
+            list.map(function (u) { return '<span data-username="' + escapeHtml(u) + '">' + escapeHtml(u) + '</span>'; }).join('');
+          box.querySelectorAll('span[data-username]').forEach(function (span) {
+            span.addEventListener('click', function () {
+              var inp = document.getElementById('remove-users');
+              var uname = this.getAttribute('data-username');
+              var cur = (inp.value || '').trim();
+              var parts = cur ? cur.split(/\s*,\s*/) : [];
+              if (parts.indexOf(uname) === -1) {
+                parts.push(uname);
+                inp.value = parts.join(', ');
+              }
+            });
+          });
+        }
+
+        async function loadUsersIntoBoxRemove() {
+          var box = document.getElementById('users-list-box-remove');
+          var btn = document.getElementById('btn-load-users-remove');
+          if (btn) btn.disabled = true;
+          box.innerHTML = 'Loading...';
+          cachedRemoveUsersList = [];
+          try {
+            var res = await fetch('/api/users');
+            var text = await res.text();
+            var j;
+            try { j = JSON.parse(text); } catch (parseErr) {
+              box.innerHTML = '<span style="color:var(--danger)">ดึง user ไม่ได้: response ไม่ใช่ JSON.</span>';
+              if (btn) btn.disabled = false;
+              return;
+            }
+            if (j.ok && j.users && j.users.length) {
+              cachedRemoveUsersList = j.users;
+              renderUsersFilteredRemove();
+            } else {
+              var msg = (j && (j.hint || j.detail)) ? (j.hint || '') + ' ' + (j.detail || '') : 'ไม่มี users หรือ API ไม่พร้อม';
+              box.innerHTML = '<span class="hint">' + escapeHtml(msg || 'ไม่มี users') + '</span>';
+            }
+          } catch (e) {
+            box.innerHTML = '<span style="color:var(--danger)">Request failed: ' + escapeHtml(e.message) + '</span>';
+          }
+          if (btn) btn.disabled = false;
+        }
+
+        function renderTopicsFilteredTest() {
+          var box = document.getElementById('topics-list-box-test');
+          if (!box) return;
+          var q = (document.getElementById('filter-topics-test') || {}).value || '';
+          if (!cachedTestTopicsList.length) return;
+          var list = cachedTestTopicsList.filter(function (t) { return filterMatches(t, q); });
+          if (list.length === 0) { box.innerHTML = '<span class="hint">ไม่มี topic ที่ตรงกับ filter</span>'; return; }
+          box.innerHTML = list.map(function (t) { return '<span data-topic="' + escapeHtml(t) + '">' + escapeHtml(t) + '</span>'; }).join('');
+          box.querySelectorAll('span[data-topic]').forEach(function (span) {
+            span.addEventListener('click', function () { document.getElementById('test-topic').value = this.getAttribute('data-topic'); });
+          });
+        }
+        function renderUsersFilteredTest() {
+          var box = document.getElementById('users-list-box-test');
+          if (!box) return;
+          var q = (document.getElementById('filter-users-test') || {}).value || '';
+          if (!cachedTestUsersList.length) return;
+          var list = cachedTestUsersList.filter(function (u) { return filterMatches(u, q); });
+          if (list.length === 0) { box.innerHTML = '<span class="hint">ไม่มี user ที่ตรงกับ filter</span>'; return; }
+          box.innerHTML = list.map(function (u) { return '<span data-username="' + escapeHtml(u) + '">' + escapeHtml(u) + '</span>'; }).join('');
+          box.querySelectorAll('span[data-username]').forEach(function (span) {
+            span.addEventListener('click', function () { document.getElementById('test-username').value = this.getAttribute('data-username'); });
+          });
+        }
+        async function loadTopicsIntoBoxTest() {
+          var box = document.getElementById('topics-list-box-test');
+          var btn = document.getElementById('btn-load-topics-test');
+          if (btn) btn.disabled = true;
+          box.innerHTML = 'Loading...';
+          cachedTestTopicsList = [];
+          try {
+            var res = await fetch('/api/topics');
+            var j = await res.json();
+            if (j.ok && j.topics && j.topics.length) { cachedTestTopicsList = j.topics; renderTopicsFilteredTest(); }
+            else { box.innerHTML = '<span class="hint">' + escapeHtml((j && (j.hint || j.detail)) || 'ไม่มี topics') + '</span>'; }
+          } catch (e) { box.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(e.message) + '</span>'; }
+          if (btn) btn.disabled = false;
+        }
+        async function loadUsersIntoBoxTest() {
+          var box = document.getElementById('users-list-box-test');
+          var btn = document.getElementById('btn-load-users-test');
+          if (btn) btn.disabled = true;
+          box.innerHTML = 'Loading...';
+          cachedTestUsersList = [];
+          try {
+            var res = await fetch('/api/users');
+            var text = await res.text();
+            var j;
+            try { j = JSON.parse(text); } catch (_) { box.innerHTML = '<span style="color:var(--danger)">Invalid response.</span>'; if (btn) btn.disabled = false; return; }
+            if (j.ok && j.users && j.users.length) { cachedTestUsersList = j.users; renderUsersFilteredTest(); }
+            else { box.innerHTML = '<span class="hint">' + escapeHtml((j && (j.hint || j.detail)) || 'ไม่มี users') + '</span>'; }
+          } catch (e) { box.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(e.message) + '</span>'; }
+          if (btn) btn.disabled = false;
+        }
+
+        function renderUsersFilteredChg() {
+          var box = document.getElementById('users-list-box-chg');
+          if (!box) return;
+          var q = (document.getElementById('filter-users-chg') || {}).value || '';
+          if (!cachedChgUsersList.length) return;
+          var list = cachedChgUsersList.filter(function (u) { return filterMatches(u, q); });
+          if (list.length === 0) { box.innerHTML = '<span class="hint">ไม่มี user ที่ตรงกับ filter</span>'; return; }
+          box.innerHTML = list.map(function (u) { return '<span data-username="' + escapeHtml(u) + '">' + escapeHtml(u) + '</span>'; }).join('');
+          box.querySelectorAll('span[data-username]').forEach(function (span) {
+            span.addEventListener('click', function () { document.getElementById('chg-username').value = this.getAttribute('data-username'); });
+          });
+        }
+        async function loadUsersIntoBoxChg() {
+          var box = document.getElementById('users-list-box-chg');
+          var btn = document.getElementById('btn-load-users-chg');
+          if (btn) btn.disabled = true;
+          box.innerHTML = 'Loading...';
+          cachedChgUsersList = [];
+          try {
+            var res = await fetch('/api/users');
+            var text = await res.text();
+            var j;
+            try { j = JSON.parse(text); } catch (_) { box.innerHTML = '<span style="color:var(--danger)">Invalid response.</span>'; if (btn) btn.disabled = false; return; }
+            if (j.ok && j.users && j.users.length) { cachedChgUsersList = j.users; renderUsersFilteredChg(); }
+            else { box.innerHTML = '<span class="hint">' + escapeHtml((j && (j.hint || j.detail)) || 'ไม่มี users') + '</span>'; }
+          } catch (e) { box.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(e.message) + '</span>'; }
+          if (btn) btn.disabled = false;
+        }
+
+        async function loadTopicsIntoBox() {
+          var box = document.getElementById('topics-list-box');
+          var btn = document.getElementById('btn-load-topics');
+          if (btn) btn.disabled = true;
+          box.innerHTML = 'Loading...';
+          cachedTopicsList = [];
+          try {
+            var res = await fetch('/api/topics');
+            var j = await res.json();
+            if (j.ok && j.topics) {
+              if (j.topics.length) {
+                cachedTopicsList = j.topics;
+                renderTopicsFiltered();
+              } else {
+                var msg = 'ไม่มี topic (หรือ Kafka ยังไม่พร้อม).';
+                if (j.hint) msg += ' ' + j.hint;
+                if (j.detail) msg += ' [' + j.detail + ']';
+                box.innerHTML = '<span class="hint">' + escapeHtml(msg) + '</span>';
+              }
+            } else {
+              var err = (j.detail || j.error || 'List topics failed').toString();
+              var hint = (j.hint || '').toString();
+              var html = '<span style="color:var(--danger)">ดึง topic ไม่ได้: ' + escapeHtml(err) + '</span>';
+              if (hint) html += '<p class="hint" style="margin-top:8px;">' + escapeHtml(hint) + '</p>';
+              box.innerHTML = html;
+            }
+          } catch (e) {
+            box.innerHTML = '<span style="color:var(--danger)">Request failed: ' + escapeHtml(e.message) + '</span>';
+          }
+          if (btn) btn.disabled = false;
+        }
+        async function loadUsersIntoBox() {
+          var box = document.getElementById('users-list-box');
+          var btn = document.getElementById('btn-load-users');
+          if (btn) btn.disabled = true;
+          box.innerHTML = 'Loading...';
+          cachedUsersList = [];
+          try {
+            var res = await fetch('/api/users');
+            var text = await res.text();
+            var j;
+            try { j = JSON.parse(text); } catch (parseErr) {
+              box.innerHTML = '<span style="color:var(--danger)">ดึง user ไม่ได้: response ไม่ใช่ JSON (อาจเป็น oc/secret ไม่พร้อม). ' + escapeHtml((text || parseErr.message).slice(0, 120)) + '</span>';
+              if (btn) btn.disabled = false;
+              return;
+            }
+            if (j.ok && j.users) {
+              if (j.users.length) {
+                cachedUsersList = j.users;
+                renderUsersFiltered();
+              } else {
+                var msg = 'ไม่มี non-system users.';
+                if (j.hint) msg += ' ' + j.hint;
+                if (j.detail) msg += ' [' + j.detail + ']';
+                box.innerHTML = '<span class="hint">' + escapeHtml(msg) + '</span>';
+              }
+            } else {
+              var err = (j.detail || j.error || 'List users failed').toString();
+              box.innerHTML = '<span style="color:var(--danger)">ดึง user ไม่ได้: ' + escapeHtml(err) + '</span>';
+            }
+          } catch (e) {
+            box.innerHTML = '<span style="color:var(--danger)">Request failed: ' + escapeHtml(e.message) + '</span>';
+          }
+          if (btn) btn.disabled = false;
+        }
+
+        document.getElementById('btn-load-topics').addEventListener('click', loadTopicsIntoBox);
+        document.getElementById('btn-load-users').addEventListener('click', loadUsersIntoBox);
+        document.getElementById('filter-topics').addEventListener('input', renderTopicsFiltered);
+        document.getElementById('filter-users').addEventListener('input', renderUsersFiltered);
+
+        // ——— Create Topic & Onboard User wizard (6 steps) ———
+        var ctCurrentStep = 1;
+        var ctTotalSteps = 6;
+        var cachedCTUsersList = [];
+        function escapeHtmlCt(s) { var d = document.createElement('div'); if (s == null) return ''; d.textContent = s; return d.innerHTML; }
+        function showStepCT(step) {
+          ctCurrentStep = step;
+          var wrap = document.getElementById('wizard-steps-ct');
+          if (wrap) wrap.querySelectorAll('.wizard-step').forEach(function (el) {
+            var n = parseInt(el.getAttribute('data-step'), 10);
+            el.classList.remove('active', 'done');
+            if (n === step) el.classList.add('active');
+            else if (n < step) el.classList.add('done');
+          });
+          document.querySelectorAll('#create-topic-onboard .wizard-panel').forEach(function (el) {
+            el.classList.toggle('active', parseInt(el.getAttribute('data-step'), 10) === step);
+          });
+        }
+        function setCTStepError(id, msg) {
+          var el = document.getElementById(id);
+          if (el) { el.textContent = msg || ''; el.style.visibility = msg ? 'visible' : 'hidden'; }
+        }
+        document.getElementById('btn-ct-create-topic').addEventListener('click', async function () {
+          var topicName = (document.getElementById('ct-topic-name').value || '').trim();
+          setCTStepError('ct-step1-error', '');
+          var errEl = document.getElementById('ct-create-topic-result');
+          errEl.style.display = 'none';
+          if (!topicName) { setCTStepError('ct-step1-error', 'Please enter topic name.'); return; }
+          if (!/^[a-zA-Z0-9._-]+$/.test(topicName)) { setCTStepError('ct-step1-error', 'Topic: only letters, numbers, dots, underscores, hyphens.'); return; }
+          var btn = document.getElementById('btn-ct-create-topic');
+          btn.disabled = true;
+          errEl.style.display = 'block';
+          errEl.innerHTML = 'Creating topic (broker default partitions/replication)...';
+          try {
+            var res = await fetch('/api/create-topic', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ topic: topicName })
+            });
+            var j = await res.json();
+            if (j.ok) {
+              document.getElementById('ct-topic').value = topicName;
+              errEl.innerHTML = '<span style="color:var(--success)">Topic created: ' + escapeHtmlCt(topicName) + '</span>';
+              showStepCT(2);
+            } else {
+              var errMsg = (j.error || 'Create topic failed');
+              if (j.detail) errMsg += ': ' + escapeHtmlCt(String(j.detail).slice(0, 200));
+              errEl.innerHTML = '<span style="color:var(--danger)">' + errMsg + '</span>';
+            }
+          } catch (e) {
+            errEl.innerHTML = '<span style="color:var(--danger)">Request failed: ' + (e.message || e) + '</span>';
+          }
+          btn.disabled = false;
+        });
+        document.getElementById('ct-wizard-back-2').addEventListener('click', function () { showStepCT(1); });
+        document.getElementById('ct-wizard-next-2').addEventListener('click', function () {
+          setCTStepError('ct-step2-error', '');
+          var system = (document.getElementById('ct-system').value || '').trim();
+          var topic = (document.getElementById('ct-topic').value || '').trim();
+          if (!system) { setCTStepError('ct-step2-error', 'Please enter client system name.'); return; }
+          if (!topic) { setCTStepError('ct-step2-error', 'Topic is required (create in step 1).'); return; }
+          showStepCT(3);
+        });
+        document.getElementById('ct-wizard-back-3').addEventListener('click', function () { showStepCT(2); });
+        document.getElementById('ct-wizard-next-3').addEventListener('click', function () {
+          setCTStepError('ct-step3-error', '');
+          var username = (document.getElementById('ct-username').value || '').trim();
+          if (!username) { setCTStepError('ct-step3-error', 'Please enter username.'); return; }
+          if (!/^[a-zA-Z0-9._-]+$/.test(username)) { setCTStepError('ct-step3-error', 'Username: only letters, numbers, dots, underscores, hyphens.'); return; }
+          if (cachedCTUsersList.length > 0 && cachedCTUsersList.indexOf(username) !== -1) {
+            var topicVal = (document.getElementById('ct-topic') && document.getElementById('ct-topic').value || '').trim();
+            try { sessionStorage.setItem('addAclExistingPrefill', JSON.stringify({ topic: topicVal, username: username })); } catch (_) {}
+            var errEl = document.getElementById('ct-step3-error');
+            if (errEl) { errEl.innerHTML = 'Username already exists. Pick a different one, or <a href="#add-acl-existing">add this topic to this user</a>.'; errEl.style.visibility = 'visible'; }
+            return;
+          }
+          showStepCT(4);
+        });
+        document.getElementById('ct-wizard-back-4').addEventListener('click', function () { showStepCT(3); });
+        document.getElementById('ct-wizard-next-4').addEventListener('click', function () { showStepCT(5); });
+        document.getElementById('ct-wizard-back-5').addEventListener('click', function () { showStepCT(4); });
+        document.getElementById('ct-wizard-next-5').addEventListener('click', function () {
+          setCTStepError('ct-step5-error', '');
+          var pass = (document.getElementById('ct-passphrase').value || '').trim();
+          var passConfirm = (document.getElementById('ct-passphrase-confirm').value || '').trim();
+          if (!pass) { setCTStepError('ct-step5-error', 'Please set a passphrase.'); return; }
+          if (pass !== passConfirm) { setCTStepError('ct-step5-error', 'Passphrase and confirm do not match.'); return; }
+          renderCTSummary();
+          showStepCT(6);
+        });
+        document.getElementById('ct-wizard-back-6').addEventListener('click', function () { showStepCT(5); });
+        function renderCTSummary() {
+          var system = (document.getElementById('ct-system').value || '').trim();
+          var topic = (document.getElementById('ct-topic').value || '').trim();
+          var username = (document.getElementById('ct-username').value || '').trim();
+          var acl = (document.getElementById('ct-acl').value || 'client');
+          var html = '<div class="wizard-summary-block"><strong>Client System:</strong> ' + escapeHtmlCt(system) + ' &nbsp;|&nbsp; <strong>Topic:</strong> ' + escapeHtmlCt(topic) + ' &nbsp;|&nbsp; <strong>Username:</strong> ' + escapeHtmlCt(username) + '</div>';
+          html += '<p class="hint" style="margin-top:8px;">Topic ACL: ' + acl + '. Click "Create user + ACL and download pack" to apply.</p>';
+          document.getElementById('ct-wizard-summary').innerHTML = html;
+        }
+        async function loadCTUsers() {
+          var box = document.getElementById('ct-users-list-box');
+          var btn = document.getElementById('btn-ct-load-users');
+          if (btn) btn.disabled = true;
+          box.innerHTML = 'Loading...';
+          cachedCTUsersList = [];
+          try {
+            var res = await fetch('/api/users');
+            var j = await res.json();
+            if (j.ok && j.users && j.users.length) { cachedCTUsersList = j.users; renderCTUsersFiltered(); }
+            else { box.innerHTML = '<span class="hint">' + (j && (j.hint || j.detail) ? (j.hint || '') + ' ' + (j.detail || '') : 'ไม่มี users') + '</span>'; }
+          } catch (e) { box.innerHTML = '<span style="color:var(--danger)">' + (e.message || e) + '</span>'; }
+          if (btn) btn.disabled = false;
+        }
+        function renderCTUsersFiltered() {
+          var box = document.getElementById('ct-users-list-box');
+          var q = (document.getElementById('ct-filter-users') || {}).value || '';
+          if (!cachedCTUsersList.length) return;
+          var list = cachedCTUsersList.filter(function (u) { return !q || u.toLowerCase().indexOf(q.trim().toLowerCase()) !== -1; });
+          if (list.length === 0) { box.innerHTML = '<span class="hint">ไม่มี user ที่ตรงกับ filter</span>'; return; }
+          box.innerHTML = list.map(function (u) { return '<span data-username="' + escapeHtmlCt(u) + '">' + escapeHtmlCt(u) + '</span>'; }).join('');
+          box.querySelectorAll('span[data-username]').forEach(function (span) {
+            span.addEventListener('click', function () { document.getElementById('ct-username').value = this.getAttribute('data-username'); });
+          });
+        }
+        document.getElementById('btn-ct-load-users').addEventListener('click', loadCTUsers);
+        document.getElementById('ct-filter-users').addEventListener('input', renderCTUsersFiltered);
+        document.getElementById('btn-ct-execute').addEventListener('click', async function () {
+          var system = document.getElementById('ct-system').value.trim();
+          var topic = document.getElementById('ct-topic').value.trim();
+          var username = document.getElementById('ct-username').value.trim();
+          var acl = document.getElementById('ct-acl').value;
+          var passphrase = (document.getElementById('ct-passphrase').value || '').trim();
+          var passphraseConfirm = (document.getElementById('ct-passphrase-confirm').value || '').trim();
+          var aclGroupExtra = [];
+          if (document.getElementById('ct-acl-group-describe') && document.getElementById('ct-acl-group-describe').checked) aclGroupExtra.push('Describe');
+          if (document.getElementById('ct-acl-group-delete') && document.getElementById('ct-acl-group-delete').checked) aclGroupExtra.push('Delete');
+          var resultEl = document.getElementById('ct-api-result');
+          var downloadBlock = document.getElementById('ct-api-download-block');
+          var progressWrap = document.getElementById('ct-progress-wrap');
+          var progressBar = document.getElementById('ct-progress-bar');
+          var progressStepText = document.getElementById('ct-progress-step-text');
+          var progressPercent = document.getElementById('ct-progress-percent');
+          var stepsListEl = document.getElementById('ct-progress-steps-list');
+          var btnExecute = document.getElementById('btn-ct-execute');
+          downloadBlock.style.display = 'none';
+          downloadBlock.innerHTML = '';
+          resultEl.style.display = 'block';
+          resultEl.innerHTML = '';
+          if (cachedCTUsersList.length > 0 && cachedCTUsersList.indexOf(username) !== -1) {
+            try { sessionStorage.setItem('addAclExistingPrefill', JSON.stringify({ topic: topic, username: username })); } catch (_) {}
+            resultEl.innerHTML = '<span style="color:var(--danger)">Username already exists. Pick a different one, or <a href="#add-acl-existing" style="color:var(--link);">add this topic to this user</a>.</span>';
+            return;
+          }
+          progressWrap.classList.add('visible');
+          progressBar.style.width = '0%';
+          progressStepText.innerHTML = '<strong>กำลังสร้าง user และ pack...</strong>';
+          if (progressPercent) progressPercent.textContent = '0%';
+          stepsListEl.innerHTML = '';
+          btnExecute.disabled = true;
+          var ADD_USER_TIMEOUT_MS = 600000;
+          try {
+            var f = fetchWithTimeout('/api/add-user?stream=1', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
+              body: JSON.stringify({ systemName: system, topic: topic, username: username, acl: acl, aclGroupExtra: aclGroupExtra, passphrase: passphrase, confirmPassphrase: passphraseConfirm })
+            }, ADD_USER_TIMEOUT_MS);
+            currentAbort.add = f.abort;
+            var res = await f.promise;
+            currentAbort.add = null;
+            var ct = (res.headers.get('Content-Type') || '');
+            var j = null;
+            if (ct.indexOf('ndjson') !== -1 && res.body) {
+              var reader = res.body.getReader();
+              var dec = new TextDecoder();
+              var buf = '';
+              while (true) {
+                var chunk = await reader.read();
+                if (chunk.done) break;
+                buf += dec.decode(chunk.value, { stream: true });
+                var lines = buf.split('\n');
+                buf = lines.pop() || '';
+                for (var i = 0; i < lines.length; i++) {
+                  var line = lines[i].trim();
+                  if (!line) continue;
+                  try {
+                    var obj = JSON.parse(line);
+                    if (obj.type === 'progress') {
+                      var pct = obj.percent || 0;
+                      progressBar.style.width = pct + '%';
+                      if (progressPercent) progressPercent.textContent = pct + '%';
+                      if (obj.step) progressStepText.innerHTML = '<strong>' + escapeHtmlCt(obj.step) + '</strong>';
+                    } else if (obj.type === 'result') j = obj;
+                  } catch (_) {}
+                }
+              }
+              if (buf.trim()) { try { var parsed = JSON.parse(buf.trim()); if (parsed.type === 'result') j = parsed; } catch (_) {} }
+            } else {
+              j = await res.json();
+            }
+            progressWrap.classList.remove('visible');
+            progressBar.style.width = '100%';
+            if (progressPercent) progressPercent.textContent = '100%';
+            if (j && j.ok) {
+              resultEl.innerHTML = '<span style="color:var(--success)">' + (j.message || 'Done.') + '</span>';
+              if (j.downloadPath && j.decryptInstructions) {
+                var html = '<p><strong>Download:</strong></p><p><button type="button" class="btn btn-primary btn-ct-dl" data-path="' + escapeHtmlCt(j.downloadPath) + '" data-filename="' + escapeHtmlCt(j.packFile || 'pack.enc') + '">ดาวน์โหลดไฟล์ .enc</button></p>';
+                html += '<pre class="decrypt-pre">' + (j.decryptInstructions || []).join('\n') + '</pre>';
+                html += '<p><button type="button" class="btn btn-secondary btn-ct-another">Create another (reset wizard)</button></p>';
+                downloadBlock.innerHTML = html;
+                downloadBlock.style.display = 'block';
+                downloadBlock.querySelector('.btn-ct-dl').addEventListener('click', function () {
+                  var path = this.getAttribute('data-path');
+                  var filename = this.getAttribute('data-filename') || 'pack.enc';
+                  if (!path) return;
+                  fetch(path).then(function (r) { return r.blob(); }).then(function (blob) {
+                    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+                    URL.revokeObjectURL(a.href);
+                  });
+                });
+                downloadBlock.querySelector('.btn-ct-another').addEventListener('click', function () {
+                  document.getElementById('ct-topic-name').value = '';
+                  document.getElementById('ct-system').value = '';
+                  document.getElementById('ct-topic').value = '';
+                  document.getElementById('ct-username').value = '';
+                  document.getElementById('ct-passphrase').value = '';
+                  document.getElementById('ct-passphrase-confirm').value = '';
+                  document.getElementById('ct-create-topic-result').style.display = 'none';
+                  ctCurrentStep = 1;
+                  showStepCT(1);
+                  resultEl.style.display = 'none';
+                  downloadBlock.style.display = 'none';
+                });
+              }
+            } else {
+              var errMsg = (j && (j.error || 'Failed')) || 'Failed';
+              if (j && j.detail) errMsg += ': ' + escapeHtmlCt(String(j.detail).slice(0, 300));
+              resultEl.innerHTML = '<span style="color:var(--danger)">' + errMsg + '</span>';
+            }
+          } catch (e) {
+            progressWrap.classList.remove('visible');
+            resultEl.innerHTML = '<span style="color:var(--danger)">' + (e.name === 'AbortError' ? 'Request timeout or cancelled.' : 'Request failed: ' + (e.message || e)) + '</span>';
+          }
+          btnExecute.disabled = false;
+        });
+        if (document.getElementById('ct-users-list-box')) document.getElementById('ct-users-list-box').innerHTML = '<span class="hint">กดปุ่ม "Load existing users" เพื่อดึงรายการ user</span>';
+
+        document.getElementById('btn-load-users-remove').addEventListener('click', loadUsersIntoBoxRemove);
+        document.getElementById('filter-users-remove').addEventListener('input', renderUsersFilteredRemove);
+        document.getElementById('btn-load-topics-test').addEventListener('click', loadTopicsIntoBoxTest);
+        document.getElementById('btn-load-users-test').addEventListener('click', loadUsersIntoBoxTest);
+        document.getElementById('filter-topics-test').addEventListener('input', renderTopicsFilteredTest);
+        document.getElementById('filter-users-test').addEventListener('input', renderUsersFilteredTest);
+        document.getElementById('btn-load-users-chg').addEventListener('click', loadUsersIntoBoxChg);
+        document.getElementById('filter-users-chg').addEventListener('input', renderUsersFilteredChg);
+
+        // ——— Add ACL to existing user ———
+        var cachedAclExistingUsersList = [];
+        var cachedAclExistingTopicsList = [];
+        function renderUsersFilteredAclExisting() {
+          var box = document.getElementById('users-list-box-acl-existing');
+          if (!box) return;
+          var q = (document.getElementById('filter-users-acl-existing') || {}).value || '';
+          var list = cachedAclExistingUsersList.filter(function (u) { return filterMatches(u, q); });
+          if (list.length === 0) { box.innerHTML = '<span class="hint">ไม่มี user ที่ตรงกับ filter</span>'; return; }
+          box.innerHTML = list.map(function (u) { return '<span data-username="' + escapeHtml(u) + '">' + escapeHtml(u) + '</span>'; }).join('');
+          box.querySelectorAll('span[data-username]').forEach(function (span) {
+            span.addEventListener('click', function () { document.getElementById('acl-existing-username').value = this.getAttribute('data-username'); });
+          });
+        }
+        function renderTopicsFilteredAclExisting() {
+          var box = document.getElementById('topics-list-box-acl-existing');
+          if (!box) return;
+          var q = (document.getElementById('filter-topics-acl-existing') || {}).value || '';
+          var list = cachedAclExistingTopicsList.filter(function (t) { return filterMatches(t, q); });
+          if (list.length === 0) { box.innerHTML = '<span class="hint">ไม่มี topic ที่ตรงกับ filter</span>'; return; }
+          box.innerHTML = list.map(function (t) { return '<span data-topic="' + escapeHtml(t) + '">' + escapeHtml(t) + '</span>'; }).join('');
+          box.querySelectorAll('span[data-topic]').forEach(function (span) {
+            span.addEventListener('click', function () { document.getElementById('acl-existing-topic').value = this.getAttribute('data-topic'); });
+          });
+        }
+        async function loadUsersIntoBoxAclExisting() {
+          var box = document.getElementById('users-list-box-acl-existing');
+          var btn = document.getElementById('btn-acl-existing-load-users');
+          if (btn) btn.disabled = true;
+          box.innerHTML = 'Loading...';
+          cachedAclExistingUsersList = [];
+          try {
+            var res = await fetch('/api/users');
+            var j = await res.json();
+            if (j.ok && j.users && j.users.length) { cachedAclExistingUsersList = j.users; renderUsersFilteredAclExisting(); }
+            else { box.innerHTML = '<span class="hint">' + escapeHtml((j && (j.hint || j.detail)) || 'ไม่มี users') + '</span>'; }
+          } catch (e) { box.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(e.message) + '</span>'; }
+          if (btn) btn.disabled = false;
+        }
+        async function loadTopicsIntoBoxAclExisting() {
+          var box = document.getElementById('topics-list-box-acl-existing');
+          var btn = document.getElementById('btn-acl-existing-load-topics');
+          if (btn) btn.disabled = true;
+          box.innerHTML = 'Loading...';
+          cachedAclExistingTopicsList = [];
+          try {
+            var res = await fetch('/api/topics');
+            var j = await res.json();
+            if (j.ok && j.topics && j.topics.length) { cachedAclExistingTopicsList = j.topics; renderTopicsFilteredAclExisting(); }
+            else { box.innerHTML = '<span class="hint">' + escapeHtml((j && (j.hint || j.detail)) || 'ไม่มี topics') + '</span>'; }
+          } catch (e) { box.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(e.message) + '</span>'; }
+          if (btn) btn.disabled = false;
+        }
+        document.getElementById('btn-acl-existing-load-users').addEventListener('click', loadUsersIntoBoxAclExisting);
+        document.getElementById('btn-acl-existing-load-topics').addEventListener('click', loadTopicsIntoBoxAclExisting);
+        document.getElementById('filter-users-acl-existing').addEventListener('input', renderUsersFilteredAclExisting);
+        var filterTopicsAclExisting = document.getElementById('filter-topics-acl-existing');
+        if (filterTopicsAclExisting) filterTopicsAclExisting.addEventListener('input', renderTopicsFilteredAclExisting);
+
+        document.getElementById('btn-acl-existing-load-acls').addEventListener('click', async function () {
+          var username = (document.getElementById('acl-existing-username').value || '').trim();
+          var summaryEl = document.getElementById('acl-existing-summary');
+          if (!username) { summaryEl.style.display = 'none'; summaryEl.textContent = ''; return; }
+          summaryEl.style.display = 'block';
+          summaryEl.textContent = 'Loading...';
+          try {
+            var res = await fetch('/api/list-acls?username=' + encodeURIComponent(username));
+            var j = await res.json();
+            if (j.ok) summaryEl.textContent = j.aclList || '(no ACLs)';
+            else summaryEl.textContent = 'Error: ' + (j.error || j.detail || 'Failed');
+          } catch (e) { summaryEl.textContent = 'Error: ' + (e.message || e); }
+        });
+
+        document.getElementById('btn-acl-existing-prepare').addEventListener('click', function () {
+          var username = (document.getElementById('acl-existing-username').value || '').trim();
+          var topic = (document.getElementById('acl-existing-topic').value || '').trim();
+          var aclSel = document.getElementById('acl-existing-acl');
+          var aclVal = aclSel ? aclSel.value : '2';
+          var aclLabel = aclVal === '1' ? 'Read' : aclVal === '3' ? 'All' : 'Client';
+          var msgEl = document.getElementById('acl-existing-confirm-msg');
+          var wrap = document.getElementById('acl-existing-confirm-wrap');
+          var resultEl = document.getElementById('acl-existing-result');
+          if (resultEl) resultEl.style.display = 'none';
+          if (!username) { if (msgEl) msgEl.textContent = 'กรุณาใส่ username'; if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } return; }
+          if (!topic) { if (msgEl) msgEl.textContent = 'กรุณาใส่ topic'; if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } return; }
+          if (msgEl) msgEl.textContent = 'คุณจะเพิ่มสิทธิ์ให้ user \u201c' + username + '\u201d ในการเข้าถึง topic \u201c' + topic + '\u201d (ACL: ' + aclLabel + '). ยืนยันหรือไม่?';
+          if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
+        });
+
+        document.getElementById('btn-acl-existing-cancel').addEventListener('click', function () {
+          document.getElementById('acl-existing-confirm-wrap').style.display = 'none';
+        });
+
+        document.getElementById('btn-acl-existing-confirm').addEventListener('click', async function () {
+          var username = (document.getElementById('acl-existing-username').value || '').trim();
+          var topic = (document.getElementById('acl-existing-topic').value || '').trim();
+          var aclSel = document.getElementById('acl-existing-acl');
+          var aclVal = aclSel ? aclSel.value : '2';
+          var resultEl = document.getElementById('acl-existing-result');
+          var wrap = document.getElementById('acl-existing-confirm-wrap');
+          var btn = document.getElementById('btn-acl-existing-confirm');
+          resultEl.style.display = 'block';
+          resultEl.innerHTML = 'กำลังเพิ่มสิทธิ์...';
+          if (btn) btn.disabled = true;
+          try {
+            var res = await fetch('/api/add-acl-existing-user', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              credentials: 'same-origin',
+              body: JSON.stringify({ username: username, topic: topic, acl: aclVal })
+            });
+            var j = await res.json();
+            if (j.ok) {
+              resultEl.innerHTML = '<span style="color:var(--success)">เพิ่มสิทธิ์เรียบร้อย</span>';
+              if (wrap) wrap.style.display = 'none';
+            } else {
+              var detail = (j.detail || '').toString().replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\[?[0-9;]*[a-zA-Z]?/g, '').trim();
+              resultEl.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(j.error || 'Failed') + (detail ? ': ' + escapeHtml(detail.slice(0, 500)) + '</span>' : '</span>');
+            }
+          } catch (e) {
+            resultEl.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(e.message || e) + '</span>';
+          }
+          if (btn) btn.disabled = false;
+        });
+
+        // ไม่โหลด topic/user อัตโนมัติ — แสดง hint ให้กดปุ่มโหลด จะได้ไม่โชว์ error ก่อนผู้ใช้กด
+        var topicsBox = document.getElementById('topics-list-box');
+        var usersBox = document.getElementById('users-list-box');
+        if (topicsBox) topicsBox.innerHTML = '<span class="hint">กดปุ่ม "Load topic list" เพื่อดึงรายการ topic</span>';
+        if (usersBox) usersBox.innerHTML = '<span class="hint">กดปุ่ม "Load existing users" เพื่อดึงรายการ user</span>';
+        // ล้างค่า wizard ถ้าแอปเวอร์ชันเปลี่ยน (หลัง deploy ใหม่) แล้วค่อย restore
+        var WIZARD_VERSION_KEY = 'kafka-user-mgmt-wizard-version';
+        fetch('/api/version', { credentials: 'same-origin' }).then(function (r) { return r.json(); }).then(function (j) {
+          if (j.ok && j.version) {
+            var stored = localStorage.getItem(WIZARD_VERSION_KEY);
+            if (stored !== j.version) {
+              try { localStorage.removeItem(WIZARD_STORAGE_KEY); } catch (_) {}
+            }
+            try { localStorage.setItem(WIZARD_VERSION_KEY, j.version); } catch (_) {}
+          }
+          restoreWizardState();
+        }).catch(function () { restoreWizardState(); });
+      })();
+
+      function renderDownloadBlock(j) {
+        var downloadBlock = document.getElementById('api-download-block');
+        downloadBlock.style.display = 'block';
+        var html = '<p><strong>Download:</strong></p>';
+        html += '<p><button type="button" class="btn btn-primary btn-download-fetch" data-path="' + escapeHtml(j.downloadPath) + '" data-filename="' + escapeHtml(j.packFile || 'pack.enc') + '">ดาวน์โหลดไฟล์ .enc (แนะนำ)</button>';
+        html += ' <a href="' + j.downloadPath + '" download class="btn btn-secondary">ลิงก์ตรง</a>';
+        html += ' <a href="' + (window.location.origin + j.downloadPath) + '" target="_blank" rel="noopener" class="btn btn-secondary">เปิดในแท็บใหม่</a></p>';
+        html += '<p class="hint">ถ้า "ดาวน์โหลดไฟล์ .enc" ไม่ทำงาน: ใช้ลิงก์ตรง หรือคลิกขวา → บันทึกลิงก์เป็น</p>';
+        html += '<p><button type="button" class="btn btn-secondary btn-download-check" data-filename="' + escapeHtml(j.packFile || '') + '">Load / เช็ค path ที่ server ใช้</button></p>';
+        html += '<div id="download-check-result" class="download-check-result" style="display:none; margin-top:8px; padding:10px; background:var(--code-bg); border:1px solid var(--border); border-radius:6px; font-size:12px; white-space:pre-wrap; max-height:200px; overflow:auto;"></div>';
+        html += '<p><strong>How to decrypt and unpack (same as the script):</strong></p><pre class="decrypt-pre">' + j.decryptInstructions.join('\n') + '</pre>';
+        html += '<p style="margin-top:14px;"><button type="button" class="btn btn-secondary btn-create-another">Create another user</button> <span class="hint">— ล้างฟอร์มและกลับไปขั้นที่ 1 เมื่อดาวน์โหลดเสร็จแล้ว</span></p>';
+        downloadBlock.innerHTML = html;
+        var createAnotherBtn = downloadBlock.querySelector('.btn-create-another');
+        if (createAnotherBtn && typeof window.resetWizardAfterSuccess === 'function') {
+          createAnotherBtn.addEventListener('click', function () { window.resetWizardAfterSuccess(); });
+        }
+        var checkBtn = downloadBlock.querySelector('.btn-download-check');
+        if (checkBtn) {
+          checkBtn.addEventListener('click', function () {
+            var fn = this.getAttribute('data-filename') || '';
+            if (!fn) { document.getElementById('download-check-result').style.display = 'block'; document.getElementById('download-check-result').textContent = 'ไม่มีชื่อไฟล์'; return; }
+            this.disabled = true;
+            var resultDiv = document.getElementById('download-check-result');
+            resultDiv.style.display = 'block';
+            resultDiv.textContent = 'กำลังโหลด...';
+            fetch('/api/download-check?filename=' + encodeURIComponent(fn)).then(function (r) { return r.json(); })
+              .then(function (d) {
+                var lines = ['ไฟล์: ' + d.filename, 'lastPackDir (จาก add-user): ' + (d.lastPackDir || '(none)'), ''];
+                if (d.candidates && d.candidates.length) {
+                  d.candidates.forEach(function (c, i) { lines.push('[' + (i + 1) + '] ' + c.fullPath + ' → ' + (c.exists ? 'มีไฟล์' : 'ไม่มี')); });
+                }
+                lines.push('', d.foundAt ? '✓ เจอที่: ' + d.foundAt : '✗ ไม่เจอใน path ใดที่ลอง');
+                if (d.hint) lines.push('', '--- แนะนำ ---', d.hint);
+                resultDiv.textContent = lines.join('\n');
+              })
+              .catch(function (e) { resultDiv.textContent = 'Error: ' + (e.message || e); })
+              .finally(function () { checkBtn.disabled = false; });
+          });
+        }
+        var fetchBtn = downloadBlock.querySelector('.btn-download-fetch');
+        if (fetchBtn) {
+          fetchBtn.addEventListener('click', function () {
+            var path = this.getAttribute('data-path');
+            var filename = this.getAttribute('data-filename') || 'pack.enc';
+            if (!path) return;
+            this.disabled = true;
+            this.textContent = 'กำลังโหลด...';
+            fetch(path).then(function (r) { if (!r.ok) throw new Error(r.status + ' ' + r.statusText); return r.blob(); })
+              .then(function (blob) {
+                var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+                URL.revokeObjectURL(a.href);
+                fetchBtn.textContent = 'ดาวน์โหลดแล้ว';
+              })
+              .catch(function (e) {
+                fetchBtn.disabled = false;
+                fetchBtn.textContent = 'ดาวน์โหลดไฟล์ .enc (แนะนำ)';
+                alert('ดาวน์โหลดไม่สำเร็จ: ' + (e.message || e));
+              });
+          });
+        }
+      }
+
+      document.getElementById('btn-create').addEventListener('click', async function () {
+        var system = document.getElementById('system').value.trim();
+        var topic = document.getElementById('topic').value.trim();
+        var username = document.getElementById('username').value.trim();
+        var acl = document.getElementById('acl').value;
+        var passphrase = (document.getElementById('passphrase').value || '').trim();
+        var passphraseConfirm = (document.getElementById('passphrase-confirm').value || '').trim();
+        var resultEl = document.getElementById('api-result');
+        var downloadBlock = document.getElementById('api-download-block');
+        var progressWrap = document.getElementById('progress-wrap');
+        var progressBar = document.getElementById('progress-bar');
+        var progressStepText = document.getElementById('progress-step-text');
+        downloadBlock.style.display = 'none';
+        downloadBlock.innerHTML = '';
+        resultEl.style.display = 'block';
+        if (cachedTopicsList.length > 0 && cachedTopicsList.indexOf(topic) === -1) {
+          resultEl.innerHTML = '<span style="color:var(--danger)">Topic not in list. Load topic list and pick from the list to avoid typos.</span>';
+          return;
+        }
+        if (cachedUsersList.length > 0 && cachedUsersList.indexOf(username) !== -1) {
+          try { sessionStorage.setItem('addAclExistingPrefill', JSON.stringify({ topic: topic, username: username })); } catch (_) {}
+          resultEl.innerHTML = '<span style="color:var(--danger)">Username already exists. Pick a different one, or <a href="#add-acl-existing" style="color:var(--link);">add this topic to this user</a>.</span>';
+          return;
+        }
+        resultEl.innerHTML = '';
+        var progressHintAdd = document.getElementById('progress-hint-add');
+        if (progressHintAdd) progressHintAdd.style.display = 'none';
+        progressWrap.classList.add('visible');
+        progressBar.style.width = '0%';
+        progressStepText.innerHTML = '<strong>กำลังสร้าง user และ pack...</strong>';
+        var progressPercent = document.getElementById('progress-percent');
+        if (progressPercent) progressPercent.textContent = '0%';
+        var stepsListEl = document.getElementById('progress-steps-list');
+        stepsListEl.innerHTML = '';
+        var completedSteps = [];
+        var currentStepName = '';
+        var btnCreate = document.getElementById('btn-create');
+        var btnCancelAdd = document.getElementById('btn-cancel-add');
+        var btnExecuteCancel = document.getElementById('btn-execute-cancel');
+        btnCreate.disabled = true;
+        if (btnCancelAdd) btnCancelAdd.style.display = 'inline-block';
+        if (btnExecuteCancel) btnExecuteCancel.style.display = 'none';
+        currentAbort.add = null;
+        (function addFirstStepLine() {
+          var line = document.createElement('div');
+          line.className = 'step-line';
+          line.innerHTML = '<span class="step-name">กำลังเชื่อมต่อ / เริ่มต้น...</span> <span class="step-pending">...</span>';
+          stepsListEl.appendChild(line);
+        })();
+        function addStepDone(name) {
+          if (!name) return;
+          completedSteps.push(name);
+          var first = stepsListEl.querySelector('.step-line');
+          var pending = first ? first.querySelector('.step-pending') : null;
+          var nameEl = first ? first.querySelector('.step-name') : null;
+          if (pending && nameEl && nameEl.textContent.trim() === name) {
+            nameEl.textContent = name;
+            pending.textContent = 'Done';
+            pending.className = 'step-done';
+          } else {
+            var line = document.createElement('div');
+            line.className = 'step-line';
+            line.innerHTML = '<span class="step-name">' + escapeHtml(name) + '</span> <span class="step-done">Done</span>';
+            stepsListEl.appendChild(line);
+          }
+          stepsListEl.scrollTop = stepsListEl.scrollHeight;
+        }
+        var aclGroupExtra = [];
+        if (document.getElementById('acl-group-describe') && document.getElementById('acl-group-describe').checked) aclGroupExtra.push('Describe');
+        if (document.getElementById('acl-group-delete') && document.getElementById('acl-group-delete').checked) aclGroupExtra.push('Delete');
+        var ADD_USER_TIMEOUT_MS = 600000; // 10 นาที (script อาจรอนานตอน auth retry)
+        try {
+          var f = fetchWithTimeout('/api/add-user?stream=1', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
+            body: JSON.stringify({ systemName: system, topic: topic, username: username, acl: acl, aclGroupExtra: aclGroupExtra, passphrase: passphrase, confirmPassphrase: passphraseConfirm })
+          }, ADD_USER_TIMEOUT_MS);
+          currentAbort.add = f.abort;
+          var res = await f.promise;
+          currentAbort.add = null;
+          var ct = (res.headers.get('Content-Type') || '');
+          if (ct.indexOf('ndjson') !== -1 && res.body) {
+            var reader = res.body.getReader();
+            var dec = new TextDecoder();
+            var buf = '';
+            var j = null;
+            while (true) {
+              var chunk = await reader.read();
+              if (chunk.done) break;
+              buf += dec.decode(chunk.value, { stream: true });
+              var lines = buf.split('\n');
+              buf = lines.pop() || '';
+              for (var i = 0; i < lines.length; i++) {
+                var line = lines[i].trim();
+                if (!line) continue;
+                try {
+                  var obj = JSON.parse(line);
+                  if (obj.type === 'progress') {
+                    var pct = obj.percent || 0;
+                    progressBar.style.width = pct + '%';
+                    if (progressPercent) progressPercent.textContent = pct + '%';
+                    if (obj.step) {
+                      addStepDone(currentStepName);
+                      currentStepName = obj.step;
+                      progressStepText.innerHTML = '<strong>' + escapeHtml(obj.step) + '</strong>';
+                      var firstLine = stepsListEl.querySelector('.step-line .step-pending');
+                      if (firstLine && firstLine.previousElementSibling) firstLine.previousElementSibling.textContent = obj.step;
+                      var hintEl = document.getElementById('progress-hint-add');
+                      var isSlowStep = /Consume|Auth|Testing|retry|validat/i.test(obj.step);
+                      if (hintEl) hintEl.style.display = isSlowStep ? 'block' : 'none';
+                    }
+                  } else if (obj.type === 'result') {
+                    j = obj;
+                    addStepDone(currentStepName);
+                    currentStepName = '';
+                    progressBar.style.width = '100%';
+                    if (progressPercent) progressPercent.textContent = '100%';
+                    progressStepText.innerHTML = '<strong>เสร็จสิ้น</strong>';
+                    var hintDone = document.getElementById('progress-hint-add');
+                    if (hintDone) hintDone.style.display = 'none';
+                  }
+                } catch (_) {}
+              }
+            }
+            if (buf.trim()) {
+              try { var parsed = JSON.parse(buf.trim()); if (parsed.type === 'result') j = parsed; } catch (_) {}
+            }
+            progressWrap.classList.remove('visible');
+            var phAdd = document.getElementById('progress-hint-add');
+            if (phAdd) phAdd.style.display = 'none';
+            if (j) {
+              if (j.ok) {
+                resultEl.innerHTML = '<span style="color:var(--success)">' + (j.message || 'Done.') + '</span>' +
+                  (j.verificationMessage ? '<p style="margin-top:8px;font-size:14px;">' + (j.verificationPassed ? '<span style="color:var(--success)">✓ Verification: ' : '<span style="color:var(--warning, #b8860b)">') + escapeHtml(j.verificationMessage) + '</span></p>' : '');
+                if (j.downloadPath && j.decryptInstructions) { renderDownloadBlock(j); /* ไม่ reset ทันที — ให้ค้างหน้า Execute + บล็อกดาวน์โหลดไว้ก่อน ให้ user ดาวน์โหลดได้ แล้วค่อย Back หรือ Create another เอง */ }
+                else { document.getElementById('passphrase').value = ''; document.getElementById('passphrase-confirm').value = ''; }
+              } else {
+                renderAddUserError(resultEl, formatApiError(j), getPlainErrorFromApi(j), j);
+              }
+            } else {
+              renderAddUserError(resultEl, 'ไม่ได้รับผลลัพธ์จาก server (connection อาจหลุด)', 'No result from server', null);
+            }
+          } else {
+            var j = await res.json();
+            progressWrap.classList.remove('visible');
+            var phAdd2 = document.getElementById('progress-hint-add');
+            if (phAdd2) phAdd2.style.display = 'none';
+            progressBar.style.width = '100%';
+            if (progressPercent) progressPercent.textContent = '100%';
+            if (j.ok) {
+              resultEl.innerHTML = '<span style="color:var(--success)">' + (j.message || 'Done.') + '</span>' +
+                (j.verificationMessage ? '<p style="margin-top:8px;font-size:14px;">' + (j.verificationPassed ? '<span style="color:var(--success)">✓ Verification: ' : '<span style="color:var(--warning, #b8860b)">') + escapeHtml(j.verificationMessage) + '</span></p>' : '');
+              if (j.downloadPath && j.decryptInstructions) { renderDownloadBlock(j); /* ไม่ reset ทันที — ให้ค้างหน้า Execute + บล็อกดาวน์โหลดไว้ก่อน ให้ user ดาวน์โหลดได้ แล้วค่อย Back หรือ Create another เอง */ }
+              else { document.getElementById('passphrase').value = ''; document.getElementById('passphrase-confirm').value = ''; }
+            } else {
+              renderAddUserError(resultEl, formatApiError(j), getPlainErrorFromApi(j), j);
+            }
+          }
+        } catch (e) {
+          progressWrap.classList.remove('visible');
+          var phAddErr = document.getElementById('progress-hint-add');
+          if (phAddErr) phAddErr.style.display = 'none';
+          var isAbort = e.name === 'AbortError';
+          var userCancelled = isAbort && (typeof currentAbort.add === 'function');
+          currentAbort.add = null;
+          var errMsg = isAbort ? (userCancelled ? 'ยกเลิกแล้ว (Cancel).' : 'Request timeout (เกิน ' + (ADD_USER_TIMEOUT_MS / 60000) + ' นาที). กรุณาลองใหม่หรือตรวจสอบที่ server.') : 'Request failed: ' + escapeHtml(e.message);
+          if (userCancelled) resultEl.innerHTML = '<span style="color:var(--text-muted)">' + errMsg + '</span>';
+          else renderAddUserError(resultEl, errMsg, isAbort ? 'Request timeout' : e.message, null);
+        }
+        btnCreate.disabled = false;
+        if (btnCancelAdd) btnCancelAdd.style.display = 'none';
+        var btnExecuteCancelAgain = document.getElementById('btn-execute-cancel');
+        if (btnExecuteCancelAgain) btnExecuteCancelAgain.style.display = 'inline-block';
+      });
+      document.getElementById('btn-cancel-add').addEventListener('click', function () {
+        if (typeof currentAbort.add === 'function') currentAbort.add();
+      });
+
+      function renderAddUserError(resultEl, htmlMsg, plainMsg, detail) {
+        var copyPayload = buildErrorLog('Add user', plainMsg, detail);
+        try {
+          console.error('[Kafka User Mgmt]', copyPayload);
+          var b64 = btoa(unescape(encodeURIComponent(copyPayload)));
+          resultEl.innerHTML = '<div class="result-error-wrap"><span style="color:var(--danger)">' + htmlMsg + '</span> <button type="button" class="btn btn-copy-error" data-error-b64="' + escapeHtml(b64) + '" title="Copy full error log for support">Copy error for support</button></div>';
+        } catch (_) {
+          resultEl.innerHTML = '<div class="result-error-wrap"><span style="color:var(--danger)">' + htmlMsg + '</span></div>';
+        }
+      }
+      document.getElementById('btn-test').addEventListener('click', async function () {
+        var username = document.getElementById('test-username').value.trim();
+        var password = document.getElementById('test-password').value;
+        var topic = document.getElementById('test-topic').value.trim();
+        var el = document.getElementById('test-result');
+        var progressWrap = document.getElementById('progress-wrap-test');
+        var progressBar = document.getElementById('progress-bar-test');
+        var progressText = document.getElementById('progress-step-text-test');
+        var btn = document.getElementById('btn-test');
+        if (!username || !password || !topic) {
+          showResult(el, false, 'Please fill username, password, and topic.');
+          return;
+        }
+        if (cachedTestTopicsList.length > 0 && cachedTestTopicsList.indexOf(topic) === -1) {
+          showResult(el, false, 'Topic not in list. Load topics and pick from the list to avoid typos.');
+          return;
+        }
+        if (cachedTestUsersList.length > 0 && cachedTestUsersList.indexOf(username) === -1) {
+          showResult(el, false, 'Username not in list. Load users and pick from the list to avoid typos.');
+          return;
+        }
+        el.style.display = 'none';
+        progressWrap.classList.add('visible', 'indeterminate');
+        progressBar.style.width = '0%';
+        progressText.innerHTML = '<strong>กำลังทดสอบ auth...</strong>';
+        btn.disabled = true;
+        var btnCancelTest = document.getElementById('btn-cancel-test');
+        if (btnCancelTest) btnCancelTest.style.display = 'inline-block';
+        try {
+          var f = fetchWithTimeout('/api/test-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, password: password, topic: topic })
+          }, 120000);
+          currentAbort.test = f.abort;
+          var res = await f.promise;
+          currentAbort.test = null;
+          var j = await res.json();
+          progressWrap.classList.remove('visible', 'indeterminate');
+          progressBar.style.width = '0%';
+          el.style.display = 'block';
+          showResult(el, j.ok, j.ok ? (j.message || 'Auth OK.') : formatApiError(j), j.ok ? {} : { action: 'Test user', errorDetail: j });
+        } catch (e) {
+          var cancelled = e.name === 'AbortError' && (typeof currentAbort.test === 'function');
+          currentAbort.test = null;
+          progressWrap.classList.remove('visible', 'indeterminate');
+          el.style.display = 'block';
+          showResult(el, false, cancelled ? 'ยกเลิกแล้ว (Cancel).' : (e.name === 'AbortError' ? 'Request timeout (เกิน 2 นาที).' : 'Request failed: ' + escapeHtml(e.message)), cancelled ? {} : { action: 'Test user', errorMessage: e.name === 'AbortError' ? 'Request timeout (2 min)' : e.message });
+        }
+        btn.disabled = false;
+        if (btnCancelTest) btnCancelTest.style.display = 'none';
+      });
+      document.getElementById('btn-cancel-test').addEventListener('click', function () { if (typeof currentAbort.test === 'function') currentAbort.test(); });
+      document.getElementById('btn-remove').addEventListener('click', async function () {
+        var raw = document.getElementById('remove-users').value.trim();
+        var el = document.getElementById('remove-result');
+        var progressWrap = document.getElementById('progress-wrap-remove');
+        var progressBar = document.getElementById('progress-bar-remove');
+        var progressText = document.getElementById('progress-step-text-remove');
+        var btn = document.getElementById('btn-remove');
+        if (!raw) {
+          showResult(el, false, 'Enter at least one username (comma-separated).');
+          return;
+        }
+        var parts = raw.split(/\s*,\s*/).map(function (p) { return p.trim(); }).filter(Boolean);
+        if (cachedRemoveUsersList.length > 0) {
+          var invalid = parts.filter(function (u) { return cachedRemoveUsersList.indexOf(u) === -1; });
+          if (invalid.length > 0) {
+            showResult(el, false, 'Not in list (load list and pick to avoid typos): ' + invalid.join(', '));
+            return;
+          }
+        }
+        el.style.display = 'none';
+        progressWrap.classList.add('visible', 'indeterminate');
+        progressBar.style.width = '0%';
+        progressText.innerHTML = '<strong>กำลังลบ user และ ACL...</strong>';
+        var percentEl = document.getElementById('progress-percent-remove');
+        var stepsList = document.getElementById('progress-steps-list-remove');
+        if (percentEl) percentEl.textContent = '0%';
+        if (stepsList) { stepsList.innerHTML = '<div class="step-line"><span class="step-name">Remove user(s) and ACL</span> <span class="step-pending">...</span></div>'; }
+        btn.disabled = true;
+        var btnCancelRemove = document.getElementById('btn-cancel-remove');
+        if (btnCancelRemove) btnCancelRemove.style.display = 'inline-block';
+        try {
+          var f = fetchWithTimeout('/api/remove-user', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ users: raw })
+          }, 120000);
+          currentAbort.remove = f.abort;
+          var res = await f.promise;
+          currentAbort.remove = null;
+          var j = await res.json();
+          progressWrap.classList.remove('visible', 'indeterminate');
+          progressBar.style.width = '100%';
+          if (percentEl) percentEl.textContent = '100%';
+          if (stepsList) stepsList.innerHTML = '<div class="step-line"><span class="step-name">Remove user(s) and ACL</span> <span class="step-done">Done</span></div>';
+          el.style.display = 'block';
+          showResult(el, j.ok, j.ok ? (j.message || 'Done.') : formatApiError(j), j.ok ? {} : { action: 'Remove user', errorDetail: j });
+          if (j.ok) { document.getElementById('remove-users').value = ''; }
+        } catch (e) {
+          var cancelled = e.name === 'AbortError' && (typeof currentAbort.remove === 'function');
+          currentAbort.remove = null;
+          progressWrap.classList.remove('visible', 'indeterminate');
+          if (stepsList) stepsList.innerHTML = '<div class="step-line"><span class="step-name">Remove user(s) and ACL</span> <span style="color:var(--danger)">Failed</span></div>';
+          el.style.display = 'block';
+          showResult(el, false, cancelled ? 'ยกเลิกแล้ว (Cancel).' : (e.name === 'AbortError' ? 'Request timeout (เกิน 2 นาที).' : 'Request failed: ' + escapeHtml(e.message)), cancelled ? {} : { action: 'Remove user', errorMessage: e.name === 'AbortError' ? 'Request timeout (2 min)' : e.message });
+        }
+        btn.disabled = false;
+        if (btnCancelRemove) btnCancelRemove.style.display = 'none';
+      });
+      document.getElementById('btn-cancel-remove').addEventListener('click', function () { if (typeof currentAbort.remove === 'function') currentAbort.remove(); });
+      document.getElementById('btn-chg').addEventListener('click', async function () {
+        var username = document.getElementById('chg-username').value.trim();
+        var newPass = document.getElementById('chg-password').value;
+        var el = document.getElementById('chg-result');
+        var progressWrap = document.getElementById('progress-wrap-chg');
+        var progressBar = document.getElementById('progress-bar-chg');
+        var progressText = document.getElementById('progress-step-text-chg');
+        var btn = document.getElementById('btn-chg');
+        if (!username || !newPass) {
+          showResult(el, false, 'Enter username and new password.');
+          return;
+        }
+        if (cachedChgUsersList.length > 0 && cachedChgUsersList.indexOf(username) === -1) {
+          showResult(el, false, 'Username not in list. Load users and pick from the list to avoid typos.');
+          return;
+        }
+        el.style.display = 'none';
+        progressWrap.classList.add('visible', 'indeterminate');
+        progressBar.style.width = '0%';
+        progressText.innerHTML = '<strong>กำลังเปลี่ยนรหัสผ่าน...</strong>';
+        var percentElChg = document.getElementById('progress-percent-chg');
+        var stepsListChg = document.getElementById('progress-steps-list-chg');
+        if (percentElChg) percentElChg.textContent = '0%';
+        if (stepsListChg) stepsListChg.innerHTML = '<div class="step-line"><span class="step-name">Change password</span> <span class="step-pending">...</span></div>';
+        btn.disabled = true;
+        var btnCancelChg = document.getElementById('btn-cancel-chg');
+        if (btnCancelChg) btnCancelChg.style.display = 'inline-block';
+        try {
+          var f = fetchWithTimeout('/api/change-password', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: username, newPassword: newPass })
+          }, 120000);
+          currentAbort.chg = f.abort;
+          var res = await f.promise;
+          currentAbort.chg = null;
+          var j = await res.json();
+          progressWrap.classList.remove('visible', 'indeterminate');
+          progressBar.style.width = '100%';
+          if (percentElChg) percentElChg.textContent = '100%';
+          if (stepsListChg) stepsListChg.innerHTML = '<div class="step-line"><span class="step-name">Change password</span> <span class="step-done">Done</span></div>';
+          el.style.display = 'block';
+          showResult(el, j.ok, j.ok ? (j.message || 'Done.') : formatApiError(j), j.ok ? {} : { action: 'Change password', errorDetail: j });
+          if (j.ok) { document.getElementById('chg-username').value = ''; document.getElementById('chg-password').value = ''; }
+        } catch (e) {
+          var cancelled = e.name === 'AbortError' && (typeof currentAbort.chg === 'function');
+          currentAbort.chg = null;
+          progressWrap.classList.remove('visible', 'indeterminate');
+          if (stepsListChg) stepsListChg.innerHTML = '<div class="step-line"><span class="step-name">Change password</span> <span style="color:var(--danger)">Failed</span></div>';
+          el.style.display = 'block';
+          showResult(el, false, cancelled ? 'ยกเลิกแล้ว (Cancel).' : (e.name === 'AbortError' ? 'Request timeout (เกิน 2 นาที).' : 'Request failed: ' + escapeHtml(e.message)), cancelled ? {} : { action: 'Change password', errorMessage: e.name === 'AbortError' ? 'Request timeout (2 min)' : e.message });
+        }
+        btn.disabled = false;
+        if (btnCancelChg) btnCancelChg.style.display = 'none';
+      });
+      document.getElementById('btn-cancel-chg').addEventListener('click', function () { if (typeof currentAbort.chg === 'function') currentAbort.chg(); });
+      document.getElementById('btn-cleanup').addEventListener('click', async function () {
+        var el = document.getElementById('cleanup-result');
+        var progressWrap = document.getElementById('progress-wrap-cleanup');
+        var progressBar = document.getElementById('progress-bar-cleanup');
+        var progressText = document.getElementById('progress-step-text-cleanup');
+        var btn = document.getElementById('btn-cleanup');
+        el.style.display = 'none';
+        progressWrap.classList.add('visible', 'indeterminate');
+        progressBar.style.width = '0%';
+        progressText.innerHTML = '<strong>กำลัง cleanup ACL ที่ไม่ใช้...</strong>';
+        var percentElCl = document.getElementById('progress-percent-cleanup');
+        var stepsListCl = document.getElementById('progress-steps-list-cleanup');
+        if (percentElCl) percentElCl.textContent = '0%';
+        if (stepsListCl) stepsListCl.innerHTML = '<div class="step-line"><span class="step-name">Cleanup orphaned ACLs</span> <span class="step-pending">...</span></div>';
+        btn.disabled = true;
+        var btnCancelCleanup = document.getElementById('btn-cancel-cleanup');
+        if (btnCancelCleanup) btnCancelCleanup.style.display = 'inline-block';
+        try {
+          var f = fetchWithTimeout('/api/cleanup-acl', { method: 'POST', headers: { 'Content-Type': 'application/json' } }, 120000);
+          currentAbort.cleanup = f.abort;
+          var res = await f.promise;
+          currentAbort.cleanup = null;
+          var j = await res.json();
+          progressWrap.classList.remove('visible', 'indeterminate');
+          progressBar.style.width = '100%';
+          if (percentElCl) percentElCl.textContent = '100%';
+          if (stepsListCl) stepsListCl.innerHTML = '<div class="step-line"><span class="step-name">Cleanup orphaned ACLs</span> <span class="step-done">Done</span></div>';
+          el.style.display = 'block';
+          showResult(el, j.ok, j.ok ? (j.message || 'Done.') : formatApiError(j), j.ok ? {} : { action: 'Cleanup ACLs', errorDetail: j });
+        } catch (e) {
+          var cancelled = e.name === 'AbortError' && (typeof currentAbort.cleanup === 'function');
+          currentAbort.cleanup = null;
+          progressWrap.classList.remove('visible', 'indeterminate');
+          if (stepsListCl) stepsListCl.innerHTML = '<div class="step-line"><span class="step-name">Cleanup orphaned ACLs</span> <span style="color:var(--danger)">Failed</span></div>';
+          el.style.display = 'block';
+          showResult(el, false, cancelled ? 'ยกเลิกแล้ว (Cancel).' : (e.name === 'AbortError' ? 'Request timeout (เกิน 2 นาที).' : 'Request failed: ' + escapeHtml(e.message)), cancelled ? {} : { action: 'Cleanup ACLs', errorMessage: e.name === 'AbortError' ? 'Request timeout (2 min)' : e.message });
+        }
+        btn.disabled = false;
+        if (btnCancelCleanup) btnCancelCleanup.style.display = 'none';
+      });
+      document.getElementById('btn-cancel-cleanup').addEventListener('click', function () { if (typeof currentAbort.cleanup === 'function') currentAbort.cleanup(); });
+    </script>
+
+    <aside class="sidebar-right">
+      <div class="title">Add user (steps)</div>
+      <nav>
+        <span style="color:var(--text-muted);font-size:13px;">1. Identification</span>
+        <span style="color:var(--text-muted);font-size:13px;">2. Username</span>
+        <span style="color:var(--text-muted);font-size:13px;">3. Permission</span>
+        <span style="color:var(--text-muted);font-size:13px;">4. Passphrase</span>
+        <span style="color:var(--text-muted);font-size:13px;">5. Execute</span>
+      </nav>
+    </aside>
+  </div>
+</body>
+</html>

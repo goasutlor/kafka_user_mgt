@@ -1,0 +1,735 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>First-time setup — Confluent Kafka User Management</title>
+  <style>
+    :root {
+      --header-bg: #0d1117;
+      --header-text: #ffffff;
+      --accent: #24b4e8;
+      --body-bg: #f6f8fa;
+      --card: #ffffff;
+      --border: #e1e4e8;
+      --text: #24292f;
+      --muted: #57606a;
+      --danger: #cf222e;
+      --success: #1a7f37;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      font-size: 14px;
+      line-height: 1.5;
+      background: var(--body-bg);
+      color: var(--text);
+    }
+    .header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 16px 24px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .header h1 { margin: 0; font-size: 18px; font-weight: 600; }
+    .header p { margin: 6px 0 0; font-size: 13px; opacity: 0.9; max-width: 900px; }
+    main { max-width: 800px; margin: 0 auto; padding: 24px; }
+    .steps {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-bottom: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--muted);
+    }
+    .steps span {
+      padding: 6px 12px;
+      border-radius: 6px;
+      background: var(--card);
+      border: 1px solid var(--border);
+    }
+    .steps span.active { border-color: var(--accent); color: var(--accent); background: #e8f4fc; }
+    .steps span.done { color: var(--success); border-color: #4ac26b; }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px 22px;
+      margin-bottom: 16px;
+    }
+    .card h2 { margin: 0 0 12px; font-size: 15px; }
+    .step-panel { display: none; }
+    .step-panel.active { display: block; }
+    label { display: block; font-weight: 600; margin-top: 12px; font-size: 13px; }
+    label:first-of-type { margin-top: 0; }
+    .hint { font-weight: 400; color: var(--muted); font-size: 12px; margin-top: 2px; }
+    input[type="text"], input[type="password"], input[type="number"], textarea {
+      width: 100%;
+      margin-top: 4px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    textarea { min-height: 100px; font-family: ui-monospace, monospace; font-size: 12px; }
+    .row { display: flex; gap: 12px; flex-wrap: wrap; }
+    .row > div { flex: 1; min-width: 160px; }
+    .check { display: flex; align-items: center; gap: 8px; margin-top: 12px; font-weight: 600; }
+    .check input { width: auto; }
+    .check label { margin: 0; }
+    .banner {
+      padding: 12px 14px;
+      border-radius: 6px;
+      margin-bottom: 16px;
+      font-size: 13px;
+    }
+    .banner.warn { background: #fff8e6; border: 1px solid #e0c040; color: #744210; }
+    .banner.ok { background: #ddf4e8; border: 1px solid #4ac26b; color: #1a4d2e; }
+    .banner.err { background: #ffebe9; border: 1px solid #ff8182; color: #82071e; }
+    .actions { margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #f0f4f8;
+      color: var(--text);
+      border: 1px solid var(--border);
+      padding: 10px 18px;
+      border-radius: 6px;
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+    }
+    button.primary:disabled, button.secondary:disabled { opacity: 0.45; cursor: not-allowed; }
+    a { color: #0969da; }
+    code { background: #f0f4f8; padding: 2px 6px; border-radius: 4px; font-size: 12px; }
+    .site-block {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 14px;
+      margin-top: 12px;
+      background: #fafbfc;
+    }
+    .site-block h3 { margin: 0 0 10px; font-size: 13px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .checklist { list-style: none; padding: 0; margin: 12px 0 0; font-size: 13px; }
+    .checklist li { padding: 6px 0; border-bottom: 1px solid var(--border); display: flex; gap: 8px; align-items: flex-start; }
+    .checklist li:last-child { border-bottom: 0; }
+    .badge { font-size: 11px; font-weight: 700; padding: 2px 8px; border-radius: 4px; text-transform: uppercase; flex-shrink: 0; }
+    .badge.ok { background: #ddf4e8; color: #1a4d2e; }
+    .badge.warn { background: #fff8e6; color: #744210; }
+    .badge.err { background: #ffebe9; color: #82071e; }
+    pre.summary {
+      background: #0d1117;
+      color: #e6edf3;
+      padding: 14px;
+      border-radius: 8px;
+      overflow: auto;
+      font-size: 12px;
+      max-height: 280px;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <h1>First-time setup</h1>
+    <p>
+      Start with <strong>Confluent architecture</strong> (single region vs two regions). Then define, per OpenShift cluster, the <strong>namespace</strong> where your Confluent Kafka instance lives (one primary namespace per cluster for secret updates). The tool defaults to Confluent&rsquo;s usual secret <code>kafka-server-side-credentials</code> for SASL/plain user data unless you override it.
+    </p>
+  </header>
+  <main>
+    <div id="status-banners"></div>
+    <div id="done-panel" class="card" style="display:none;">
+      <h2>Already configured</h2>
+      <p><a href="/">Open the application</a></p>
+    </div>
+
+    <div id="wizard-wrap" style="display:none;">
+      <div class="steps" id="step-indicator">
+        <span data-i="1" class="active">1 · Architecture</span>
+        <span data-i="2">2 · Kafka &amp; runtime</span>
+        <span data-i="3">3 · OpenShift</span>
+        <span data-i="4">4 · Portal</span>
+        <span data-i="5">5 · Verify</span>
+      </div>
+
+      <form id="setup-form" class="card">
+        <div class="step-panel active" data-step="1">
+          <h2>Confluent architecture</h2>
+          <p class="hint">Choose how many OpenShift clusters host your Confluent Kafka footprint for <strong>user / ACL management</strong> (where we run <code>oc</code> to patch credentials).</p>
+          <div class="check" style="margin-top:0;">
+            <input type="radio" name="ocTopology" id="topoSingle" value="single" checked />
+            <label for="topoSingle" style="margin:0;"><strong>Single region</strong> — one OCP cluster; typically <strong>one</strong> namespace where the Kafka CR and secrets live.</label>
+          </div>
+          <div class="check">
+            <input type="radio" name="ocTopology" id="topoDual" value="dual" />
+            <label for="topoDual" style="margin:0;"><strong>2 regions</strong> — two OCP clusters; <strong>one Confluent namespace per cluster</strong> (names may differ by region). You will enter the full OpenShift API URL and OC credentials for <em>each</em> region.</label>
+          </div>
+          <div class="actions">
+            <button type="button" class="primary btn-next" data-next="2" data-skip-validate="1">Next</button>
+          </div>
+        </div>
+
+        <div class="step-panel" data-step="2">
+          <h2>Kafka &amp; runtime</h2>
+          <label for="runtimeRoot">Runtime root (configs, kubeconfig, outputs)</label>
+          <input type="text" id="runtimeRoot" value="/opt/kafka-usermgmt" required />
+          <p class="hint">Compose: typically <code>/opt/kafka-usermgmt</code> via <code>runtime</code> volume.</p>
+          <label for="kafkaBootstrap">Kafka bootstrap servers</label>
+          <input type="text" id="kafkaBootstrap" placeholder="broker1:443,broker2:443" required />
+          <div class="row" style="margin-top:12px;">
+            <div>
+              <label for="scriptName">gen script name</label>
+              <input type="text" id="scriptName" value="gen.sh" />
+            </div>
+          </div>
+          <p class="hint" style="margin-top:14px;">
+            For Confluent on OpenShift, <code>oc get secret -n &lt;namespace&gt;</code> lists many Kafka-related secrets. This application updates the secret that holds the <strong>plain SASL user list</strong> (key <code>plain-users.json</code>). For standard Confluent deployments that name is fixed:
+            <strong><code>kafka-server-side-credentials</code></strong>.
+            Others (e.g. <code>kafka-admin-client-credentials</code>, <code>kafka-client-side-credentials</code>, listener apikeys) are for different purposes — you do <strong>not</strong> type those here unless your platform uses a different secret name for the same role.
+          </p>
+          <div class="check">
+            <input type="checkbox" id="customK8sSecret" />
+            <label for="customK8sSecret" style="margin:0;">My cluster uses a <strong>different</strong> secret name for that user list (override default)</label>
+          </div>
+          <label for="k8sSecretName">Kubernetes secret name (must exist in <em>each</em> namespace you configure in the next step)</label>
+          <input type="text" id="k8sSecretName" value="kafka-server-side-credentials" readonly style="background:#f6f8fa;" />
+          <div class="row">
+            <div>
+              <label for="clientPropertiesFile">Client properties file</label>
+              <input type="text" id="clientPropertiesFile" value="kafka-client.properties" />
+            </div>
+            <div>
+              <label for="adminPropertiesFile">Admin properties file</label>
+              <input type="text" id="adminPropertiesFile" value="kafka-client-master.properties" />
+            </div>
+          </div>
+          <div class="actions">
+            <button type="button" class="secondary btn-back" data-back="1">Back</button>
+            <button type="button" class="primary btn-next" data-next="3">Next</button>
+          </div>
+        </div>
+
+        <div class="step-panel" data-step="3">
+          <h2>OpenShift — namespaces &amp; API</h2>
+          <p class="hint">
+            <strong>Namespace</strong> = the OpenShift project where your Confluent Kafka resources run for <em>that</em> cluster. Count: <strong>one namespace per region/cluster</strong> in this form (if you use 2 regions, fill two rows). Secret <code id="secret-name-hint">kafka-server-side-credentials</code> (or your override) must exist in each of those namespaces.
+          </p>
+
+          <div class="row" style="margin-top:16px;">
+            <div>
+              <label for="ocPath"><code>oc</code> directory</label>
+              <input type="text" id="ocPath" value="/host/usr/bin" />
+            </div>
+            <div>
+              <label for="kubeconfig">Kubeconfig path template</label>
+              <input type="text" id="kubeconfig" value="{runtimeRoot}/.kube/config-both" />
+            </div>
+          </div>
+
+          <div id="site-primary" class="site-block">
+            <h3 id="site-a-title">Region 1 — OpenShift cluster</h3>
+            <div class="row">
+              <div>
+                <label><code>oc</code> context name</label>
+                <p class="hint" style="margin:4px 0 0;">Must match a context in your kubeconfig (e.g. <code>cwdc</code>).</p>
+                <input type="text" class="site-context" data-site="0" placeholder="cwdc" />
+              </div>
+              <div>
+                <label>Namespace on <strong>this</strong> cluster</label>
+                <p class="hint" style="margin:4px 0 0;">Where Confluent Kafka + target secret live (one namespace per cluster).</p>
+                <input type="text" class="site-ns" data-site="0" placeholder="esb-prod-cwdc" />
+              </div>
+            </div>
+            <label>OpenShift API URL (full, including port)</label>
+            <input type="text" class="site-api" data-site="0" placeholder="https://api.cwdc.example.com:6443" />
+            <div class="row per-cluster-creds" style="display:none; margin-top:8px;">
+              <div><label>OC user (this cluster)</label><input type="text" class="site-oc-user" data-site="0" autocomplete="off" /></div>
+              <div><label>OC password</label><input type="password" class="site-oc-pass" data-site="0" autocomplete="new-password" /></div>
+            </div>
+          </div>
+
+          <div id="site-secondary" class="site-block" style="display:none;">
+            <h3>Region 2 — second OpenShift cluster</h3>
+            <div class="row">
+              <div>
+                <label><code>oc</code> context name</label>
+                <input type="text" class="site-context" data-site="1" placeholder="tls2" />
+              </div>
+              <div>
+                <label>Namespace on <strong>this</strong> cluster</label>
+                <p class="hint" style="margin:4px 0 0;">Often a different project name than region 1.</p>
+                <input type="text" class="site-ns" data-site="1" placeholder="esb-prod-tls2" />
+              </div>
+            </div>
+            <label>OpenShift API URL (full, including port)</label>
+            <input type="text" class="site-api" data-site="1" placeholder="https://api.tls2.example.com:6443" />
+            <div class="row per-cluster-creds" style="display:none; margin-top:8px;">
+              <div><label>OC user (this cluster)</label><input type="text" class="site-oc-user" data-site="1" autocomplete="off" /></div>
+              <div><label>OC password</label><input type="password" class="site-oc-pass" data-site="1" autocomplete="new-password" /></div>
+            </div>
+          </div>
+
+          <div class="check" style="margin-top:16px;">
+            <input type="checkbox" id="ocAutoLogin" />
+            <label for="ocAutoLogin" style="margin:0;">Enable OC auto-login on server start</label>
+          </div>
+          <div id="oc-shared-cred-block" style="display:none; margin-top:8px;">
+            <p class="hint">Same user/password for every cluster (typical when one service account is used on both OCPs).</p>
+            <div class="row">
+              <div><label for="ocLoginUser">OC username</label><input type="text" id="ocLoginUser" autocomplete="off" /></div>
+              <div><label for="ocLoginPassword">OC password</label><input type="password" id="ocLoginPassword" autocomplete="new-password" /></div>
+            </div>
+          </div>
+          <div id="oc-cred-mode-wrap" style="display:none; margin-top:12px;">
+            <span class="hint" style="display:block;margin-bottom:6px;">OpenShift login credentials</span>
+            <div class="check"><input type="radio" name="ocCredMode" id="credShared" value="shared" checked /><label for="credShared" style="margin:0;">Same OC user/password for every cluster (one account can log in to both API URLs)</label></div>
+            <div class="check"><input type="radio" name="ocCredMode" id="credPer" value="per_cluster" /><label for="credPer" style="margin:0;">Different OC user/password per region (typical for 2 regions)</label></div>
+          </div>
+
+          <div class="actions">
+            <button type="button" class="secondary btn-back" data-back="2">Back</button>
+            <button type="button" class="primary btn-next" data-next="4">Next</button>
+          </div>
+        </div>
+
+        <div class="step-panel" data-step="4">
+          <h2>Portal &amp; advanced</h2>
+          <label for="portalPort">Listen port</label>
+          <input type="number" id="portalPort" min="1" max="65535" value="3443" />
+          <div class="check"><input type="checkbox" id="httpsEnabled" /><label for="httpsEnabled" style="margin:0;">HTTPS</label></div>
+          <div class="row">
+            <div><label for="httpsKeyPath">TLS key</label><input type="text" id="httpsKeyPath" value="/app/ssl/server.key" /></div>
+            <div><label for="httpsCertPath">TLS cert</label><input type="text" id="httpsCertPath" value="/app/ssl/server.crt" /></div>
+          </div>
+          <div class="check"><input type="checkbox" id="authEnabled" /><label for="authEnabled" style="margin:0;">Portal login</label></div>
+          <div id="auth-fields" style="display:none;">
+            <div class="row">
+              <div><label for="credentialsFile">Credentials file</label><input type="text" id="credentialsFile" value="credentials.json" /></div>
+            </div>
+            <div class="row">
+              <div><label for="adminUser">Admin user</label><input type="text" id="adminUser" autocomplete="username" /></div>
+              <div><label for="adminPassword">Admin password</label><input type="password" id="adminPassword" autocomplete="new-password" /></div>
+            </div>
+          </div>
+          <div class="check"><input type="checkbox" id="environmentsEnabled" /><label for="environmentsEnabled" style="margin:0;">Multi-environment (dev/SIT/UAT) JSON</label></div>
+          <div id="env-fields" style="display:none;">
+            <label for="environmentsJson"><code>environments</code> object</label>
+            <textarea id="environmentsJson" placeholder='{ "enabled": true, "defaultEnvironmentId": "dev", "environments": [] }'></textarea>
+            <p class="hint">Every <code>ocContext</code> in this JSON must have a matching API URL in step 3. See <code>/app/config-examples/</code>.</p>
+          </div>
+          <label for="ocLoginServersOverride">Optional: <code>loginServers</code> JSON (context → API URL)</label>
+          <textarea id="ocLoginServersOverride" placeholder='Use when multi-environment JSON lists contexts; merge with step 3 URLs. Example: { "cwdc": "https://api..." }'></textarea>
+          <label for="fallbackSitesJson">Override <code>fallbackSites</code> (optional JSON array)</label>
+          <textarea id="fallbackSitesJson" placeholder='Leave empty when using structured OpenShift rows in step 3'></textarea>
+
+          <div id="token-wrap" style="display:none; margin-top:16px;">
+            <label for="setupToken">Setup token <span class="hint">(<code>SETUP_TOKEN</code> env)</span></label>
+            <input type="password" id="setupToken" autocomplete="off" />
+          </div>
+
+          <div class="actions">
+            <button type="button" class="secondary btn-back" data-back="3">Back</button>
+            <button type="button" class="primary btn-next" data-next="5">Review</button>
+          </div>
+        </div>
+
+        <div class="step-panel" data-step="5">
+          <h2>Verify &amp; confirm</h2>
+          <p class="hint">Run server-side checks (paths, <code>oc</code>, API URLs, credentials coverage). Fix any <span class="badge err">error</span> items, then confirm to save.</p>
+          <div class="actions">
+            <button type="button" class="secondary btn-back" data-back="4">Back</button>
+            <button type="button" class="primary" id="btn-verify">Run verification</button>
+          </div>
+          <div id="verify-out" style="display:none; margin-top:16px;">
+            <ul class="checklist" id="checklist-ul"></ul>
+            <p class="hint" style="margin-top:12px;">Configuration preview (secrets redacted):</p>
+            <pre class="summary" id="summary-pre"></pre>
+            <div class="check" id="confirm-wrap" style="display:none; margin-top:12px;">
+              <input type="checkbox" id="confirmCheck" />
+              <label for="confirmCheck" style="margin:0;">I confirm this configuration is correct for Confluent Kafka user management.</label>
+            </div>
+            <div class="actions">
+              <button type="submit" class="primary" id="btn-save" disabled>Save configuration</button>
+              <span id="submit-msg" class="hint"></span>
+            </div>
+          </div>
+        </div>
+      </form>
+    </div>
+  </main>
+  <script>
+    (function () {
+      var form = document.getElementById('setup-form');
+      var banners = document.getElementById('status-banners');
+      var donePanel = document.getElementById('done-panel');
+      var wizardWrap = document.getElementById('wizard-wrap');
+      var authFields = document.getElementById('auth-fields');
+      var envFields = document.getElementById('env-fields');
+      var tokenWrap = document.getElementById('token-wrap');
+      var siteSecondary = document.getElementById('site-secondary');
+      var ocSharedCredBlock = document.getElementById('oc-shared-cred-block');
+      var ocCredModeWrap = document.getElementById('oc-cred-mode-wrap');
+      var verifyOut = document.getElementById('verify-out');
+      var checklistUl = document.getElementById('checklist-ul');
+      var summaryPre = document.getElementById('summary-pre');
+      var confirmWrap = document.getElementById('confirm-wrap');
+      var confirmCheck = document.getElementById('confirmCheck');
+      var btnSave = document.getElementById('btn-save');
+      var btnVerify = document.getElementById('btn-verify');
+      var lastPreviewOk = false;
+
+      function banner(className, html) {
+        var d = document.createElement('div');
+        d.className = 'banner ' + className;
+        d.innerHTML = html;
+        banners.appendChild(d);
+      }
+
+      function parseJsonOptional(text, label) {
+        var t = (text || '').trim();
+        if (!t) return undefined;
+        try {
+          return JSON.parse(t);
+        } catch (e) {
+          throw new Error(label + ': invalid JSON — ' + e.message);
+        }
+      }
+
+      function topoDual() {
+        return document.getElementById('topoDual').checked;
+      }
+
+      function syncSecretNameHint() {
+        var hint = document.getElementById('secret-name-hint');
+        var inp = document.getElementById('k8sSecretName');
+        if (hint && inp) hint.textContent = (inp.value || 'kafka-server-side-credentials').trim();
+      }
+
+      function updateTopologyUi() {
+        var dual = topoDual();
+        siteSecondary.style.display = dual ? 'block' : 'none';
+        document.getElementById('site-a-title').textContent = dual
+          ? 'Region 1 — OpenShift cluster'
+          : 'Single region — OpenShift cluster';
+      }
+
+      function onArchChange() {
+        updateTopologyUi();
+        if (topoDual()) {
+          document.getElementById('credPer').checked = true;
+        } else {
+          document.getElementById('credShared').checked = true;
+        }
+        syncCredModeUi();
+      }
+
+      document.getElementById('topoSingle').addEventListener('change', onArchChange);
+      document.getElementById('topoDual').addEventListener('change', onArchChange);
+      document.getElementById('customK8sSecret').addEventListener('change', function () {
+        var inp = document.getElementById('k8sSecretName');
+        inp.readOnly = !this.checked;
+        if (!this.checked) {
+          inp.value = 'kafka-server-side-credentials';
+        }
+        syncSecretNameHint();
+      });
+      document.getElementById('k8sSecretName').addEventListener('input', syncSecretNameHint);
+      document.getElementById('ocAutoLogin').addEventListener('change', function () {
+        var on = this.checked;
+        ocSharedCredBlock.style.display = on ? 'block' : 'none';
+        ocCredModeWrap.style.display = on ? 'block' : 'none';
+        syncCredModeUi();
+      });
+      document.getElementById('authEnabled').addEventListener('change', function () {
+        authFields.style.display = this.checked ? 'block' : 'none';
+      });
+      document.getElementById('environmentsEnabled').addEventListener('change', function () {
+        envFields.style.display = this.checked ? 'block' : 'none';
+      });
+      document.querySelectorAll('input[name="ocCredMode"]').forEach(function (r) {
+        r.addEventListener('change', syncCredModeUi);
+      });
+
+      function syncCredModeUi() {
+        var per = document.getElementById('credPer').checked;
+        var auto = document.getElementById('ocAutoLogin').checked;
+        document.querySelectorAll('.per-cluster-creds').forEach(function (el) {
+          el.style.display = auto && per ? 'flex' : 'none';
+        });
+        document.getElementById('oc-shared-cred-block').style.display = auto && !per ? 'block' : 'none';
+      }
+
+      function collectOcSites() {
+        var n = topoDual() ? 2 : 1;
+        var sites = [];
+        for (var i = 0; i < n; i++) {
+          var ctxEl = document.querySelector('.site-context[data-site="' + i + '"]');
+          var nsEl = document.querySelector('.site-ns[data-site="' + i + '"]');
+          var apiEl = document.querySelector('.site-api[data-site="' + i + '"]');
+          var uEl = document.querySelector('.site-oc-user[data-site="' + i + '"]');
+          var pEl = document.querySelector('.site-oc-pass[data-site="' + i + '"]');
+          sites.push({
+            ocContext: (ctxEl && ctxEl.value || '').trim(),
+            namespace: (nsEl && nsEl.value || '').trim(),
+            apiServer: (apiEl && apiEl.value || '').trim(),
+            loginUser: uEl ? uEl.value.trim() : '',
+            loginPassword: pEl ? pEl.value : '',
+          });
+        }
+        return sites;
+      }
+
+      function buildBody() {
+        var sites = collectOcSites();
+        var dual = topoDual();
+        var eff = dual ? sites : [sites[0]];
+        var firstOk = eff[0] && eff[0].ocContext && eff[0].namespace;
+        var ocSitesPayload = null;
+        if (dual) {
+          var secondOk = eff[1] && eff[1].ocContext && eff[1].namespace;
+          if (firstOk || secondOk) {
+            if (!firstOk || !secondOk) {
+              throw new Error('Dual OCP topology: fill context + namespace for both cluster rows (or clear both and use advanced JSON only).');
+            }
+            ocSitesPayload = eff;
+          }
+        } else if (firstOk) {
+          ocSitesPayload = eff;
+        }
+        var body = {
+          runtimeRoot: document.getElementById('runtimeRoot').value.trim(),
+          kafkaBootstrap: document.getElementById('kafkaBootstrap').value.trim(),
+          scriptName: document.getElementById('scriptName').value.trim(),
+          k8sSecretName: document.getElementById('k8sSecretName').value.trim(),
+          clientPropertiesFile: document.getElementById('clientPropertiesFile').value.trim(),
+          adminPropertiesFile: document.getElementById('adminPropertiesFile').value.trim(),
+          portalPort: document.getElementById('portalPort').value,
+          httpsEnabled: document.getElementById('httpsEnabled').checked,
+          httpsKeyPath: document.getElementById('httpsKeyPath').value.trim(),
+          httpsCertPath: document.getElementById('httpsCertPath').value.trim(),
+          ocPath: document.getElementById('ocPath').value.trim(),
+          kubeconfig: document.getElementById('kubeconfig').value.trim(),
+          ocTopology: dual ? 'dual' : 'single',
+        };
+        if (ocSitesPayload) body.ocSites = ocSitesPayload;
+        if (document.getElementById('authEnabled').checked) {
+          body.authEnabled = true;
+          body.credentialsFile = document.getElementById('credentialsFile').value.trim();
+          body.adminUser = document.getElementById('adminUser').value.trim();
+          body.adminPassword = document.getElementById('adminPassword').value;
+        }
+        if (document.getElementById('ocAutoLogin').checked) {
+          body.ocAutoLogin = true;
+          body.ocCredentialMode = document.getElementById('credPer').checked ? 'per_cluster' : 'shared';
+          if (body.ocCredentialMode === 'shared') {
+            body.ocLoginUser = document.getElementById('ocLoginUser').value.trim();
+            body.ocLoginPassword = document.getElementById('ocLoginPassword').value;
+          }
+        }
+        if (document.getElementById('environmentsEnabled').checked) {
+          var envObj = parseJsonOptional(document.getElementById('environmentsJson').value, 'Environments');
+          if (!envObj || typeof envObj !== 'object') {
+            throw new Error('Environments JSON is required when multi-environment is enabled');
+          }
+          body.environments = envObj;
+        }
+        var lsOvr = parseJsonOptional(document.getElementById('ocLoginServersOverride').value, 'loginServers');
+        if (lsOvr !== undefined) {
+          if (typeof lsOvr !== 'object' || Array.isArray(lsOvr)) throw new Error('loginServers must be a JSON object');
+          body.ocLoginServers = lsOvr;
+        }
+        var fb = parseJsonOptional(document.getElementById('fallbackSitesJson').value, 'fallbackSites');
+        if (fb !== undefined) {
+          if (!Array.isArray(fb)) throw new Error('fallbackSites must be a JSON array');
+          body.fallbackSites = fb;
+        }
+        return body;
+      }
+
+      function authHeaders(extra) {
+        var h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
+        var tok = document.getElementById('setupToken').value;
+        if (tok) h['X-Setup-Token'] = tok;
+        return h;
+      }
+
+      function showStep(n) {
+        document.querySelectorAll('.step-panel').forEach(function (p) {
+          p.classList.toggle('active', parseInt(p.getAttribute('data-step'), 10) === n);
+        });
+        document.querySelectorAll('#step-indicator span').forEach(function (s) {
+          var i = parseInt(s.getAttribute('data-i'), 10);
+          s.classList.remove('active', 'done');
+          if (i === n) s.classList.add('active');
+          else if (i < n) s.classList.add('done');
+        });
+        if (n !== 5) {
+          verifyOut.style.display = 'none';
+          lastPreviewOk = false;
+          confirmCheck.checked = false;
+          btnSave.disabled = true;
+        }
+      }
+
+      document.querySelectorAll('.btn-next').forEach(function (b) {
+        b.addEventListener('click', function () {
+          var msg = document.getElementById('submit-msg');
+          msg.textContent = '';
+          if (!b.getAttribute('data-skip-validate')) {
+            try {
+              buildBody();
+            } catch (e) {
+              msg.style.color = 'var(--danger)';
+              msg.textContent = e.message || String(e);
+              return;
+            }
+          }
+          showStep(parseInt(b.getAttribute('data-next'), 10));
+        });
+      });
+      document.querySelectorAll('.btn-back').forEach(function (b) {
+        b.addEventListener('click', function () {
+          showStep(parseInt(b.getAttribute('data-back'), 10));
+        });
+      });
+
+      btnVerify.addEventListener('click', function () {
+        var msg = document.getElementById('submit-msg');
+        msg.textContent = '';
+        var body;
+        try {
+          body = buildBody();
+        } catch (e) {
+          msg.style.color = 'var(--danger)';
+          msg.textContent = e.message || String(e);
+          return;
+        }
+        btnVerify.disabled = true;
+        fetch('/api/setup/preview', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: authHeaders(),
+          body: JSON.stringify(body),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }); })
+          .then(function (x) {
+            verifyOut.style.display = 'block';
+            checklistUl.innerHTML = '';
+            lastPreviewOk = false;
+            confirmWrap.style.display = 'none';
+            btnSave.disabled = true;
+            confirmCheck.checked = false;
+            if (!x.j || !x.j.ok) {
+              summaryPre.textContent = x.j && x.j.error ? x.j.error : 'Request failed';
+              return;
+            }
+            lastPreviewOk = !!x.j.canSave;
+            (x.j.checks || []).forEach(function (c) {
+              var li = document.createElement('li');
+              var b = document.createElement('span');
+              b.className = 'badge ' + (c.level || 'ok');
+              b.textContent = c.level || 'ok';
+              li.appendChild(b);
+              li.appendChild(document.createTextNode(c.message || ''));
+              checklistUl.appendChild(li);
+            });
+            var blob = { summary: x.j.summary, master: x.j.masterPreview, credentials: x.j.credentialsPreview };
+            summaryPre.textContent = JSON.stringify(blob, null, 2);
+            if (x.j.canSave) {
+              confirmWrap.style.display = 'flex';
+            } else {
+              msg.style.color = 'var(--danger)';
+              msg.textContent = 'Fix errors above before saving.';
+            }
+          })
+          .catch(function () {
+            verifyOut.style.display = 'block';
+            summaryPre.textContent = 'Network error';
+          })
+          .then(function () {
+            btnVerify.disabled = false;
+          });
+      });
+
+      confirmCheck.addEventListener('change', function () {
+        btnSave.disabled = !(lastPreviewOk && this.checked);
+      });
+
+      fetch('/api/setup/status', { credentials: 'same-origin' })
+        .then(function (r) { return r.json(); })
+        .then(function (st) {
+          if (!st.ok) {
+            banner('err', 'Could not load setup status.');
+            return;
+          }
+          banner('warn', 'Config file path: <code>' + (st.configPath || '') + '</code>');
+          if (!st.configDirWritable) {
+            banner('err', 'Config directory is not writable: ' + (st.configDirError || 'unknown'));
+            return;
+          }
+          if (!st.setupRequired) {
+            donePanel.style.display = 'block';
+            return;
+          }
+          if (st.setupTokenRequired) tokenWrap.style.display = 'block';
+          wizardWrap.style.display = 'block';
+          onArchChange();
+          syncSecretNameHint();
+          syncCredModeUi();
+          showStep(1);
+        })
+        .catch(function () {
+          banner('err', 'Network error loading setup status.');
+        });
+
+      form.addEventListener('submit', function (e) {
+        e.preventDefault();
+        if (!lastPreviewOk || !confirmCheck.checked) return;
+        var msg = document.getElementById('submit-msg');
+        var body;
+        try {
+          body = buildBody();
+        } catch (err) {
+          msg.style.color = 'var(--danger)';
+          msg.textContent = err.message || String(err);
+          return;
+        }
+        btnSave.disabled = true;
+        fetch('/api/setup/apply', {
+          method: 'POST',
+          credentials: 'same-origin',
+          headers: authHeaders(),
+          body: JSON.stringify(body),
+        })
+          .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }); })
+          .then(function (x) {
+            if (x.j && x.j.ok) {
+              msg.style.color = 'var(--success)';
+              msg.textContent = x.j.message || 'Saved.';
+              setTimeout(function () { location.replace('/'); }, 900);
+              return;
+            }
+            msg.style.color = 'var(--danger)';
+            msg.textContent = (x.j && x.j.error) ? x.j.error : ('HTTP ' + x.status);
+            btnSave.disabled = false;
+          })
+          .catch(function () {
+            msg.style.color = 'var(--danger)';
+            msg.textContent = 'Request failed.';
+            btnSave.disabled = false;
+          });
+      });
+    })();
+  </script>
+</body>
+</html>

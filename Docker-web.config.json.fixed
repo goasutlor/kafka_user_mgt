@@ -1,0 +1,35 @@
+{
+  "_comment": "หลังย้ายไป /opt/kafka-usermgmt. ocPath /host/usr/bin, .kube mount ที่ /app/user2/.kube, ssl ที่ /app/ssl.",
+  "gen": {
+    "rootDir": "/opt/kafka-usermgmt",
+    "ocPath": "/host/usr/bin",
+    "logFile": "/tmp/provisioning.log",
+    "k8sSecretName": "kafka-server-side-credentials",
+    "bootstrapServers": "kafka.apps.cwdc.esb-kafka-prod.intra.ais:443,kafka.apps.tls2.esb-kafka-prod.intra.ais:443",
+    "kubeconfigPath": "/app/user2/.kube/config-both",
+    "sites": [
+      { "name": "cwdc", "namespace": "esb-prod-cwdc", "ocContext": "cwdc" },
+      { "name": "tls2", "namespace": "esb-prod-tls2", "ocContext": "tls2" }
+    ],
+    "namespace": "esb-prod-cwdc",
+    "ocContext": "cwdc",
+    "ocAutoLogin": true,
+    "ocLoginUser": "ocpadmin",
+    "ocLoginPassword": "ocp@dmin!",
+    "ocLoginServers": {
+      "cwdc": "https://api.cwdc.esb-kafka-prod.intra.ais:6443",
+      "tls2": "https://api.tls2.esb-kafka-prod.intra.ais:6443"
+    }
+  },
+  "server": {
+    "port": 3443,
+    "https": {
+      "enabled": true,
+      "keyPath": "/app/ssl/server.key",
+      "certPath": "/app/ssl/server.crt"
+    },
+    "auth": {
+      "enabled": true
+    }
+  }
+}

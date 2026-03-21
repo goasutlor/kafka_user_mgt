@@ -1,0 +1,47 @@
+# All-in-one: image includes Node + gen.sh + Kafka CLI downloaded from Apache at build (see Dockerfile KAFKA_VERSION).
+#
+# CI/CD–safe image: no customer config baked in. On first start, open http://localhost:3443/setup.html
+# and save configuration + credentials into the mounted volume (persists across image upgrades).
+# JSON samples (when deploy/config is an empty mount): docker compose exec app ls /app/config-examples
+# Optional: SETUP_TOKEN in .env — same value must be sent as header X-Setup-Token from the setup page.
+#
+# Manual config (alternative to web setup):
+#   mkdir -p deploy/config
+#   cp webapp/config/master.config.example.json deploy/config/master.config.json
+#   cp webapp/config/credentials.example.json deploy/config/credentials.json
+#   Edit both. Do not commit credentials.json.
+#
+# Runtime (Kafka client props, kube, packs):
+#   mkdir -p runtime/configs runtime/.kube runtime/user_output
+#   cp kafka-client*.properties → runtime/configs/
+#   cp kubeconfig → runtime/.kube/config-both
+#
+# Run:
+#   docker compose up -d --build
+#   CLI: docker compose exec app bash -lc 'cd /opt/kafka-usermgmt && GEN_ACTIVE_ENV_ID=dev ./gen.sh'
+#
+# master.config.json: runtimeRoot / oc.kubeconfig should point kubeconfig under /opt/kafka-usermgmt/.kube/ when using default layout
+# Mount host oc: only works on Linux (path below). On Windows, use WSL2 or add `oc` to the image.
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Match broker-friendly client version when needed: KAFKA_VERSION, KAFKA_SCALA, KAFKA_LINK_NAME
+        KAFKA_VERSION: ${KAFKA_VERSION:-3.8.1}
+        KAFKA_SCALA: ${KAFKA_SCALA:-2.13}
+        KAFKA_LINK_NAME: ${KAFKA_LINK_NAME:-kafka_2.13-3.6.1}
+    image: confluent-kafka-user-management:latest
+    ports:
+      - "3443:3443"
+    environment:
+      CONFIG_PATH: /app/config/master.config.json
+      AUTH_ENABLED: ${AUTH_ENABLED:-0}
+      SETUP_TOKEN: ${SETUP_TOKEN:-}
+    volumes:
+      - ./runtime:/opt/kafka-usermgmt
+      # Persistent config + credentials (survives docker image version bumps)
+      - ./deploy/config:/app/config
+      - /usr/bin:/host/usr/bin:ro

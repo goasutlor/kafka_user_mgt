@@ -1,0 +1,46 @@
+{
+  "_comment": "LEGACY flat format (tests + old installs). For new deployments use master.config.example.json → master.config.json — one file + credentials.json; set CONFIG_PATH to master.config.json. See server/lib/master-config.js.",
+  "gen": {
+    "scriptPath": "D:\\Project1\\gen-kafka-user - Enhanced\\webapp\\tests\\fixtures\\dummy-gen.sh",
+    "baseDir": "D:\\Project1\\gen-kafka-user - Enhanced\\webapp\\tests\\fixtures",
+    "downloadDir": "/opt/kafka-usermgmt/user_output",
+    "kafkaBin": "/opt/kafka-usermgmt/kafka_2.13-3.6.1/bin",
+    "bootstrapServers": "host1:443,host2:443",
+    "ocPath": "/host/usr/bin",
+    "clientConfig": "/opt/kafka-usermgmt/configs/kafka-client.properties",
+    "adminConfig": "/opt/kafka-usermgmt/configs/kafka-client-master.properties",
+    "logFile": "/opt/kafka-usermgmt/provisioning.log",
+    "k8sSecretName": "kafka-server-side-credentials",
+    "kubeconfigPath": "/opt/kafka-usermgmt/.kube/config-both",
+    "sites": [
+      {
+        "name": "cwdc",
+        "namespace": "esb-prod-cwdc",
+        "ocContext": "cwdc"
+      },
+      {
+        "name": "tls2",
+        "namespace": "esb-prod-tls2",
+        "ocContext": "tls2"
+      }
+    ],
+    "namespace": "esb-prod-cwdc",
+    "ocContext": "cwdc"
+  },
+  "server": {
+    "port": 3443,
+    "environments": {
+      "enabled": true,
+      "file": "environments.json"
+    },
+    "auth": {
+      "enabled": false,
+      "secretsFile": "auth-secrets.json"
+    },
+    "https": {
+      "enabled": false,
+      "keyPath": "/app/ssl/server.key",
+      "certPath": "/app/ssl/server.crt"
+    }
+  }
+}

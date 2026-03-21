@@ -1,0 +1,14 @@
+.git
+.gitignore
+*.md
+!DEPLOY-WEB.md
+webapp/node_modules
+webapp/tests
+OPTIMIZE_SHELL.md
+web-ui-mockup/README.md
+web-ui-mockup/RUN.md
+web-ui-mockup/BACKEND_OPTIONS.md
+web-ui-mockup/Dockerfile
+web-ui-mockup/.dockerignore
+test-gen-pack.sh
+assets

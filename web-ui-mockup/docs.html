@@ -1,0 +1,419 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>คู่มือการใช้งาน — Confluent Kafka User Management</title>
+  <style>
+    :root {
+      --header-bg: #0d1117;
+      --header-text: #ffffff;
+      --header-accent: #24b4e8;
+      --body-bg: #f6f8fa;
+      --sidebar-bg: #ffffff;
+      --content-bg: #ffffff;
+      --border: #e1e4e8;
+      --text: #24292f;
+      --text-muted: #57606a;
+      --link: #0969da;
+      --link-hover: #0550ae;
+      --active-bg: #e8f4fc;
+      --active-border: #24b4e8;
+      --code-bg: #f0f4f8;
+      --success: #1a7f37;
+      --danger: #cf222e;
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      margin: 0;
+      min-height: 100vh;
+      background: var(--body-bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.6;
+    }
+    .header {
+      background: var(--header-bg);
+      color: var(--header-text);
+      padding: 0 24px;
+      height: 56px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .header-brand { display: flex; align-items: center; gap: 12px; }
+    .header-logo { width: 56px; height: 56px; border-radius: 6px; object-fit: contain; }
+    .header-title { font-weight: 600; font-size: 15px; }
+    .header-nav { display: flex; align-items: center; gap: 8px; }
+    .header-nav a {
+      color: rgba(255,255,255,0.85);
+      text-decoration: none;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .header-nav a:hover { color: #fff; background: rgba(255,255,255,0.08); }
+    .header-cta { background: var(--header-accent); color: #0d1117 !important; font-weight: 600; }
+    .header-cta:hover { background: #3bc0f0; color: #0d1117 !important; }
+
+    .breadcrumb-wrap {
+      background: var(--sidebar-bg);
+      border-bottom: 1px solid var(--border);
+      padding: 10px 24px;
+    }
+    .breadcrumb { color: var(--text-muted); font-size: 13px; }
+    .breadcrumb a { color: var(--link); text-decoration: none; }
+    .breadcrumb a:hover { text-decoration: underline; }
+
+    .layout { display: flex; max-width: 1200px; margin: 0 auto; }
+    .sidebar-left {
+      width: 220px;
+      min-width: 220px;
+      background: var(--sidebar-bg);
+      border-right: 1px solid var(--border);
+      padding: 20px 12px;
+      position: sticky;
+      top: 57px;
+      align-self: flex-start;
+      max-height: calc(100vh - 57px);
+      overflow-y: auto;
+    }
+    .sidebar-left .nav-section {
+      font-size: 11px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      padding: 8px 8px 4px;
+      margin-top: 12px;
+    }
+    .sidebar-left .nav-section:first-child { margin-top: 0; }
+    .sidebar-left a {
+      display: block;
+      padding: 6px 10px;
+      color: var(--text);
+      text-decoration: none;
+      border-radius: 6px;
+      font-size: 13px;
+      margin-bottom: 2px;
+    }
+    .sidebar-left a:hover { background: var(--body-bg); color: var(--link); }
+
+    .main {
+      flex: 1;
+      min-width: 0;
+      padding: 32px 40px 48px;
+      background: var(--content-bg);
+    }
+    .main h1 { font-size: 28px; font-weight: 700; margin: 0 0 8px; color: var(--text); }
+    .main .lead { font-size: 16px; color: var(--text-muted); margin-bottom: 32px; }
+    .main h2 {
+      font-size: 20px;
+      font-weight: 600;
+      margin: 36px 0 16px;
+      padding-top: 8px;
+      border-top: 1px solid var(--border);
+      color: var(--text);
+    }
+    .main h2:first-of-type { border-top: none; margin-top: 0; padding-top: 0; }
+    .main h3 { font-size: 16px; font-weight: 600; margin: 20px 0 10px; color: var(--text); }
+    .main p { margin: 0 0 12px; }
+    .main ul, .main ol { margin: 0 0 16px; padding-left: 24px; }
+    .main li { margin-bottom: 6px; }
+    .main .term {
+      background: #fff8e6;
+      padding: 0 4px;
+      border-radius: 3px;
+      font-family: ui-monospace, monospace;
+      font-size: 13px;
+    }
+    .main .step-num {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 24px;
+      height: 24px;
+      background: var(--header-accent);
+      color: #0d1117;
+      font-weight: 700;
+      font-size: 12px;
+      border-radius: 50%;
+      margin-right: 8px;
+    }
+    .main .step { margin-bottom: 14px; }
+    .main .note {
+      background: var(--code-bg);
+      border-left: 4px solid var(--header-accent);
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 13px;
+    }
+    .main .warn {
+      background: #fff8e6;
+      border-left: 4px solid #b8860b;
+      padding: 12px 16px;
+      margin: 16px 0;
+      font-size: 13px;
+    }
+    .main pre {
+      background: var(--code-bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 12px 16px;
+      font-size: 12px;
+      overflow-x: auto;
+      margin: 12px 0;
+    }
+  </style>
+</head>
+<body>
+  <header class="header">
+    <div class="header-brand">
+      <img src="Confluent-Emblem.png" alt="" class="header-logo" />
+      <span class="header-title">Confluent Kafka User Management</span>
+    </div>
+    <nav class="header-nav">
+      <a href="index.html">กลับไปแอป</a>
+      <a href="docs.html" class="header-cta">Documentation</a>
+    </nav>
+  </header>
+
+  <div class="breadcrumb-wrap">
+    <div class="breadcrumb">
+      <a href="index.html">Home</a><span> › </span>
+      <span>คู่มือการใช้งาน (Documentation)</span>
+    </div>
+  </div>
+
+  <div class="layout">
+    <aside class="sidebar-left">
+      <div class="nav-section">เนื้อหา</div>
+      <a href="#intro">บทนำ</a>
+      <a href="#add-user">1. Add new user</a>
+      <a href="#create-topic-onboard">2. Create Topic &amp; Onboard User</a>
+      <a href="#add-acl-existing">3. Add ACL to existing user</a>
+      <a href="#test-user">4. Test existing user</a>
+      <a href="#remove-user">5. Remove user(s) + ACL</a>
+      <a href="#change-password">6. Change password</a>
+      <a href="#cleanup-acl">7. Cleanup orphaned ACLs</a>
+      <a href="#audit-download">8. Audit Log &amp; Download History</a>
+      <a href="#errors">เมื่อเกิดข้อผิดพลาด</a>
+      <a href="#release-notes">Release Notes</a>
+    </aside>
+
+    <main class="main">
+      <h1>คู่มือการใช้งาน (User Guide)</h1>
+      <p class="lead">วิธีใช้งาน Web Confluent Kafka User Management แบบทีละขั้นตอน ให้ทำตามลำดับเพื่อลดข้อผิดพลาด</p>
+
+      <h2 id="intro">บทนำ</h2>
+      <p>แอปนี้ใช้จัดการ User ของ Kafka บน Confluent (OCP CWDC + TLS2) ได้แก่ <strong>สร้าง topic ใหม่และ onboard user</strong>, <strong>เพิ่ม user ใหม่</strong>, <strong>เพิ่มสิทธิ์ (ACL) ให้ user ที่มีอยู่แล้ว</strong>, <strong>ทดสอบ user</strong>, <strong>ลบ user และ ACL</strong>, <strong>เปลี่ยนรหัสผ่าน</strong>, และ <strong>ลบ ACL ที่ค้างอยู่</strong> หลังดำเนินการแต่ละอย่าง ระบบจะ validate ก่อนทำจริง และไม่ commit แบบครึ่งเดียว (ถ้าล้มกลางทางจะ rollback)</p>
+
+      <h2 id="add-user">1. Add new user (เพิ่ม user ใหม่)</h2>
+      <p>ใช้เมื่อต้องการสร้าง Kafka user ใหม่ พร้อม ACL สำหรับ topic ที่กำหนด และได้ไฟล์ .enc สำหรับแจกให้ผู้ใช้ถอดรหัสแล้วใช้งาน</p>
+
+      <h3>ขั้นตอนการทำ</h3>
+      <div class="step">
+        <span class="step-num">1</span>
+        <strong>Identification &amp; Topic</strong><br/>
+        กรอก <strong>Client System Name</strong> (ใช้เป็นชื่อโฟลเดอร์/ไฟล์ของ pack) และ <strong>Topic name</strong> ที่มีอยู่จริงในคลัสเตอร์<br/>
+        กดปุ่ม <strong>Load topic list</strong> เพื่อดึงรายการ topic จาก Kafka แล้วเลือกจากรายการหรือพิมพ์ชื่อ (แนะนำให้เลือกจาก list เพื่อกันพิมพ์ผิด)
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        <strong>Username</strong><br/>
+        กรอก <strong>Username</strong> ของ Kafka (ตัวอักษร/ตัวเลข/จุด/ขีดล่าง/ขีดเท่านั้น ไม่ซ้ำกับที่มีอยู่)<br/>
+        กดปุ่ม <strong>Load existing users</strong> เพื่อดูรายชื่อ user ที่มีอยู่ — <strong>ห้ามใช้ชื่อที่อยู่ใน list นี้</strong>
+      </div>
+      <div class="step">
+        <span class="step-num">3</span>
+        <strong>Permission (ACL)</strong><br/>
+        เลือกสิทธิ์ของ topic: <strong>Read</strong> (consume อย่างเดียว) หรือ <strong>All</strong> (อ่าน+เขียน)
+      </div>
+      <div class="step">
+        <span class="step-num">4</span>
+        <strong>Passphrase</strong><br/>
+        ตั้งรหัสผ่านสำหรับเข้ารหัสไฟล์ .enc (ต้องกรอกสองช่องให้ตรงกัน) — ใช้รหัสนี้เมื่อถอดรหัสไฟล์ .enc
+      </div>
+      <div class="step">
+        <span class="step-num">5</span>
+        <strong>Execute</strong><br/>
+        ตรวจสอบข้อมูลใน Summary แล้วกดปุ่ม <strong>Create</strong><br/>
+        รอจนเสร็จ จะมีข้อความสำเร็จ และลิงก์ <strong>Download</strong> ไฟล์ .enc พร้อมคำสั่งถอดรหัส (openssl) ด้านล่าง<br/>
+        หลัง Add สำเร็จ ระบบจะรันการทดสอบ auth ให้อัตโนมัติ และแสดงผล <strong>Verification</strong> ว่าผ่านหรือไม่
+      </div>
+      <div class="note">
+        <strong>ถ้า Username มีอยู่แล้ว:</strong> ระบบจะแสดงข้อความ "Username already exists" พร้อมลิงก์ <strong>add this topic to this user</strong> — กดลิงก์เพื่อไปหน้า Add ACL to existing user โดยระบบจะเติม Username และ Topic ให้อัตโนมัติ
+      </div>
+      <div class="note">
+        <strong>หลังดาวน์โหลด:</strong> ใช้คำสั่งในบล็อก "How to decrypt and unpack" เพื่อถอดรหัสไฟล์ .enc (ใส่ passphrase ที่ตั้งไว้) จากนั้นแตกไฟล์และส่งโฟลเดอร์ (หรือ client.properties + credentials) ให้ผู้ใช้ Kafka
+      </div>
+
+      <h2 id="create-topic-onboard">2. Create Topic &amp; Onboard User (สร้าง topic ใหม่และ onboard user)</h2>
+      <p>ใช้เมื่อต้องการสร้าง Kafka topic ใหม่จาก Web แล้ว onboard user คนแรกสำหรับ topic นั้นใน flow เดียว (ขั้นที่ 1 สร้าง topic, ขั้นที่ 2–6 เหมือน Add new user: Client System Name, Username, ACL, Passphrase, Execute)</p>
+      <h3>ขั้นตอนการทำ</h3>
+      <div class="step">
+        <span class="step-num">1</span>
+        <strong>Create Topic</strong> — กรอกชื่อ topic ที่ต้องการสร้าง แล้วกดปุ่มสร้าง topic (ใช้ค่า default ของ broker สำหรับ partitions และ replication factor)
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        <strong>Identification &amp; Topic</strong> — กรอก <strong>Client System Name</strong> และ topic จะถูก pre-fill จากขั้นที่ 1
+      </div>
+      <div class="step">
+        <span class="step-num">3–6</span>
+        <strong>Username, Permission, Passphrase, Execute</strong> — ทำเหมือน Add new user (รวมถึงการโหลดรายการ users และเลือก ACL)
+      </div>
+      <div class="note">
+        ถ้าใส่ Username ที่มีอยู่แล้ว ระบบจะแจ้งและมีลิงก์ไป <strong>Add ACL to existing user</strong> เพื่อเพิ่ม topic นี้ให้ user นั้น
+      </div>
+
+      <h2 id="add-acl-existing">3. Add ACL to existing user (เพิ่มสิทธิ์ให้ user ที่มีอยู่แล้ว)</h2>
+      <p>ใช้เมื่อ user มีอยู่แล้วในระบบ และต้องการ<strong>เพิ่มสิทธิ์ (ACL) สำหรับ topic อื่น</strong> โดยไม่สร้าง user ใหม่หรือเปลี่ยนรหัสผ่าน — เพิ่มเฉพาะ topic ACL และ consumer group ACL ให้ user นั้น</p>
+      <h3>ขั้นตอนการทำ</h3>
+      <div class="step">
+        <span class="step-num">1</span>
+        กดปุ่ม <strong>Load users</strong> และ <strong>Load topics</strong> เพื่อดึงรายการล่าสุด
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        กรอก <strong>Username</strong> (user ที่มีอยู่แล้ว) และ <strong>Topic</strong> ที่ต้องการเพิ่มสิทธิ์ — หรือคลิกเลือกจากรายการ
+      </div>
+      <div class="step">
+        <span class="step-num">3</span>
+        กดปุ่ม <strong>Load existing ACLs</strong> เพื่อดูสรุปสิทธิ์ปัจจุบันของ user นั้น
+      </div>
+      <div class="step">
+        <span class="step-num">4</span>
+        เลือกระดับสิทธิ์ (Read / Client (R+W+Describe) / All) แล้วกด <strong>Prepare</strong> — ระบบจะแสดงข้อความยืนยัน
+      </div>
+      <div class="step">
+        <span class="step-num">5</span>
+        กด <strong>Confirm</strong> เพื่อดำเนินการ — หลังสำเร็จการกระทำจะถูกบันทึกใน Audit Log เป็น "Add ACL (existing user)"
+      </div>
+
+      <h2 id="test-user">4. Test existing user (ทดสอบ user ที่มีอยู่)</h2>
+      <p>ใช้ตรวจสอบว่า user สามารถเชื่อมต่อ Kafka ได้ (auth ผ่านและเข้าถึง topic ได้)</p>
+
+      <h3>ขั้นตอนการทำ</h3>
+      <div class="step">
+        <span class="step-num">1</span>
+        กดปุ่ม <strong>Load topics</strong> และ <strong>Load users</strong> ในส่วน Test existing user เพื่อดึงรายการล่าสุด
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        กรอก <strong>Kafka username</strong>, <strong>Password</strong> (รหัสที่ได้จากไฟล์ที่ถอดรหัสแล้ว เช่น ใน credentials.txt หรือ client.properties), และ <strong>Topic name</strong><br/>
+        สามารถคลิกเลือกจากรายการ topic/user ที่โหลดไว้ได้
+      </div>
+      <div class="step">
+        <span class="step-num">3</span>
+        กดปุ่ม <strong>Test</strong> — ถ้าสำเร็จจะแสดง "Auth OK." ถ้าไม่จะแสดงข้อความ error และรายละเอียด (Details) สำหรับใช้ trace
+      </div>
+
+      <h2 id="remove-user">5. Remove user(s) + ACL (ลบ user และ ACL)</h2>
+      <p>ใช้เมื่อต้องการลบ user ออกจากระบบ (ลบ ACL ทั้งหมดของ user นั้นก่อน จากนั้นลบออกจาก secret CWDC และ TLS2) ระบบจะ validate ก่อนว่าอ่าน secret ได้และ user มีอยู่ในทั้งสองฝั่ง จึงจะลงมือลบ และถ้าล้มกลางทางจะไม่ทิ้งให้แก้แค่ฝั่งเดียว (rollback)</p>
+
+      <h3>ขั้นตอนการทำ</h3>
+      <div class="step">
+        <span class="step-num">1</span>
+        กดปุ่ม <strong>Load existing users</strong> ในส่วน Remove user(s) + ACL เพื่อดึงรายการ user ล่าสุด
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        ในช่อง <strong>Users (comma-separated)</strong> กรอกชื่อ user ที่ต้องการลบ (หลายคนคั่นด้วย comma) หรือคลิกเลือกจากรายการที่โหลดไว้
+      </div>
+      <div class="step">
+        <span class="step-num">3</span>
+        กดปุ่ม <strong>Remove user(s) and ACL</strong><br/>
+        ระบบจะ: (1) ตรวจสอบว่าอ่าน secret CWDC/TLS2 ได้ และ user มีในทั้งสองฝั่ง (2) ลบ ACL ทั้งหมดของ user เหล่านั้น (3) ลบ user ออกจาก secret ทั้งสองฝั่ง — ถ้าขั้นใดขั้นหนึ่งล้มเหลวจะไม่ commit แบบครึ่งเดียว
+      </div>
+      <div class="warn">
+        <strong>คำเตือน:</strong> การลบ user จะทำให้ user นั้นเข้า Kafka ไม่ได้หลังจาก CFK hot-reload (~30–60 วินาที) แนะนำให้แจ้งผู้ใช้ก่อนลบ
+      </div>
+
+      <h2 id="change-password">6. Change password (เปลี่ยนรหัสผ่าน)</h2>
+      <p>ใช้เมื่อต้องการเปลี่ยนรหัสผ่านของ user ที่มีอยู่แล้ว ระบบจะ validate ว่า user มีใน secret ทั้ง CWDC และ TLS2 ก่อน จากนั้นอัปเดตทั้งสองฝั่ง หรือ rollback ถ้าล้มกลางทาง</p>
+
+      <h3>ขั้นตอนการทำ</h3>
+      <div class="step">
+        <span class="step-num">1</span>
+        กดปุ่ม <strong>Load users</strong> ในส่วน Change password เพื่อดึงรายการ user
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        กรอก <strong>Username</strong> ของ user ที่จะเปลี่ยนรหัส (แนะนำให้เลือกจาก list) และ <strong>New password</strong> ที่ต้องการตั้ง
+      </div>
+      <div class="step">
+        <span class="step-num">3</span>
+        กดปุ่ม <strong>Change password</strong><br/>
+        หลังเปลี่ยนแล้ว รหัสเก่าจะใช้ไม่ได้หลัง CFK reload — แจ้งผู้ใช้ให้ใช้รหัสใหม่และอัปเดต client.properties/credentials
+      </div>
+
+      <h2 id="cleanup-acl">7. Cleanup orphaned ACLs (ลบ ACL ที่ค้างอยู่)</h2>
+      <p>ใช้เมื่อมี principal ใน ACL ของ Kafka ที่ไม่มีอยู่ใน plain-users.json แล้ว (เช่น ลบ user ไปแล้วแต่ ACL ยังค้าง) ระบบจะ list ACL ทั้งหมด แล้วลบเฉพาะรายการที่ principal ไม่ได้อยู่ใน secret — <strong>ไม่มีการแก้ secret</strong> แค่ลบ ACL ใน Kafka</p>
+
+      <h3>ขั้นตอนการทำ</h3>
+      <div class="step">
+        <span class="step-num">1</span>
+        ไปที่ส่วน <strong>Cleanup orphaned ACLs</strong> แล้วกดปุ่ม <strong>Run cleanup</strong>
+      </div>
+      <div class="step">
+        <span class="step-num">2</span>
+        รอจนเสร็จ จะแสดงจำนวน ACL ที่ลบออก (ถ้ามี) หรือข้อความสำเร็จ
+      </div>
+
+      <h2 id="audit-download">8. Audit Log &amp; Download History</h2>
+      <p><strong>Audit Log</strong> — แสดงประวัติการดำเนินการ (Add user, Create topic, Add ACL existing, Remove user, Change password, Test user, Cleanup ACL) สามารถกรองตามช่วงวันที่ (From / To รูปแบบ YYYY-MM-DD) แล้วกด Refresh</p>
+      <p><strong>Download History</strong> — แสดงรายการวันที่มีการ generate credential pack พร้อมลิงก์ดาวน์โหลดไฟล์ .enc ตามวัน</p>
+
+      <h2 id="errors">เมื่อเกิดข้อผิดพลาด</h2>
+      <p>ถ้าแอปแสดงข้อความ error (สีแดง):</p>
+      <ul>
+        <li>อ่านข้อความหลักด้านบน — มักบอกสาเหตุสั้นๆ (เช่น gen.sh exited 1, config not found)</li>
+        <li>ถ้ามี <strong>Step / Phase / Exit code</strong> ด้านล่าง ใช้สำหรับอ้างอิงเวลาแจ้ง Admin หรือดู log</li>
+        <li>กดเปิด <strong>Details (stderr)</strong> หรือ <strong>Details (stdout)</strong> เพื่อดูข้อความจากสคริปต์/คำสั่ง — ใช้ trace ปัญหาใน production ได้</li>
+      </ul>
+      <p>Admin สามารถดู log ที่ server (ข้อความขึ้นต้นด้วย [add-user], [remove-user] ฯลฯ) และที่เครื่องที่รัน gen.sh ดูที่ไฟล์ <span class="term">provisioning.log</span> (path ตาม config) เพื่อดู step และ exit_code เพิ่มเติม</p>
+
+      <h2 id="release-notes">Release Notes</h2>
+      <p>สรุปการเปลี่ยนแปลงและฟีเจอร์หลักในแต่ละเวอร์ชัน (อัปเดตตาม app version ใน Web)</p>
+
+      <h3>1.0.44</h3>
+      <ul>
+        <li><strong>UI:</strong> เปลี่ยน label "System name" เป็น "Client System Name" ทั้งใน Add new user และ Create Topic &amp; Onboard เพื่อสื่อความหมายฝั่ง client ให้ชัดเจน</li>
+        <li><strong>UI:</strong> เมื่อกรอก Username ที่มีอยู่แล้ว (ใน Add user หรือ Create Topic &amp; Onboard) จะแสดงลิงก์ "add this topic to this user" — กดแล้วไปหน้า Add ACL to existing user พร้อม pre-fill Username และ Topic</li>
+        <li><strong>Docs:</strong> อัปเดต Documentation ให้รวม Create Topic &amp; Onboard, Add ACL to existing user, Audit Log &amp; Download History และ Release Notes</li>
+      </ul>
+
+      <h3>1.0.43</h3>
+      <ul>
+        <li><strong>UI:</strong> Audit Log ช่องวันที่ From/To ใช้ placeholder "YYYY-MM-DD" (ภาษาอังกฤษ) แทนรูปแบบภาษาไทย</li>
+      </ul>
+
+      <h3>1.0.42</h3>
+      <ul>
+        <li><strong>ฟีเจอร์:</strong> Add ACL to existing user — เพิ่มสิทธิ์ (topic + consumer group) ให้ user ที่มีอยู่แล้วโดยไม่สร้าง credential ใหม่</li>
+        <li><strong>Web:</strong> หน้า "Add ACL to existing user" — โหลด users/topics, แสดงสรุป ACL เดิม, เลือกระดับสิทธิ์, ยืนยันแล้ว Execute</li>
+        <li><strong>Audit:</strong> บันทึกการสร้าง topic (create-topic) และ Add ACL existing (add-acl-existing) ใน Audit Log พร้อม label อ่านง่าย</li>
+        <li><strong>CLI:</strong> gen.sh โหมด [5] Add ACL for existing user (ทั้งแบบ interactive และ non-interactive GEN_MODE=5)</li>
+      </ul>
+
+      <h3>1.0.41 และก่อนหน้า</h3>
+      <ul>
+        <li>Create Topic จาก Web (GEN_MODE=4), Add user, Test user, Remove user, Change password, Cleanup ACL</li>
+        <li>Login พร้อม security code (เมื่อเปิด auth), session, favicon 204, /api/me 200 เมื่อยังไม่ login</li>
+        <li>แก้ไข syntax error ใน Create Topic/Add user error message และการโหลด security code หลัง auth mode</li>
+      </ul>
+
+      <p style="margin-top:32px; color: var(--text-muted); font-size: 13px;">
+        — คู่มือนี้ครอบคลุมการใช้งานผ่าน Web UI. สำหรับการรัน gen.sh แบบ CLI และการ deploy ดูได้จากเอกสารใน repo (INSTALL.md, RUN-AFTER-LOAD.md, ERROR_HANDLING_AND_CRITICAL_OPS.md)
+      </p>
+    </main>
+  </div>
+</body>
+</html>

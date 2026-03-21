@@ -1,0 +1,28 @@
+.cursor/
+node_modules/
+webapp/node_modules/
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+__pycache__/
+*.pyc
+
+# Local secrets / generated master (never commit)
+deploy/config/credentials.json
+deploy/config/master.config.json
+deploy/config/auth-secrets.json
+webapp/config/credentials.json
+webapp/config/master.config.json
+webapp/config/auth-secrets.json
+webapp/config/auth-users.json
+
+# Full host mirror: contains kubeconfigs, keystores, customer packs — never publish.
+# The Docker image downloads Kafka from Apache at build time; this tree is not required in git.
+kafka_from_host/
+
+# Local / runtime blobs
+kafka.tar.gz
+*.enc
+clarify_folder.txt

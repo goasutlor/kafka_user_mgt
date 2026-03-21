@@ -1,0 +1,16 @@
+{
+  "_comment": "For Docker Desktop on Windows: mount project to /workspace and use this config. Paths are inside container.",
+  "gen": {
+    "scriptPath": "/workspace/gen.sh",
+    "baseDir": "/workspace",
+    "kafkaBin": "/workspace/kafka_2.13-3.6.1/bin",
+    "ocPath": "/usr/bin",
+    "clientConfig": "/workspace/configs/kafka-client.properties",
+    "adminConfig": "/workspace/configs/kafka-client-master.properties",
+    "logFile": "/workspace/provisioning.log",
+    "k8sSecretName": "kafka-server-side-credentials"
+  },
+  "server": {
+    "port": 3000
+  }
+}
