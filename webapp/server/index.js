@@ -45,12 +45,56 @@ function stripAnsi(str) {
 
 const app = express();
 
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const USE_HTTPS_DIRECT = process.env.USE_HTTPS === '1';
+const TRUST_PROXY = process.env.TRUST_PROXY === '1';
+
+// Behind Nginx / LB that terminates TLS: set TRUST_PROXY=1 and X-Forwarded-Proto (session cookies use secure: auto).
+if (TRUST_PROXY) {
+  app.set('trust proxy', 1);
+}
+
+/** Cookie options for logout / clearCookie — must match how the session cookie was issued. */
+function sessionCookieResponseOpts(req) {
+  const base = { path: '/', httpOnly: true, sameSite: 'lax' };
+  if (!IS_PRODUCTION) return base;
+  if (USE_HTTPS_DIRECT) return { ...base, secure: true };
+  if (TRUST_PROXY) {
+    const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+    if (proto === 'https') return { ...base, secure: true };
+  }
+  return base;
+}
+
+let sessionCookieSecure = false;
+let sessionProxy = false;
+if (IS_PRODUCTION) {
+  if (USE_HTTPS_DIRECT) {
+    sessionCookieSecure = true;
+  } else if (TRUST_PROXY) {
+    sessionCookieSecure = 'auto';
+    sessionProxy = true;
+  }
+}
+
 // Security headers (no Helmet dependency; set essential ones only)
 app.use((req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('X-XSS-Protection', '1; mode=block');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
+  const hsts = process.env.HSTS_MAX_AGE;
+  if (hsts && /^\d+$/.test(String(hsts).trim())) {
+    let clientHttps = !!req.secure;
+    if (!clientHttps && TRUST_PROXY) {
+      const proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+      clientHttps = proto === 'https';
+    }
+    if (clientHttps) {
+      const inc = process.env.HSTS_INCLUDE_SUBDOMAINS === '1' ? '; includeSubDomains' : '';
+      res.setHeader('Strict-Transport-Security', `max-age=${String(hsts).trim()}${inc}`);
+    }
+  }
   next();
 });
 
@@ -62,9 +106,10 @@ app.use(session({
   resave: false,
   saveUninitialized: false,
   name: 'kafka_usermgmt_sid',
+  proxy: sessionProxy,
   cookie: {
     httpOnly: true,
-    secure: process.env.NODE_ENV === 'production' && (process.env.USE_HTTPS === '1'),
+    secure: sessionCookieSecure,
     maxAge: 24 * 60 * 60 * 1000,
     sameSite: 'lax',
   },
@@ -516,8 +561,7 @@ app.get('/api/auth-mode', (req, res) => {
 });
 
 app.post('/api/logout', (req, res) => {
-  const cookieOpts = { path: '/', httpOnly: true, sameSite: 'lax' };
-  if (process.env.NODE_ENV === 'production' && process.env.USE_HTTPS === '1') cookieOpts.secure = true;
+  const cookieOpts = sessionCookieResponseOpts(req);
   req.session.destroy((err) => {
     if (err) return res.status(500).json({ ok: false, error: 'Logout error' });
     res.clearCookie('kafka_usermgmt_sid', cookieOpts);

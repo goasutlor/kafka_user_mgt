@@ -20,6 +20,12 @@ export IMAGE_NAME="${IMAGE_NAME:-confluent-kafka-user-management:latest}"
 # Port: host:container (if server.port=3443 use 443:3443; if 443 use 443:443)
 export PORT_MAP="${PORT_MAP:-443:3443}"
 
+# In-container TLS: mounts SSL_DIR → /app/ssl. The app only uses HTTPS if USE_HTTPS=1 (+ valid key/cert).
+# Default: if server.key and server.crt exist under SSL_DIR, pass USE_HTTPS=1. For plain HTTP on host 443, export USE_HTTPS=0.
+# TLS at Nginx/LB only: export TRUST_PROXY=1 (and usually USE_HTTPS=0). Send X-Forwarded-Proto from the proxy.
+export USE_HTTPS="${USE_HTTPS:-}"
+export TRUST_PROXY="${TRUST_PROXY:-0}"
+
 # Auth: user file for login (create with: node scripts/auth-users-cli.js add admin)
 # To enable login + security code: set AUTH_ENABLED=1 and restart container (no rebuild). Or in web.config.json set "server": { "auth": { "enabled": true } }
 export AUTH_USERS_HOST="${AUTH_USERS_HOST:-$ROOT/Docker/auth-users.json}"
@@ -43,6 +49,9 @@ run_podman_start() {
   [[ -n "${OC_LOGIN_PASSWORD:-}" ]] && extra+=(-e "OC_LOGIN_PASSWORD=$OC_LOGIN_PASSWORD")
   [[ -n "${OC_CREDENTIALS_KEY:-}" ]] && extra+=(-e "OC_CREDENTIALS_KEY=$OC_CREDENTIALS_KEY")
   [[ -n "${AUTH_ENABLED:-}" ]] && extra+=(-e "AUTH_ENABLED=$AUTH_ENABLED")
+  [[ "${TRUST_PROXY}" == "1" ]] && extra+=(-e TRUST_PROXY=1)
+  [[ -n "${HSTS_MAX_AGE:-}" ]] && extra+=(-e "HSTS_MAX_AGE=$HSTS_MAX_AGE")
+  [[ "${HSTS_INCLUDE_SUBDOMAINS:-}" == "1" ]] && extra+=(-e HSTS_INCLUDE_SUBDOMAINS=1)
 
   # When everything is under ROOT: CONFIG/BASE/SSL/KUBE derive from ROOT. If .kube is under ROOT, it is already in the ROOT mount; only add a separate .kube mount when KUBE_DIR is outside ROOT.
   # ROOT must be writable so the script can create .enc in user_output.
@@ -52,6 +61,20 @@ run_podman_start() {
   if [[ "$KUBE_DIR" != "$BASE_HOST"* && "$KUBE_DIR" != "$BASE_HOST" ]]; then
     kube_vol=(-v "$KUBE_DIR:$BASE_HOST/.kube-external:z")
   fi
+
+  local https_env=()
+  if [[ "${USE_HTTPS}" == "0" ]]; then
+    :
+  elif [[ "${TRUST_PROXY}" == "1" && "${USE_HTTPS}" != "1" ]]; then
+    : # TLS terminated at reverse proxy; Node serves HTTP (session cookies use X-Forwarded-Proto)
+  elif [[ "${USE_HTTPS}" == "1" ]] || [[ -f "$SSL_DIR/server.key" && -f "$SSL_DIR/server.crt" ]]; then
+    https_env=(
+      -e USE_HTTPS=1
+      -e SSL_KEY_PATH=/app/ssl/server.key
+      -e SSL_CERT_PATH=/app/ssl/server.crt
+    )
+  fi
+
   podman run -d --name "$CONTAINER_NAME" --restart=unless-stopped --userns=keep-id --security-opt label=disable -p "$PORT_MAP" \
     -v "${ROOT}/Docker:/app/config:z" \
     -v "$BASE_HOST:$BASE_HOST:z" \
@@ -61,6 +84,7 @@ run_podman_start() {
     "${kube_vol[@]}" \
     -e CONFIG_PATH=/app/config/web.config.json \
     -e BASE_HOST="$BASE_HOST" \
+    "${https_env[@]}" \
     "${extra[@]}" \
     "$IMAGE_NAME"
 }

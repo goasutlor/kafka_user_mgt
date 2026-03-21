@@ -76,3 +76,17 @@ podman load -i confluent-kafka-user-management-0.0.0.tar
 ```
 
 จากนั้นใช้ Export Path + Podman run ด้านบน (หรือ `source podman-run-config.sh` แล้ว `run_podman_start`)
+
+---
+
+## 5. HTTPS แบบ Prod (TLS ที่ Node — ไม่ต้องมี Nginx)
+
+- วาง `server.key` + `server.crt` (เช่น self-signed CN=hostname เหมือนเครื่อง Prod) ใต้ `SSL_DIR` — `podman-run-config.sh` mount ไป `/app/ssl/` อยู่แล้ว
+- ถ้ามีไฟล์ทั้งคู่ สคริปต์ส่ง **`USE_HTTPS=1`** ให้อัตโนมัติ
+- อยากให้พอร์ต 443 เป็น HTTP ชั่วคราว: **`export USE_HTTPS=0`** ก่อน `run_podman_start`
+- หลัง first-time setup เคยรันแบบ HTTP: **restart container** หลังมี config ครบ แล้วค่อยเปิด HTTPS
+- **Docker Compose:** ใน `.env` ใส่ `USE_HTTPS=1` และ uncomment volume `./deploy/ssl:/app/ssl:ro` ใน `docker-compose.yml`
+
+### 5.1 ทางเลือก: TLS ที่ reverse proxy เท่านั้น
+
+ถ้าองค์กรบังคับใบที่ LB/Nginx: ให้แอปเป็น HTTP + **`TRUST_PROXY=1`** และ proxy ส่ง **`X-Forwarded-Proto: https`** (ไม่ส่ง `USE_HTTPS` ที่ Node)

@@ -9,7 +9,7 @@ COPY webapp/package.json ./
 RUN npm install --omit=dev --ignore-scripts
 
 FROM node:20-bookworm-slim
-ARG VERSION=1.0.1
+ARG VERSION=1.0.55
 ENV APP_VERSION=${VERSION}
 LABEL org.opencontainers.image.version="${VERSION}"
 # Kafka CLI: always downloaded from Apache at build time (no copy from old bundles).
