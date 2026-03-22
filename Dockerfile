@@ -26,7 +26,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 RUN mkdir -p /opt/kafka-usermgmt \
     && DIST="kafka_${KAFKA_SCALA}-${KAFKA_VERSION}" \
-    && curl -fsSL "https://archive.apache.org/dist/kafka/${KAFKA_VERSION}/${DIST}.tgz" \
+    && URL_DL="https://downloads.apache.org/kafka/${KAFKA_VERSION}/${DIST}.tgz" \
+    && URL_AR="https://archive.apache.org/dist/kafka/${KAFKA_VERSION}/${DIST}.tgz" \
+    && (curl -fsSL "$URL_DL" || curl -fsSL "$URL_AR") \
     | tar xz -C /opt/kafka-usermgmt \
     && test -d "/opt/kafka-usermgmt/${DIST}" \
     && ln -sfn "/opt/kafka-usermgmt/${DIST}" "/opt/kafka-usermgmt/${KAFKA_LINK_NAME}"
