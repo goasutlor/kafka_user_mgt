@@ -334,21 +334,45 @@
 
         <div class="step-panel" data-step="3">
           <h2>Kafka (Confluent clients)</h2>
-          <p class="hint">Bootstrap addresses for the Kafka cluster your CLI uses (often the OpenShift route, port 443). One value here applies to all namespaces from step 2 unless you customize JSON later.</p>
-          <label for="kafkaBootstrap">Kafka bootstrap servers <span class="hint">(required)</span></label>
+          <p class="hint">Dev / SIT / UAT in step 2 choose which <strong>OpenShift namespace</strong> we patch for each environment — they are not three Kafka forms. The field below is the <strong>default bootstrap</strong> for Kafka clients (and for setup verify / property templates). If each environment uses a <em>different</em> broker hostname, expand &ldquo;Per-environment bootstrap&rdquo; (or add <code>bootstrapServers</code> on each env in JSON mode).</p>
+          <label for="kafkaBootstrap">Kafka bootstrap servers <span class="hint">(required — default for all envs)</span></label>
           <input type="text" id="kafkaBootstrap" placeholder="kafka.apps.example.com:443" required />
 
+          <div id="env-kafka-bootstrap-panel" style="display:none; margin-top:14px; padding:12px; border:1px solid #d0d7de; border-radius:8px; background:#f8fafc;">
+            <strong>Per-environment bootstrap</strong> <span class="hint">optional — only when SIT/UAT use a different <code>host:port</code> than Dev; empty row = use the main field above. The portal uses this when you switch the environment badge.</span>
+            <div id="env-kafka-bootstrap-rows" style="margin-top:8px;"></div>
+          </div>
+
           <p class="hint" style="margin-top:12px;">
-            <strong>Two modes:</strong> (1) Leave the block below empty — on Save we only create property <em>templates</em> (with <code>CHANGE_ME</code>) if missing; you finish truststore + passwords on the runtime mount. (2) Fill <strong>every</strong> field below — we write final <code>kafka-client.properties</code>, <code>kafka-client-master.properties</code>, and <code>client.truststore.jks</code> on Save and on <strong>Run verification</strong> (same paths). PEM = broker CA chain; or paste an existing JKS as base64. Later changes: edit files under the mounted <code>configs/</code> folder only.
+            <strong>Templates vs full config:</strong> (1) Leave the SSL/SASL section below empty — we only create property <em>templates</em> (with <code>CHANGE_ME</code>) if missing. (2) Fill it — we write <code>kafka-client.properties</code> and <code>kafka-client-master.properties</code>. <strong>Recommended:</strong> copy your <code>.jks</code> onto the <strong>runtime</strong> volume (e.g. <code>configs/client.truststore.jks</code>), choose <strong>File on server</strong>, enter truststore password + SASL — Setup <strong>checks the file is present</strong> and runs <code>keytool -list</code> on Verify/Save. Use <strong>Paste</strong> only if you cannot place a file on the mount yet.
           </p>
           <details class="advanced-box" open style="margin-top:12px;">
             <summary>Kafka SSL truststore + SASL (optional — all fields or none)</summary>
-            <label for="kafkaTruststorePassword">Truststore password</label>
-            <input type="password" id="kafkaTruststorePassword" autocomplete="new-password" placeholder="Password for client.truststore.jks" />
-            <label for="kafkaTruststorePem" style="margin-top:10px;">CA certificate chain (PEM) <span class="hint">— or leave empty if using JKS base64 below</span></label>
-            <textarea id="kafkaTruststorePem" rows="6" placeholder="-----BEGIN CERTIFICATE----- ..."></textarea>
-            <label for="kafkaTruststoreJksBase64" style="margin-top:10px;">Existing truststore (JKS) as base64 <span class="hint">— or leave empty if using PEM above</span></label>
-            <textarea id="kafkaTruststoreJksBase64" rows="4" placeholder="Paste base64 of client.truststore.jks (not PEM)"></textarea>
+            <p class="hint" style="margin-bottom:10px;"><strong>Truststore</strong> — choose one approach:</p>
+            <div class="check">
+              <input type="radio" name="kafkaTruststoreMode" id="kafkaTruststoreModeExisting" value="existing" checked />
+              <label for="kafkaTruststoreModeExisting" style="margin:0;"><strong>File on server</strong> (recommended): copy <code>.jks</code> into the mounted runtime folder; we verify path + password, and do <strong>not</strong> overwrite your file.</label>
+            </div>
+            <div class="check" style="margin-top:8px;">
+              <input type="radio" name="kafkaTruststoreMode" id="kafkaTruststoreModePaste" value="paste" />
+              <label for="kafkaTruststoreModePaste" style="margin:0;"><strong>Paste</strong> — PEM certificate text is fine to paste here. <strong>JKS is binary</strong>: you cannot meaningfully <code>cat</code>/<code>more</code> and paste it; use <strong>File on server</strong> above, or generate base64 from the file on a machine that has it (e.g. <code>base64 -w0 truststore.jks</code>) then paste below.</label>
+            </div>
+
+            <div id="kafka-truststore-existing-panel" style="margin-top:14px;">
+              <label for="kafkaTruststorePath">Truststore path <span class="hint">(inside container; relative to runtime root below, or absolute)</span></label>
+              <input type="text" id="kafkaTruststorePath" placeholder="configs/client.truststore.jks" autocomplete="off" />
+              <p class="hint" style="margin-top:8px;">If empty, default is <code>configs/client.truststore.jks</code> under Advanced &rarr; runtime root (e.g. <code>/opt/kafka-usermgmt/configs/client.truststore.jks</code>).</p>
+            </div>
+
+            <div id="kafka-truststore-paste-panel" style="display:none; margin-top:14px;">
+              <label for="kafkaTruststorePem">CA certificate chain (PEM)</label>
+              <textarea id="kafkaTruststorePem" rows="5" placeholder="-----BEGIN CERTIFICATE----- ..."></textarea>
+              <label for="kafkaTruststoreJksBase64" style="margin-top:10px;">Truststore (JKS) as base64 <span class="hint">— not from cat of binary; use File on server when possible</span></label>
+              <textarea id="kafkaTruststoreJksBase64" rows="4" placeholder="Output of base64-encoding the .jks file (one line)"></textarea>
+            </div>
+
+            <label for="kafkaTruststorePassword" style="margin-top:14px;">Truststore password</label>
+            <input type="password" id="kafkaTruststorePassword" autocomplete="new-password" placeholder="Password for the JKS file" />
             <div class="row" style="margin-top:10px;">
               <div><label for="kafkaSaslUsername">SASL username (app / client)</label><input type="text" id="kafkaSaslUsername" autocomplete="off" /></div>
               <div><label for="kafkaSaslPassword">SASL password</label><input type="password" id="kafkaSaslPassword" autocomplete="new-password" /></div>
@@ -531,10 +555,14 @@
         row.querySelector('.env-row-remove').addEventListener('click', function () {
           if (wrap.querySelectorAll('.env-simple-row').length <= 1) return;
           row.remove();
+          syncEnvKafkaBootstrapPanel();
           scheduleDraftSave();
         });
         ['.env-row-id', '.env-row-label', '.env-row-context', '.env-row-ns'].forEach(function (sel) {
-          row.querySelector(sel).addEventListener('input', scheduleDraftSave);
+          row.querySelector(sel).addEventListener('input', function () {
+            if (sel === '.env-row-id') syncEnvKafkaBootstrapPanel();
+            scheduleDraftSave();
+          });
         });
         if (prefill) {
           var idEl = row.querySelector('.env-row-id');
@@ -546,6 +574,58 @@
           if (cEl && prefill.ctx) cEl.value = prefill.ctx;
           if (nEl && prefill.ns) nEl.value = prefill.ns;
         }
+        syncEnvKafkaBootstrapPanel();
+      }
+
+      function syncEnvKafkaBootstrapPanel() {
+        var wrap = document.getElementById('env-kafka-bootstrap-rows');
+        var panel = document.getElementById('env-kafka-bootstrap-panel');
+        if (!wrap || !panel) return;
+        var envOn = document.getElementById('environmentsEnabled').checked;
+        var jsonMode = document.getElementById('envEditorJson').checked;
+        if (!envOn || jsonMode) {
+          panel.style.display = 'none';
+          return;
+        }
+        panel.style.display = 'block';
+        var ids = [];
+        document.querySelectorAll('#env-simple-rows .env-simple-row').forEach(function (row) {
+          var id = (row.querySelector('.env-row-id') || {}).value.trim();
+          if (id) ids.push(id);
+        });
+        var existing = {};
+        wrap.querySelectorAll('input.env-kafka-bootstrap').forEach(function (inp) {
+          var eid = inp.getAttribute('data-env-id');
+          if (eid) existing[eid] = inp.value;
+        });
+        wrap.innerHTML = '';
+        ids.forEach(function (eid) {
+          var rowEl = document.createElement('div');
+          rowEl.className = 'row';
+          rowEl.style.marginTop = '8px';
+          var div = document.createElement('div');
+          div.style.flex = '1';
+          var label = document.createElement('label');
+          var safeId = 'envKafkaBootstrap__' + eid.replace(/[^a-zA-Z0-9_-]/g, '_');
+          label.setAttribute('for', safeId);
+          label.appendChild(document.createTextNode('Override bootstrap for '));
+          var code = document.createElement('code');
+          code.textContent = eid;
+          label.appendChild(code);
+          label.appendChild(document.createTextNode(' (optional)'));
+          var inp = document.createElement('input');
+          inp.type = 'text';
+          inp.id = safeId;
+          inp.className = 'env-kafka-bootstrap';
+          inp.setAttribute('data-env-id', eid);
+          inp.placeholder = 'Empty = use main bootstrap above';
+          if (existing[eid] != null && existing[eid] !== '') inp.value = existing[eid];
+          inp.addEventListener('input', scheduleDraftSave);
+          div.appendChild(label);
+          div.appendChild(inp);
+          rowEl.appendChild(div);
+          wrap.appendChild(rowEl);
+        });
       }
 
       function seedEnvRowFromOcSite() {
@@ -589,6 +669,7 @@
         var json = document.getElementById('envEditorJson').checked;
         document.getElementById('env-simple-panel').style.display = json ? 'none' : 'block';
         document.getElementById('env-json-panel').style.display = json ? 'block' : 'none';
+        syncEnvKafkaBootstrapPanel();
         scheduleDraftSave();
       }
 
@@ -635,6 +716,8 @@
         onArchChange();
         syncSecretNameHint();
         syncCredModeUi();
+        syncEnvKafkaBootstrapPanel();
+        syncKafkaTruststoreModeUi();
         showStep(Math.min(Math.max(parseInt(data.step, 10) || 1, 1), 5));
       }
 
@@ -697,9 +780,28 @@
               ns: s0 ? s0.namespace : '',
             });
           });
+          syncEnvKafkaBootstrapPanel();
+          if (w.environmentBootstrapOverrides && typeof w.environmentBootstrapOverrides === 'object') {
+            document.querySelectorAll('#env-kafka-bootstrap-rows input.env-kafka-bootstrap').forEach(function (inp) {
+              var eid = inp.getAttribute('data-env-id');
+              if (eid && w.environmentBootstrapOverrides[eid] != null) {
+                inp.value = String(w.environmentBootstrapOverrides[eid]);
+              }
+            });
+          }
         }
         syncSecretNameHint();
         syncCredModeUi();
+        if (w.kafkaTruststoreUseExistingFile === false) {
+          var p = document.getElementById('kafkaTruststoreModePaste');
+          var e = document.getElementById('kafkaTruststoreModeExisting');
+          if (p) p.checked = true;
+          if (e) e.checked = false;
+        }
+        if (typeof w.kafkaTruststorePath === 'string' && document.getElementById('kafkaTruststorePath')) {
+          document.getElementById('kafkaTruststorePath').value = w.kafkaTruststorePath;
+        }
+        syncKafkaTruststoreModeUi();
       }
 
       function tryPrefillFromServer() {
@@ -788,6 +890,8 @@
             seedEnvRowFromOcSite();
           }
           toggleEnvEditorPanels();
+        } else {
+          syncEnvKafkaBootstrapPanel();
         }
         scheduleDraftSave();
       });
@@ -819,6 +923,21 @@
       }
       document.getElementById('kafkaAdminSameAsClient').addEventListener('change', syncKafkaAdminSaslUi);
       syncKafkaAdminSaslUi();
+
+      function syncKafkaTruststoreModeUi() {
+        var existing = document.getElementById('kafkaTruststoreModeExisting').checked;
+        var exPanel = document.getElementById('kafka-truststore-existing-panel');
+        var paPanel = document.getElementById('kafka-truststore-paste-panel');
+        if (exPanel) exPanel.style.display = existing ? 'block' : 'none';
+        if (paPanel) paPanel.style.display = existing ? 'none' : 'block';
+      }
+      document.querySelectorAll('input[name="kafkaTruststoreMode"]').forEach(function (r) {
+        r.addEventListener('change', function () {
+          syncKafkaTruststoreModeUi();
+          scheduleDraftSave();
+        });
+      });
+      syncKafkaTruststoreModeUi();
 
       function syncCredModeUi() {
         var per = document.getElementById('credPer').checked;
@@ -905,6 +1024,13 @@
             body.environmentsEnabled = true;
             body.defaultEnvironmentId = document.getElementById('defaultEnvironmentId').value.trim() || 'dev';
             body.environmentItems = collectSimpleEnvironmentItems();
+            var bootOv = {};
+            document.querySelectorAll('#env-kafka-bootstrap-rows input.env-kafka-bootstrap').forEach(function (inp) {
+              var eid = inp.getAttribute('data-env-id');
+              var v = inp.value.trim();
+              if (eid && v) bootOv[eid] = v;
+            });
+            if (Object.keys(bootOv).length) body.environmentBootstrapOverrides = bootOv;
           }
         }
         var lsOvr = parseJsonOptional(document.getElementById('ocLoginServersOverride').value, 'loginServers');
@@ -917,6 +1043,8 @@
           if (!Array.isArray(fb)) throw new Error('fallbackSites must be a JSON array');
           body.fallbackSites = fb;
         }
+        body.kafkaTruststoreUseExistingFile = document.getElementById('kafkaTruststoreModeExisting').checked;
+        body.kafkaTruststorePath = document.getElementById('kafkaTruststorePath').value.trim();
         body.kafkaTruststorePassword = document.getElementById('kafkaTruststorePassword').value.trim();
         body.kafkaTruststorePem = document.getElementById('kafkaTruststorePem').value.trim();
         body.kafkaTruststoreJksBase64 = document.getElementById('kafkaTruststoreJksBase64').value.trim();
@@ -988,6 +1116,7 @@
           if (!rt) {
             throw new Error('Kafka: open Advanced and set runtime root, or keep the default.');
           }
+          var existingMode = document.getElementById('kafkaTruststoreModeExisting').checked;
           var ktp = document.getElementById('kafkaTruststorePassword').value.trim();
           var kpem = document.getElementById('kafkaTruststorePem').value.trim();
           var kb64 = document.getElementById('kafkaTruststoreJksBase64').value.replace(/\s/g, '');
@@ -999,18 +1128,30 @@
               || !!document.getElementById('kafkaAdminSaslUsername').value.trim()
               || !!document.getElementById('kafkaAdminSaslPassword').value;
           }
-          var fullK = !!(ktp && (kpem || kb64) && ku && kpw);
-          if (fullK && !document.getElementById('kafkaAdminSameAsClient').checked) {
-            fullK = fullK && !!(document.getElementById('kafkaAdminSaslUsername').value.trim()
-              && document.getElementById('kafkaAdminSaslPassword').value);
+          var fullK;
+          if (existingMode) {
+            if (kpem || kb64) {
+              throw new Error('Kafka: File-on-server mode — clear PEM and base64 fields, or switch to Paste mode.');
+            }
+            fullK = !!(ktp && ku && kpw);
+            if (fullK && !document.getElementById('kafkaAdminSameAsClient').checked) {
+              fullK = !!(document.getElementById('kafkaAdminSaslUsername').value.trim()
+                && document.getElementById('kafkaAdminSaslPassword').value);
+            }
+          } else {
+            fullK = !!(ktp && (kpem || kb64) && ku && kpw);
+            if (fullK && !document.getElementById('kafkaAdminSameAsClient').checked) {
+              fullK = !!(document.getElementById('kafkaAdminSaslUsername').value.trim()
+                && document.getElementById('kafkaAdminSaslPassword').value);
+            }
+            if (kpem && kb64) {
+              throw new Error('Kafka: use either PEM or JKS base64 for the truststore, not both.');
+            }
           }
           if (anyK && !fullK) {
             throw new Error(
-              'Kafka SSL/SASL: fill every field (truststore password, PEM or JKS base64, SASL user/password), or clear the whole block to use templates only.',
+              'Kafka SSL/SASL: for file mode use truststore password + SASL; for paste mode add PEM or base64. Or clear everything for templates only.',
             );
-          }
-          if (kpem && kb64) {
-            throw new Error('Kafka: use either PEM or JKS base64 for the truststore, not both.');
           }
           return;
         }
@@ -1047,6 +1188,10 @@
           lastPreviewOk = false;
           confirmCheck.checked = false;
           btnSave.disabled = true;
+        }
+        if (n === 3) {
+          syncEnvKafkaBootstrapPanel();
+          syncKafkaTruststoreModeUi();
         }
       }
 

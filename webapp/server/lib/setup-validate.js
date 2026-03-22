@@ -9,6 +9,8 @@ const {
   validateKafkaConnectionCompleteness,
   hasFullKafkaConnection,
   materializeKafkaConnectionFiles,
+  verifyTruststoreWithKeytool,
+  truststoreUsesExistingFile,
 } = require('./setup-kafka-files');
 
 /** Collect every ocContext from fallbackSites and from multi-environment definitions. */
@@ -200,11 +202,31 @@ async function runSetupPreview(body, configAbsPath, options) {
   const master = built.master;
 
   if (kafkaMaterializeResult.mode === 'full') {
+    const km = kafkaMaterializeResult;
+    const ts = km.truststoreSource === 'existing'
+      ? `Truststore: using existing file at ${String(km.truststorePath || '').replace(/\\/g, '/')} (not uploaded). `
+      : '';
     checks.push({
       id: 'kafka_wizard_materialized',
       level: 'ok',
-      message: `Kafka client files written from setup form: ${(kafkaMaterializeResult.files || []).join(', ')} under runtime configs/ (Verify can use them immediately; same as Save).`,
+      message: `${ts}Kafka client files from setup: ${(km.files || []).join(', ')} (Verify / Save).`,
     });
+    if (truststoreUsesExistingFile(body) && km.truststorePath) {
+      const vr = verifyTruststoreWithKeytool(km.truststorePath, body.kafkaTruststorePassword);
+      checks.push(
+        vr.ok
+          ? {
+            id: 'kafka_truststore_keytool',
+            level: 'ok',
+            message: 'Truststore: keytool -list OK (password opens JKS)',
+          }
+          : {
+            id: 'kafka_truststore_keytool',
+            level: 'error',
+            message: `Truststore: keytool check failed — wrong password or invalid JKS: ${vr.message || 'unknown'}`,
+          },
+      );
+    }
   }
 
   if (!String(g.bootstrapServers || '').trim()) {

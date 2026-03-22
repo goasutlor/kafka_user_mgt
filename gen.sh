@@ -32,6 +32,8 @@
 #
 # CHANGELOG
 # ---------
+# 2026-03-22  Setup wizard: truststore can stay on runtime mount only — Web verifies path + keytool -list; GEN_MODE unchanged.
+# 2026-03-22  Per-environment Kafka bootstrap: with GEN_ACTIVE_ENV_ID + environments.json, if the active env object has bootstrapServers, override BOOTSTRAP_CWDC/BOTH (parity with Web portal env switch).
 # 2026-03-22  Init Kafka client .properties templates: menu [8] and GEN_MODE=8 — scripts/ensure-kafka-client-props.sh (parity with web setup save; GEN_KAFKA_BOOTSTRAP optional). Full PEM/JKS + SASL materialization (no CHANGE_ME) is via the web setup wizard only — use mount configs/ to adjust later.
 # 2026-03-21  Go-Live verify: menu [7] and GEN_NONINTERACTIVE=1 GEN_MODE=7 — scripts/verify-golive.sh (ทุก namespace จาก master/environments, Kafka, optional Portal). Env: GOLIVE_PORTAL_URL, GOLIVE_JSON=1.
 # 2026-03-21  Preflight / Kafka admin list: menu [6] and GEN_NONINTERACTIVE=1 GEN_MODE=6 — kafka-topics.sh --list (parity with web setup Verify deep check). Web setup: deep verify runs same + oc whoami.
@@ -138,6 +140,19 @@ if [ -z "${GEN_OCP_SITES:-}" ] && [ -n "${GEN_ACTIVE_ENV_ID:-}" ] && [ -f "$ENV_
     ' "$ENV_JSON" 2>/dev/null)
     if [ -n "$_pairs" ]; then
         export GEN_OCP_SITES="$_pairs"
+    fi
+fi
+# Per-environment Kafka bootstrap (parity with Web session env): if active env defines bootstrapServers in environments.json, use it for CLI Kafka tools.
+if [ -n "${GEN_ACTIVE_ENV_ID:-}" ] && [ -f "$ENV_JSON" ] && command -v jq >/dev/null 2>&1; then
+    _eboot=$(jq -r --arg id "$GEN_ACTIVE_ENV_ID" '
+      ([.environments[]? | select(.enabled != false) | select(.id == $id)] | first) as $e
+      | if $e == null then "" else ($e.bootstrapServers // "") end
+    ' "$ENV_JSON" 2>/dev/null || true)
+    _eboot=$(echo "$_eboot" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    if [ -n "$_eboot" ]; then
+        BOOTSTRAP_CWDC="$_eboot"
+        BOOTSTRAP_TLS2="$_eboot"
+        BOOTSTRAP_BOTH="$_eboot"
     fi
 fi
 

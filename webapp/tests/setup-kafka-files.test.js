@@ -9,6 +9,7 @@ const {
   hasFullKafkaConnection,
   validateKafkaConnectionCompleteness,
   materializeKafkaConnectionFiles,
+  getTruststoreAbsolutePathForWizard,
   DEFAULT_CLIENT_PROPS,
   DEFAULT_ADMIN_PROPS,
 } = require('../server/lib/setup-kafka-files');
@@ -47,6 +48,25 @@ describe('setup-kafka-files', () => {
       }),
       true,
     );
+    assert.strictEqual(
+      hasFullKafkaConnection({
+        kafkaTruststoreUseExistingFile: true,
+        kafkaTruststorePassword: 'x',
+        kafkaSaslUsername: 'u',
+        kafkaSaslPassword: 'p',
+      }),
+      true,
+    );
+    assert.strictEqual(
+      hasFullKafkaConnection({
+        kafkaTruststoreUseExistingFile: true,
+        kafkaTruststorePassword: 'x',
+        kafkaTruststorePem: '-----BEGIN CERTIFICATE-----\nAA\n-----END CERTIFICATE-----',
+        kafkaSaslUsername: 'u',
+        kafkaSaslPassword: 'p',
+      }),
+      false,
+    );
   });
 
   it('validateKafkaConnectionCompleteness throws when partially filled', () => {
@@ -82,5 +102,29 @@ describe('setup-kafka-files', () => {
     assert.ok(client.includes('password="p\\\\ass\\"word"'));
     const admin = fs.readFileSync(path.join(tmp, 'configs', DEFAULT_ADMIN_PROPS), 'utf8');
     assert.ok(admin.includes('username="app\\"user"'));
+  });
+
+  it('materializeKafkaConnectionFiles uses existing JKS path and writes props only', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ku-kfk-ex-'));
+    const jksPath = path.join(tmp, 'configs', 'client.truststore.jks');
+    fs.mkdirSync(path.dirname(jksPath), { recursive: true });
+    fs.writeFileSync(jksPath, Buffer.alloc(120, 9));
+    const master = {
+      runtimeRoot: tmp,
+      kafka: { bootstrapServers: 'b.example.com:443' },
+    };
+    const body = {
+      kafkaTruststoreUseExistingFile: true,
+      kafkaTruststorePassword: 'pw',
+      kafkaSaslUsername: 'u',
+      kafkaSaslPassword: 'p',
+    };
+    const r = materializeKafkaConnectionFiles(body, master);
+    assert.strictEqual(r.mode, 'full');
+    assert.strictEqual(r.truststoreSource, 'existing');
+    assert.ok(!r.files.includes('client.truststore.jks'));
+    const client = fs.readFileSync(path.join(tmp, 'configs', DEFAULT_CLIENT_PROPS), 'utf8');
+    const posixJks = getTruststoreAbsolutePathForWizard(body, tmp).replace(/\\/g, '/');
+    assert.ok(client.includes(`ssl.truststore.location=${posixJks}`));
   });
 });

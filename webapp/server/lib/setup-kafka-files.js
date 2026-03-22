@@ -17,8 +17,31 @@ function truststoreLocationPosix(runtimeRootNorm) {
   return path.posix.join(r, 'configs', TRUSTSTORE_FILENAME);
 }
 
+function pathToPosix(absPath) {
+  return path.normalize(String(absPath || '')).replace(/\\/g, '/');
+}
+
 /**
- * True when user provided enough to write final truststore + both property files (no CHANGE_ME).
+ * Absolute path to JKS when user places file on runtime mount (optional relative path under runtimeRoot).
+ */
+function getTruststoreAbsolutePathForWizard(body, runtimeRootNorm) {
+  const root = path.isAbsolute(runtimeRootNorm) ? path.normalize(runtimeRootNorm) : path.resolve(runtimeRootNorm);
+  const raw = String((body && body.kafkaTruststorePath) || '').trim();
+  if (!raw) {
+    return path.join(root, 'configs', TRUSTSTORE_FILENAME);
+  }
+  if (path.isAbsolute(raw)) {
+    return path.normalize(raw);
+  }
+  return path.normalize(path.join(root, raw.replace(/^[/\\]+/, '')));
+}
+
+function truststoreUsesExistingFile(body) {
+  return body && body.kafkaTruststoreUseExistingFile === true;
+}
+
+/**
+ * True when user provided enough to write final property files (and truststore if pasted/generated).
  */
 function hasFullKafkaConnection(body) {
   if (!body || typeof body !== 'object') return false;
@@ -27,7 +50,13 @@ function hasFullKafkaConnection(body) {
   const b64 = String(body.kafkaTruststoreJksBase64 || '').replace(/\s/g, '');
   const u = String(body.kafkaSaslUsername || '').trim();
   const pw = typeof body.kafkaSaslPassword === 'string' ? body.kafkaSaslPassword : '';
-  if (!tp || (!pem && !b64) || !u || !pw) return false;
+  const useFile = truststoreUsesExistingFile(body);
+  if (!tp || !u || !pw) return false;
+  if (useFile) {
+    if (pem || b64) return false;
+  } else {
+    if (!pem && !b64) return false;
+  }
   if (body.kafkaAdminSameAsClient === false) {
     const au = String(body.kafkaAdminSaslUsername || '').trim();
     const ap = typeof body.kafkaAdminSaslPassword === 'string' ? body.kafkaAdminSaslPassword : '';
@@ -41,6 +70,7 @@ function anyKafkaConnectionFieldTouched(body) {
   if (String(body.kafkaTruststorePassword || '').trim()) return true;
   if (String(body.kafkaTruststorePem || '').trim()) return true;
   if (String(body.kafkaTruststoreJksBase64 || '').replace(/\s/g, '')) return true;
+  if (String(body.kafkaTruststorePath || '').trim()) return true;
   if (String(body.kafkaSaslUsername || '').trim()) return true;
   if (typeof body.kafkaSaslPassword === 'string' && body.kafkaSaslPassword) return true;
   if (body.kafkaAdminSameAsClient === false) {
@@ -52,10 +82,15 @@ function anyKafkaConnectionFieldTouched(body) {
 
 function validateKafkaConnectionCompleteness(body) {
   if (!anyKafkaConnectionFieldTouched(body)) return;
+  if (truststoreUsesExistingFile(body)) {
+    if (String(body.kafkaTruststorePem || '').trim() || String(body.kafkaTruststoreJksBase64 || '').replace(/\s/g, '')) {
+      throw new Error('Kafka connection: choose either truststore file on server or paste PEM/base64, not both.');
+    }
+  }
   if (!hasFullKafkaConnection(body)) {
     throw new Error(
-      'Kafka connection: fill all of truststore password, PEM or JKS (base64), SASL username/password, '
-        + 'or leave the whole block empty to use template files only.',
+      'Kafka connection: fill truststore password, SASL username/password, and either (1) place JKS on mount + select that mode, '
+        + 'or (2) PEM or JKS base64 — or leave the whole block empty for templates only.',
     );
   }
 }
@@ -142,9 +177,30 @@ function writeTruststoreFromPem(pemString, destPath, storePassword) {
   }
 }
 
+/** @returns {{ ok: boolean, message?: string }} */
+function verifyTruststoreWithKeytool(jksPath, storePassword) {
+  const pass = String(storePassword || '');
+  if (!jksPath || !fs.existsSync(jksPath)) {
+    return { ok: false, message: 'Truststore file not found' };
+  }
+  const r = spawnSync(
+    'keytool',
+    ['-list', '-keystore', jksPath, '-storepass', pass, '-storetype', 'JKS'],
+    { encoding: 'utf8', timeout: 30000 },
+  );
+  if (r.error) {
+    return { ok: false, message: r.error.message || 'keytool not available' };
+  }
+  if (r.status === 0) {
+    return { ok: true };
+  }
+  const msg = ((r.stderr || r.stdout || '') + '').trim().slice(0, 400);
+  return { ok: false, message: msg || `keytool exit ${r.status}` };
+}
+
 /**
- * Write client.truststore.jks + kafka-client*.properties from wizard body. Overwrites when re-saving.
- * @returns {{ mode: 'full', files: string[] } | { mode: 'skipped' }}
+ * Write kafka-client*.properties; optionally write client.truststore.jks from PEM/base64.
+ * @returns {{ mode: 'full', files: string[], truststoreSource: 'existing' | 'written' } | { mode: 'skipped' }}
  */
 function materializeKafkaConnectionFiles(body, master) {
   if (!hasFullKafkaConnection(body)) {
@@ -160,21 +216,41 @@ function materializeKafkaConnectionFiles(body, master) {
   const configsDir = path.join(root, 'configs');
   fs.mkdirSync(configsDir, { recursive: true });
 
-  const destJks = path.join(configsDir, TRUSTSTORE_FILENAME);
   const storePass = String(body.kafkaTruststorePassword).trim();
   const pem = String(body.kafkaTruststorePem || '').trim();
   const b64 = String(body.kafkaTruststoreJksBase64 || '').replace(/\s/g, '');
+  const useExisting = truststoreUsesExistingFile(body);
 
-  if (pem && b64) {
-    throw new Error('Provide either PEM certificate chain OR JKS base64, not both');
-  }
-  if (pem) {
-    writeTruststoreFromPem(pem, destJks, storePass);
+  let destJks;
+  let posixTrust;
+  let truststoreSource;
+
+  if (useExisting) {
+    if (pem || b64) {
+      throw new Error('Truststore: file-on-server mode cannot be combined with PEM or base64');
+    }
+    destJks = getTruststoreAbsolutePathForWizard(body, root);
+    if (!fs.existsSync(destJks)) {
+      throw new Error(
+        `Truststore file not found at ${destJks} — copy your .jks onto the runtime mount (e.g. under configs/) before Save or Verify.`,
+      );
+    }
+    posixTrust = pathToPosix(destJks);
+    truststoreSource = 'existing';
   } else {
-    writeTruststoreFromJksBase64(b64, destJks);
+    if (pem && b64) {
+      throw new Error('Provide either PEM certificate chain OR JKS base64, not both');
+    }
+    destJks = path.join(configsDir, TRUSTSTORE_FILENAME);
+    if (pem) {
+      writeTruststoreFromPem(pem, destJks, storePass);
+    } else {
+      writeTruststoreFromJksBase64(b64, destJks);
+    }
+    posixTrust = truststoreLocationPosix(root);
+    truststoreSource = 'written';
   }
 
-  const posixTrust = truststoreLocationPosix(root);
   const clientUser = String(body.kafkaSaslUsername).trim();
   const clientPass = body.kafkaSaslPassword;
   const adminSame = body.kafkaAdminSameAsClient !== false;
@@ -198,13 +274,21 @@ function materializeKafkaConnectionFiles(body, master) {
     try {
       fs.chmodSync(path.join(configsDir, DEFAULT_CLIENT_PROPS), 0o600);
       fs.chmodSync(path.join(configsDir, DEFAULT_ADMIN_PROPS), 0o600);
-      fs.chmodSync(destJks, 0o600);
+      if (truststoreSource === 'written') {
+        fs.chmodSync(destJks, 0o600);
+      }
     } catch (_) { /* ignore */ }
   }
 
+  const files = truststoreSource === 'written'
+    ? [TRUSTSTORE_FILENAME, DEFAULT_CLIENT_PROPS, DEFAULT_ADMIN_PROPS]
+    : [DEFAULT_CLIENT_PROPS, DEFAULT_ADMIN_PROPS];
+
   return {
     mode: 'full',
-    files: [TRUSTSTORE_FILENAME, DEFAULT_CLIENT_PROPS, DEFAULT_ADMIN_PROPS],
+    files,
+    truststoreSource,
+    truststorePath: destJks,
   };
 }
 
@@ -217,4 +301,7 @@ module.exports = {
   validateKafkaConnectionCompleteness,
   materializeKafkaConnectionFiles,
   truststoreLocationPosix,
+  getTruststoreAbsolutePathForWizard,
+  verifyTruststoreWithKeytool,
+  truststoreUsesExistingFile,
 };

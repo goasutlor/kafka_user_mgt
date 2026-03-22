@@ -101,6 +101,19 @@ function configDirectoryWritable(configAbsPath) {
  * @param {object} body
  * @returns {Array<{ name: string, namespace: string, ocContext: string, apiServer: string, loginUser?: string, loginPassword?: string }>|null}
  */
+/** Merge optional per-environment bootstrap overrides from wizard into env entries (Web + environments.json). */
+function mergeEnvironmentBootstrapOverrides(envList, overrides) {
+  if (!Array.isArray(envList) || !overrides || typeof overrides !== 'object') return envList;
+  for (const item of envList) {
+    if (!item || !item.id) continue;
+    const v = overrides[item.id];
+    if (typeof v === 'string' && v.trim()) {
+      item.bootstrapServers = v.trim();
+    }
+  }
+  return envList;
+}
+
 function normalizeOcSitesFromBody(body) {
   const raw = body.ocSites;
   if (!Array.isArray(raw) || raw.length === 0) return null;
@@ -220,10 +233,13 @@ function buildFilesFromSetupBody(body, configAbsPath) {
   };
 
   if (environments.enabled === true) {
+    const envListRaw = Array.isArray(environments.environments) ? environments.environments : [];
+    const envList = envListRaw.map((e) => ({ ...e }));
+    mergeEnvironmentBootstrapOverrides(envList, body.environmentBootstrapOverrides);
     master.environments = {
       enabled: true,
       defaultEnvironmentId: environments.defaultEnvironmentId || 'dev',
-      environments: Array.isArray(environments.environments) ? environments.environments : [],
+      environments: envList,
     };
   } else {
     master.environments = { enabled: false };
@@ -340,6 +356,12 @@ function masterToSetupWizardBody(master) {
   const envBlock = master.environments;
   const envEnabled = !!(envBlock && envBlock.enabled === true);
   const envItems = envEnabled && Array.isArray(envBlock.environments) ? envBlock.environments : [];
+  const environmentBootstrapOverrides = {};
+  for (const e of envItems) {
+    if (e && e.id && typeof e.bootstrapServers === 'string' && e.bootstrapServers.trim()) {
+      environmentBootstrapOverrides[e.id] = e.bootstrapServers.trim();
+    }
+  }
 
   return {
     runtimeRoot: String(master.runtimeRoot || '').trim(),
@@ -363,6 +385,8 @@ function masterToSetupWizardBody(master) {
     environmentsEnabled: envEnabled,
     defaultEnvironmentId: String((envBlock && envBlock.defaultEnvironmentId) || 'dev').trim(),
     environmentItems: envItems,
+    environmentBootstrapOverrides:
+      Object.keys(environmentBootstrapOverrides).length ? environmentBootstrapOverrides : undefined,
   };
 }
 

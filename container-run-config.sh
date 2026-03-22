@@ -10,7 +10,7 @@
 #   Default engine: docker if installed, else podman (override: CTR_ENGINE=...)
 #   Default image: full GHCR name (avoids Podman short-name registry prompt on RHEL).
 #   Local image after docker compose build: IMAGE_NAME=confluent-kafka-user-management:latest
-#   Pin version: IMAGE_NAME=ghcr.io/goasutlor/kafka_user_mgt:1.0.62 ./container-run-config.sh
+#   Pin version: IMAGE_NAME=ghcr.io/goasutlor/kafka_user_mgt:1.0.63 ./container-run-config.sh
 #   Pull policy: KAFKA_USERMGMT_IMAGE_PULL=never (default) = use local image only, no registry pull.
 #     Set to missing or always if you want pull-on-run (docker/podman both support --pull).
 #   source ./container-run-config.sh && run_container_stop && run_container_start

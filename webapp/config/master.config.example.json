@@ -38,6 +38,7 @@
         "label": "System Integration Test",
         "shortLabel": "SIT",
         "badgeColor": "#9e6a03",
+        "_comment_bootstrapServers": "Optional: if SIT brokers use a different route than kafka.bootstrapServers, set host:port here — portal + GEN_ACTIVE_ENV_ID use it.",
         "sites": [{ "name": "cwdc", "ocContext": "cwdc", "namespace": "esb-sit-cwdc" }]
       },
       {
