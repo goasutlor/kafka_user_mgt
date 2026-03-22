@@ -68,6 +68,10 @@ mkdir -p "$USER_OUTPUT_DIR"
 BASE_DIR="${GEN_BASE_DIR:-$SCRIPT_DIR}"
 # Default dir name matches Docker symlink; override with GEN_KAFKA_BIN or install newer tarball under BASE_DIR (see master.config kafka.clientInstallDir).
 KAFKA_BIN="${GEN_KAFKA_BIN:-$BASE_DIR/kafka_2.13-3.6.1/bin}"
+# Host bind-mount on /opt/kafka-usermgmt hides image Kafka — use bundled CLI (Dockerfile: /opt/apache-kafka, env KAFKA_TOOLS_BIN).
+if [ ! -f "$KAFKA_BIN/kafka-topics.sh" ] && [ -n "${KAFKA_TOOLS_BIN:-}" ] && [ -f "${KAFKA_TOOLS_BIN}/kafka-topics.sh" ]; then
+    KAFKA_BIN="$KAFKA_TOOLS_BIN"
+fi
 CLIENT_CONFIG="${GEN_CLIENT_CONFIG:-$BASE_DIR/configs/kafka-client.properties}"
 ADMIN_CONFIG="${GEN_ADMIN_CONFIG:-$BASE_DIR/configs/kafka-client-master.properties}"
 

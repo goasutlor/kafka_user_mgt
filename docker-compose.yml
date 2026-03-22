@@ -36,7 +36,7 @@ services:
         VERSION: ${APP_VERSION:-1.0.63}
         GIT_COMMIT: ${GIT_COMMIT:-}
         # Match broker-friendly client version when needed: KAFKA_VERSION, KAFKA_SCALA, KAFKA_LINK_NAME
-        KAFKA_VERSION: ${KAFKA_VERSION:-3.8.1}
+        KAFKA_VERSION: ${KAFKA_VERSION:-3.6.1}
         KAFKA_SCALA: ${KAFKA_SCALA:-2.13}
         KAFKA_LINK_NAME: ${KAFKA_LINK_NAME:-kafka_2.13-3.6.1}
     image: confluent-kafka-user-management:latest

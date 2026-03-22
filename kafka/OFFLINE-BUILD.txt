@@ -1,0 +1,13 @@
+Offline Docker build (when curl to Apache fails)
+=================================================
+
+1. Download the tarball that matches Dockerfile build-args (defaults: Scala 2.13, Kafka 3.6.1):
+   https://archive.apache.org/dist/kafka/3.6.1/kafka_2.13-3.6.1.tgz
+
+2. Save it in this folder as exactly:
+   kafka_2.13-3.6.1.tgz
+
+3. From repo root:
+   docker build -t confluent-kafka-user-management:latest .
+
+If you use --build-arg KAFKA_VERSION=3.8.1, the file must be named kafka_2.13-3.8.1.tgz instead.

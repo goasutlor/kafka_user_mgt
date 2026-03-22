@@ -2,7 +2,7 @@
   "_comment": "Copy to master.config.json (e.g. deploy/config/). ONE file to edit per deployment. Use {runtimeRoot} in paths. Secrets only in credentials.json next to this file (see credentials.example.json).",
   "runtimeRoot": "/opt/kafka-usermgmt",
   "kafka": {
-    "_comment_clientInstallDir": "Folder under runtimeRoot with bin/kafka-topics.sh. Docker image uses symlink kafka_2.13-3.6.1 → downloaded Apache Kafka; set this if you install a different tarball name on the host.",
+    "_comment_clientInstallDir": "Relative folder under runtimeRoot with bin/kafka-topics.sh, OR absolute path to the Kafka install dir (no /bin). If missing under runtime (common: bind-mount replaces /opt/kafka-usermgmt), the app falls back to image CLI at /opt/apache-kafka/kafka_2.13-3.6.1/bin.",
     "scriptName": "gen.sh",
     "bootstrapServers": "host1:443,host2:443",
     "_comment_k8sSecretName": "Confluent on OCP: default secret holding plain SASL user list (plain-users.json). Other secrets (kafka-admin-client-credentials, kafka-client-side-credentials, *-apikeys) are different; override only if your install renames this one.",

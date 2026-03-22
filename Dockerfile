@@ -15,23 +15,34 @@ ARG GIT_COMMIT=
 ENV APP_VERSION=${VERSION}
 ENV GIT_COMMIT=${GIT_COMMIT}
 LABEL org.opencontainers.image.version="${VERSION}"
-# Kafka CLI: always downloaded from Apache at build time (no copy from old bundles).
-# Bump when you hit broker/client limitations: docker build --build-arg KAFKA_VERSION=3.9.1 .
-ARG KAFKA_VERSION=3.8.1
+# Kafka CLI: default 3.6.1 (stable client; matches symlink name kafka_2.13-3.6.1).
+# Online: downloaded from Apache at build. Offline: place kafka_${KAFKA_SCALA}-${KAFKA_VERSION}.tgz under kafka/ (see kafka/OFFLINE-BUILD.txt).
+# Bump broker/client: docker build --build-arg KAFKA_VERSION=3.8.1 .
+ARG KAFKA_VERSION=3.6.1
 ARG KAFKA_SCALA=2.13
-# Stable path gen.sh / default config use (symlink → real kafka_${KAFKA_SCALA}-${KAFKA_VERSION})
+# Stable path gen.sh / master config use (symlink → extracted kafka_${KAFKA_SCALA}-${KAFKA_VERSION})
 ARG KAFKA_LINK_NAME=kafka_2.13-3.6.1
+# Tarball lives OUTSIDE /opt/kafka-usermgmt so a host bind-mount on runtime does not hide CLI tools.
+ENV KAFKA_TOOLS_BIN=/opt/apache-kafka/kafka_2.13-3.6.1/bin
 RUN apt-get update && apt-get install -y --no-install-recommends \
     bash jq openjdk-17-jre-headless ca-certificates-java curl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
-RUN mkdir -p /opt/kafka-usermgmt \
+COPY kafka/ /tmp/kafka-vendor/
+RUN mkdir -p /opt/apache-kafka \
     && DIST="kafka_${KAFKA_SCALA}-${KAFKA_VERSION}" \
-    && URL_DL="https://downloads.apache.org/kafka/${KAFKA_VERSION}/${DIST}.tgz" \
-    && URL_AR="https://archive.apache.org/dist/kafka/${KAFKA_VERSION}/${DIST}.tgz" \
-    && (curl -fsSL "$URL_DL" || curl -fsSL "$URL_AR") \
-    | tar xz -C /opt/kafka-usermgmt \
-    && test -d "/opt/kafka-usermgmt/${DIST}" \
-    && ln -sfn "/opt/kafka-usermgmt/${DIST}" "/opt/kafka-usermgmt/${KAFKA_LINK_NAME}"
+    && VENDOR="/tmp/kafka-vendor/${DIST}.tgz" \
+    && if [ -f "$VENDOR" ] && [ -s "$VENDOR" ]; then \
+         echo "kafka: using build-context $(basename "$VENDOR")" \
+         && tar xzf "$VENDOR" -C /opt/apache-kafka; \
+       else \
+         URL_DL="https://downloads.apache.org/kafka/${KAFKA_VERSION}/${DIST}.tgz" \
+         && URL_AR="https://archive.apache.org/dist/kafka/${KAFKA_VERSION}/${DIST}.tgz" \
+         && (curl -fsSL "$URL_DL" || curl -fsSL "$URL_AR") | tar xz -C /opt/apache-kafka; \
+       fi \
+    && test -d "/opt/apache-kafka/${DIST}" \
+    && ln -sfn "/opt/apache-kafka/${DIST}" "/opt/apache-kafka/${KAFKA_LINK_NAME}" \
+    && rm -rf /tmp/kafka-vendor
+RUN mkdir -p /opt/kafka-usermgmt
 WORKDIR /app
 ENV NODE_ENV=production
 ENV NODE_OPTIONS="--max-old-space-size=128"

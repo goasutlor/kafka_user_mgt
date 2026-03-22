@@ -1,0 +1,2 @@
+# Drop kafka_2.13-3.6.1.tgz here for offline Docker build (not committed).
+*.tgz

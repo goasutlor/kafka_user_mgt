@@ -19,6 +19,9 @@ function expandRt(str, runtimeRoot) {
   return str.split('{runtimeRoot}').join(runtimeRoot);
 }
 
+/** Matches Dockerfile KAFKA_TOOLS_BIN parent + symlink name (bind-mount hides /opt/kafka-usermgmt/kafka_*). */
+const IMAGE_EMBEDDED_KAFKA_BIN = '/opt/apache-kafka/kafka_2.13-3.6.1/bin';
+
 /**
  * Master config = one JSON per deployment. Detect by runtimeRoot + kafka + portal.
  */
@@ -45,13 +48,25 @@ function expandMasterToLegacy(raw, masterFileAbsPath) {
   const clientFile = k.clientPropertiesFile || 'kafka-client.properties';
   const adminFile = k.adminPropertiesFile || 'kafka-client-master.properties';
   const kubeTemplate = oc.kubeconfig || '{runtimeRoot}/.kube/config-both';
-  const kafkaDir = k.clientInstallDir || 'kafka_2.13-3.6.1';
+  const kafkaDirRaw = k.clientInstallDir != null && String(k.clientInstallDir).trim()
+    ? String(k.clientInstallDir).trim()
+    : 'kafka_2.13-3.6.1';
+  let kafkaBin = path.isAbsolute(kafkaDirRaw)
+    ? path.join(kafkaDirRaw, 'bin')
+    : path.join(rt, kafkaDirRaw, 'bin');
+  try {
+    const topics = path.join(kafkaBin, 'kafka-topics.sh');
+    const imageTopics = path.join(IMAGE_EMBEDDED_KAFKA_BIN, 'kafka-topics.sh');
+    if (!fs.existsSync(topics) && fs.existsSync(imageTopics)) {
+      kafkaBin = IMAGE_EMBEDDED_KAFKA_BIN;
+    }
+  } catch (_) { /* ignore fs errors */ }
 
   const gen = {
     scriptPath: path.join(rt, scriptName),
     baseDir: rt,
     downloadDir: path.join(rt, 'user_output'),
-    kafkaBin: path.join(rt, kafkaDir, 'bin'),
+    kafkaBin,
     bootstrapServers: k.bootstrapServers || '',
     ocPath: oc.ocPath != null ? oc.ocPath : '/host/usr/bin',
     clientConfig: path.join(rt, 'configs', clientFile),
