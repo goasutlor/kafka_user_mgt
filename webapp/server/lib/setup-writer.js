@@ -235,10 +235,61 @@ function writeSetupFiles(configAbsPath, master, credentials, credentialsPath) {
   }
 }
 
+/**
+ * Map existing master.config.json → wizard POST body shape (passwords / OC secrets not included).
+ * @param {object} master - parsed master config
+ */
+function masterToSetupWizardBody(master) {
+  if (!master || typeof master !== 'object') return null;
+  const kafka = master.kafka || {};
+  const oc = master.oc || {};
+  const portal = master.portal || {};
+  const sites = Array.isArray(master.fallbackSites) ? master.fallbackSites : [];
+  const defaultSecret = 'kafka-server-side-credentials';
+  const k8sSn = String(kafka.k8sSecretName || defaultSecret).trim() || defaultSecret;
+  const ocSites = sites.map((s) => ({
+    ocContext: String(s.ocContext || '').trim(),
+    namespace: String(s.namespace || '').trim(),
+    apiServer: (oc.loginServers && s.ocContext && oc.loginServers[s.ocContext])
+      ? String(oc.loginServers[s.ocContext]).trim()
+      : '',
+    loginUser: '',
+    loginPassword: '',
+  }));
+  const envBlock = master.environments;
+  const envEnabled = !!(envBlock && envBlock.enabled === true);
+  const envItems = envEnabled && Array.isArray(envBlock.environments) ? envBlock.environments : [];
+
+  return {
+    runtimeRoot: String(master.runtimeRoot || '').trim(),
+    kafkaBootstrap: String(kafka.bootstrapServers || '').trim(),
+    scriptName: String(kafka.scriptName || 'gen.sh').trim(),
+    k8sSecretName: k8sSn,
+    customK8sSecret: k8sSn !== defaultSecret,
+    clientPropertiesFile: String(kafka.clientPropertiesFile || 'kafka-client.properties').trim(),
+    adminPropertiesFile: String(kafka.adminPropertiesFile || 'kafka-client-master.properties').trim(),
+    ocPath: String(oc.ocPath != null ? oc.ocPath : '/host/usr/bin').trim(),
+    kubeconfig: String(oc.kubeconfig || '{runtimeRoot}/.kube/config-both').trim(),
+    ocAutoLogin: oc.autoLogin === true,
+    ocTopology: sites.length >= 2 ? 'dual' : 'single',
+    ocSites: sites.length ? ocSites : undefined,
+    portalPort: portal.port != null ? String(portal.port) : '3443',
+    httpsEnabled: !!(portal.https && portal.https.enabled),
+    httpsKeyPath: String((portal.https && portal.https.keyPath) || '/app/ssl/server.key').trim(),
+    httpsCertPath: String((portal.https && portal.https.certPath) || '/app/ssl/server.crt').trim(),
+    authEnabled: !!(portal.auth && portal.auth.enabled),
+    credentialsFile: String((portal.auth && portal.auth.credentialsFile) || 'credentials.json').trim(),
+    environmentsEnabled: envEnabled,
+    defaultEnvironmentId: String((envBlock && envBlock.defaultEnvironmentId) || 'dev').trim(),
+    environmentItems: envItems,
+  };
+}
+
 module.exports = {
   atomicWriteJson,
   configDirectoryWritable,
   buildFilesFromSetupBody,
   writeSetupFiles,
   normalizeOcSitesFromBody,
+  masterToSetupWizardBody,
 };

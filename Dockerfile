@@ -9,8 +9,11 @@ COPY webapp/package.json ./
 RUN npm install --omit=dev --ignore-scripts
 
 FROM node:20-bookworm-slim
-ARG VERSION=1.0.55
+# Semantic app version (shown in UI). Optional GIT_COMMIT for /api/version short hash.
+ARG VERSION=1.0.61
+ARG GIT_COMMIT=
 ENV APP_VERSION=${VERSION}
+ENV GIT_COMMIT=${GIT_COMMIT}
 LABEL org.opencontainers.image.version="${VERSION}"
 # Kafka CLI: always downloaded from Apache at build time (no copy from old bundles).
 # Bump when you hit broker/client limitations: docker build --build-arg KAFKA_VERSION=3.9.1 .
@@ -44,7 +47,8 @@ RUN mkdir -p /app/config-examples \
     && cp /app/config/credentials.example.json /app/config-examples/
 # master.config.json is created at first run via /setup.html (mount ./deploy/config for persistence).
 COPY gen.sh /opt/kafka-usermgmt/gen.sh
-RUN chmod +x /opt/kafka-usermgmt/gen.sh
+COPY scripts/verify-golive.sh /opt/kafka-usermgmt/verify-golive.sh
+RUN chmod +x /opt/kafka-usermgmt/gen.sh /opt/kafka-usermgmt/verify-golive.sh
 
 EXPOSE 3443
 CMD ["node", "server/index.js"]

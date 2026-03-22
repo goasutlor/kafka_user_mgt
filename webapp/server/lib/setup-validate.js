@@ -2,7 +2,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawnSync, spawn } = require('child_process');
 const { expandMasterToLegacy } = require('./master-config');
 const { buildFilesFromSetupBody } = require('./setup-writer');
 
@@ -69,11 +69,107 @@ function looksLikeHttpsApiUrl(u) {
   return /^https:\/\/.+/i.test(u.trim());
 }
 
+/** Resolve gen.baseDir the same way as runtime topic listing. */
+function resolveGenBaseDir(g) {
+  return path.resolve(g.baseDir || g.rootDir || process.cwd());
+}
+
+function resolveKafkaTopicsScriptPath(g) {
+  const baseDir = resolveGenBaseDir(g);
+  const kafkaBin = g.kafkaBin
+    ? (path.isAbsolute(g.kafkaBin) ? g.kafkaBin : path.join(baseDir, g.kafkaBin))
+    : path.join(baseDir, 'kafka_2.13-3.6.1', 'bin');
+  return path.join(kafkaBin, 'kafka-topics.sh');
+}
+
+/** Run oc (or any process) with wall-clock timeout; resolves { status, stdout, stderr }. */
+function spawnWithTimeout(exe, args, env, timeoutMs) {
+  return new Promise((resolve) => {
+    const child = spawn(exe, args, { env, windowsHide: true });
+    let stdout = '';
+    let stderr = '';
+    const timer = setTimeout(() => {
+      try {
+        child.kill('SIGTERM');
+        setTimeout(() => {
+          try { child.kill('SIGKILL'); } catch (_) {}
+        }, 1500);
+      } catch (_) {}
+    }, timeoutMs);
+    child.stdout.on('data', (d) => { stdout += d; });
+    child.stderr.on('data', (d) => { stderr += d; });
+    child.on('error', (err) => {
+      clearTimeout(timer);
+      resolve({ status: 1, stdout, stderr: String(err.message || err) });
+    });
+    child.on('close', (code, signal) => {
+      clearTimeout(timer);
+      if (signal === 'SIGTERM' || signal === 'SIGKILL') {
+        resolve({ status: 124, stdout, stderr: `${stderr}\n(timed out after ${timeoutMs}ms)`.trim() });
+      } else {
+        resolve({ status: code, stdout, stderr });
+      }
+    });
+  });
+}
+
+/** Unix: warn if .properties is readable by group/other (credential files). */
+function checkSensitiveFilePermissions(filePath, checks, idPrefix) {
+  if (process.platform === 'win32' || !filePath || !fs.existsSync(filePath)) return;
+  try {
+    const st = fs.statSync(filePath);
+    if ((st.mode & 0o077) !== 0) {
+      checks.push({
+        id: `${idPrefix}_file_perms`,
+        level: 'warn',
+        message: `${filePath} is readable by group/other — use chmod 600 on credential-related files`,
+      });
+    }
+  } catch (_) {}
+}
+
+function checkTruststoreFromPropsFile(propsPath, checks) {
+  if (!propsPath || !fs.existsSync(propsPath)) return;
+  let text;
+  try {
+    text = fs.readFileSync(propsPath, 'utf8');
+  } catch (_) {
+    return;
+  }
+  const m = text.match(/^\s*ssl\.truststore\.location\s*=\s*(.+)\s*$/m);
+  if (!m) {
+    checks.push({
+      id: 'ssl_truststore_in_props',
+      level: 'warn',
+      message: 'No ssl.truststore.location in admin properties (OK only if cluster does not use TLS truststore in this file)',
+    });
+    return;
+  }
+  let loc = m[1].trim();
+  if ((loc.startsWith('"') && loc.endsWith('"')) || (loc.startsWith("'") && loc.endsWith("'"))) {
+    loc = loc.slice(1, -1);
+  }
+  if (!fs.existsSync(loc)) {
+    checks.push({
+      id: 'ssl_truststore_file',
+      level: 'error',
+      message: `Truststore file missing at ${loc} (from admin properties) — topic list / ACL often fails until this path is valid inside the container`,
+    });
+  } else {
+    checks.push({ id: 'ssl_truststore_file', level: 'ok', message: `Truststore file present: ${loc}` });
+  }
+}
+
 /**
- * Build + validate setup body; optional filesystem / oc checks (warnings if files missing).
- * @returns {{ checks: Array<{id:string,level:string,message:string}>, summary: object, masterPreview: object, canSave: boolean }}
+ * Build + validate setup body; optional filesystem / oc checks; optional live Kafka + OC checks.
+ * @param {object} options
+ * @param {boolean} [options.deepVerify] - run kafka-topics --list and oc whoami per context (slower; needs network/cluster access)
+ * @param {boolean} [options.quickVerify] - with deepVerify: skip live Kafka + OC calls (static checks only; faster)
+ * @returns {Promise<{ checks: Array<{id:string,level:string,message:string}>, summary: object, masterPreview: object, canSave: boolean }>}
  */
-function runSetupPreview(body, configAbsPath) {
+async function runSetupPreview(body, configAbsPath, options) {
+  const deepVerify = options && options.deepVerify === true;
+  const quickVerify = options && options.quickVerify === true;
   const built = buildFilesFromSetupBody(body, configAbsPath);
   const expanded = expandMasterToLegacy(built.master, configAbsPath);
   if (built.credentials && built.credentials.oc) {
@@ -215,7 +311,7 @@ function runSetupPreview(body, configAbsPath) {
         : {
             id: 'kafka_client_props',
             level: 'warn',
-            message: `Client properties not found at ${clientPath} (copy under runtime configs after setup)`,
+            message: `Client properties not found at ${clientPath} (needed for user validation flows; place under runtime configs/)`,
           }
     );
   }
@@ -225,10 +321,28 @@ function runSetupPreview(body, configAbsPath) {
         ? { id: 'kafka_admin_props', level: 'ok', message: `Admin properties found: ${adminPath}` }
         : {
             id: 'kafka_admin_props',
-            level: 'warn',
-            message: `Admin properties not found at ${adminPath}`,
+            level: deepVerify ? 'error' : 'warn',
+            message: `Admin properties not found at ${adminPath} — portal "List topics" needs this file under runtime configs/ (error when running live verify)`,
           }
     );
+    if (fs.existsSync(adminPath)) {
+      checkTruststoreFromPropsFile(adminPath, checks);
+      checkSensitiveFilePermissions(adminPath, checks, 'kafka_admin_props');
+    }
+  }
+  if (clientPath && fs.existsSync(clientPath)) {
+    checkSensitiveFilePermissions(clientPath, checks, 'kafka_client_props');
+  }
+
+  const scriptPath = resolveKafkaTopicsScriptPath(g);
+  if (fs.existsSync(scriptPath)) {
+    checks.push({ id: 'kafka_topics_script', level: 'ok', message: `kafka-topics.sh found: ${scriptPath}` });
+  } else {
+    checks.push({
+      id: 'kafka_topics_script',
+      level: deepVerify ? 'error' : 'warn',
+      message: `kafka-topics.sh not found at ${scriptPath} — install Kafka bin under runtime or set kafka.clientInstallDir (error when running live verify)`,
+    });
   }
 
   const ocDir = g.ocPath || '/host/usr/bin';
@@ -251,6 +365,78 @@ function runSetupPreview(body, configAbsPath) {
       level: 'warn',
       message: `oc not found at ${ocExe} (install or mount host /usr/bin; optional if kubeconfig pre-logged-in)`,
     });
+  }
+
+  if (deepVerify && quickVerify) {
+    checks.push({
+      id: 'verify_mode',
+      level: 'ok',
+      message: 'Quick verify: skipped live Kafka and OC calls (uncheck Quick verify for full cluster test)',
+    });
+  } else if (deepVerify) {
+    const bs = String(g.bootstrapServers || '').trim();
+    const topicsScript = resolveKafkaTopicsScriptPath(g);
+    if (topicsScript && fs.existsSync(topicsScript) && adminPath && fs.existsSync(adminPath) && bs) {
+      const r = spawnSync(
+        topicsScript,
+        ['--bootstrap-server', bs, '--command-config', adminPath, '--list'],
+        { encoding: 'utf8', timeout: 25000, maxBuffer: 2 * 1024 * 1024, env: process.env }
+      );
+      if (r.error && r.error.code === 'ETIMEDOUT') {
+        checks.push({
+          id: 'kafka_list_topics',
+          level: 'error',
+          message: 'kafka-topics --list timed out — check bootstrap reachability, TLS/truststore, and admin SASL credentials',
+        });
+      } else if (r.status !== 0) {
+        const err = ((r.stderr || r.stdout || '') + '').trim().slice(0, 400);
+        checks.push({
+          id: 'kafka_list_topics',
+          level: 'error',
+          message: `kafka-topics --list failed (same as portal topic list): ${err || `exit ${r.status}`}`,
+        });
+      } else {
+        const n = (r.stdout || '').split('\n').map((t) => t.trim()).filter(Boolean).length;
+        checks.push({
+          id: 'kafka_list_topics',
+          level: 'ok',
+          message: `kafka-topics --list OK (${n} topic line(s))`,
+        });
+      }
+    } else if (!bs) {
+      checks.push({ id: 'kafka_list_topics', level: 'warn', message: 'Skipped live Kafka test: bootstrap servers empty' });
+    }
+
+    const kcExpanded = String(g.kubeconfigPath || '').trim();
+    const ocEnv = kcExpanded && fs.existsSync(kcExpanded)
+      ? { ...process.env, KUBECONFIG: kcExpanded }
+      : process.env;
+    if (kcExpanded && !fs.existsSync(kcExpanded)) {
+      checks.push({
+        id: 'kubeconfig_for_oc',
+        level: 'warn',
+        message: `Kubeconfig not found at ${kcExpanded} — oc uses default config paths; mount or fix path for predictable login`,
+      });
+    }
+    if (contexts.length && fs.existsSync(ocExe)) {
+      const ocTimeout = 20000;
+      const whoamiResults = await Promise.all(
+        contexts.map((ctx) => spawnWithTimeout(ocExe, ['whoami', '--context', ctx], ocEnv, ocTimeout).then((r) => ({ ctx, r })))
+      );
+      for (const { ctx, r } of whoamiResults) {
+        if (r.status === 0) {
+          const who = (r.stdout || '').split('\n')[0].trim();
+          checks.push({ id: 'oc_whoami_' + ctx, level: 'ok', message: `oc whoami (${ctx}): ${who || 'ok'} (parallel)` });
+        } else {
+          const err = ((r.stderr || r.stdout || '') + '').trim().slice(0, 300);
+          checks.push({
+            id: 'oc_whoami_' + ctx,
+            level: 'error',
+            message: `oc whoami failed for context "${ctx}" (secret updates need a valid login). ${err}`,
+          });
+        }
+      }
+    }
   }
 
   if (master.portal && master.portal.auth && master.portal.auth.enabled === true) {

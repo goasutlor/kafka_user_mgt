@@ -5,7 +5,7 @@ const session = require('express-session');
 const path = require('path');
 const fs = require('fs');
 const https = require('https');
-const { spawn } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { verifyPassword, isHashedStored } = require('./lib/auth-hash');
 const { decrypt: decryptOcCredential } = require('./lib/oc-encrypt');
 const {
@@ -17,6 +17,7 @@ const {
   configDirectoryWritable,
   buildFilesFromSetupBody,
   writeSetupFiles,
+  masterToSetupWizardBody,
 } = require('./lib/setup-writer');
 const { runSetupPreview } = require('./lib/setup-validate');
 
@@ -29,6 +30,16 @@ let SETUP_MODE = false;
 
 function getConfigAbsPath() {
   return path.isAbsolute(CONFIG_PATH) ? CONFIG_PATH : path.resolve(process.cwd(), CONFIG_PATH);
+}
+
+/** Scheme + host as seen by the browser (honours reverse-proxy headers when trust proxy is enabled). */
+function clientFacingBaseUrl(req) {
+  let proto = String(req.headers['x-forwarded-proto'] || '').split(',')[0].trim().toLowerCase();
+  if (!proto && req.secure) proto = 'https';
+  if (!proto) proto = 'http';
+  const host = String(req.headers['x-forwarded-host'] || req.headers.host || '').split(',')[0].trim();
+  const safeHost = host || 'localhost';
+  return `${proto}://${safeHost}`;
 }
 
 // Version: from env (Docker build) or package.json
@@ -321,26 +332,52 @@ app.use((req, res, next) => {
   if (!SETUP_MODE) return next();
   const url = (req.path || req.url || '').split('?')[0];
   if (url.startsWith('/api/setup')) return next();
+  if (url.startsWith('/api/preflight')) return next();
   if (url === '/api/version') return next();
   if (url.startsWith('/api/')) {
+    const base = clientFacingBaseUrl(req);
     return res.status(503).json({
       ok: false,
       setupRequired: true,
-      error: 'First-time setup required — open /setup.html and save configuration to the mounted config volume.',
+      error: 'First-time setup required — open the setup page and save configuration to the mounted config volume.',
+      setupPageUrl: `${base}/setup.html`,
+      appUrl: `${base}/`,
     });
   }
   next();
 });
 
-app.post('/api/setup/preview', (req, res) => {
+// Auth/session API and HTML must not be cached (avoids stale /api/me after docs → app; helps post-logout back button).
+app.use((req, res, next) => {
+  const p = req.path || '';
+  if (
+    p === '/api/me'
+    || p === '/api/auth-mode'
+    || p === '/api/login'
+    || p === '/api/logout'
+    || p === '/api/session/environment'
+  ) {
+    res.set('Cache-Control', 'no-store, private, no-cache');
+    res.set('Pragma', 'no-cache');
+    res.set('Vary', 'Cookie');
+  }
+  next();
+});
+
+app.post('/api/setup/preview', async (req, res) => {
   const expected = process.env.SETUP_TOKEN;
   if (expected && String(req.headers['x-setup-token'] || '') !== expected) {
     return res.status(403).json({ ok: false, error: 'Invalid or missing X-Setup-Token header' });
   }
   try {
     const configAbs = getConfigAbsPath();
-    const out = runSetupPreview(req.body || {}, configAbs);
-    res.json({ ok: true, ...out });
+    const rawBody = req.body && typeof req.body === 'object' ? { ...req.body } : {};
+    const deepVerify = !!rawBody.deepVerify;
+    const quickVerify = !!rawBody.quickVerify;
+    delete rawBody.deepVerify;
+    delete rawBody.quickVerify;
+    const out = await runSetupPreview(rawBody, configAbs, { deepVerify, quickVerify });
+    res.json({ ok: true, ...out, deepVerifyRan: deepVerify, quickVerifyRan: quickVerify });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || String(e) });
   }
@@ -350,13 +387,107 @@ app.get('/api/setup/status', (req, res) => {
   const configAbs = getConfigAbsPath();
   const present = fs.existsSync(configAbs);
   const dirOk = configDirectoryWritable(configAbs);
+  const base = clientFacingBaseUrl(req);
   res.json({
     ok: true,
     setupRequired: SETUP_MODE || !present,
+    setupPageUrl: `${base}/setup.html`,
+    appUrl: `${base}/`,
+    reconfigureAllowed: process.env.ALLOW_SETUP_RECONFIGURE === '1',
     configPath: configAbs,
     configDirWritable: dirOk.ok,
     configDirError: dirOk.ok ? null : dirOk.error,
     setupTokenRequired: !!process.env.SETUP_TOKEN,
+  });
+});
+
+app.get('/api/setup/prefill', (req, res) => {
+  const expected = process.env.SETUP_TOKEN;
+  if (expected && String(req.headers['x-setup-token'] || '') !== expected) {
+    return res.status(403).json({ ok: false, error: 'Invalid or missing X-Setup-Token header' });
+  }
+  const configAbs = getConfigAbsPath();
+  if (!fs.existsSync(configAbs)) {
+    return res.status(404).json({ ok: false, error: 'No configuration file at CONFIG_PATH yet' });
+  }
+  let raw;
+  try {
+    raw = JSON.parse(fs.readFileSync(configAbs, 'utf8'));
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: 'Could not read configuration file', detail: e.message });
+  }
+  if (!isMasterConfig(raw)) {
+    return res.status(400).json({
+      ok: false,
+      error: 'Prefill only supports master.config.json. Legacy web.config.json must be edited or migrated manually.',
+    });
+  }
+  res.json({ ok: true, wizard: masterToSetupWizardBody(raw) });
+});
+
+// Same checks as scripts/verify-golive.sh (Linux/container). Set GOLIVE_REPORT_TOKEN; send X-Golive-Token. Optional query portalBaseUrl.
+app.get('/api/preflight/golive', (req, res) => {
+  const expected = process.env.GOLIVE_REPORT_TOKEN;
+  if (!expected) {
+    return res.status(503).json({
+      ok: false,
+      error: 'GOLIVE_REPORT_TOKEN is not set — run scripts/verify-golive.sh on the helper node, or set the token to enable this API.',
+    });
+  }
+  if (String(req.headers['x-golive-token'] || '') !== String(expected)) {
+    return res.status(403).json({ ok: false, error: 'Invalid or missing X-Golive-Token header' });
+  }
+  if (process.platform === 'win32') {
+    return res.status(501).json({
+      ok: false,
+      error: 'Go-live verification runs on Linux (container or helper). Use WSL or execute scripts/verify-golive.sh on the deployment host.',
+    });
+  }
+  const scriptPath = process.env.GOLIVE_SCRIPT_PATH
+    || (fs.existsSync('/opt/kafka-usermgmt/verify-golive.sh')
+      ? '/opt/kafka-usermgmt/verify-golive.sh'
+      : path.join(__dirname, '..', '..', 'scripts', 'verify-golive.sh'));
+  if (!fs.existsSync(scriptPath)) {
+    return res.status(500).json({ ok: false, error: `verify-golive.sh not found at ${scriptPath}` });
+  }
+  const bashArgs = [scriptPath, '--json'];
+  try {
+    const configAbs = getConfigAbsPath();
+    if (fs.existsSync(configAbs)) {
+      const raw = JSON.parse(fs.readFileSync(configAbs, 'utf8'));
+      if (isMasterConfig(raw)) {
+        bashArgs.push('--config', configAbs);
+      }
+    }
+  } catch (_) { /* ignore */ }
+  const portal = String(req.query.portalBaseUrl || process.env.GOLIVE_PORTAL_BASE_URL || '').trim();
+  if (portal) {
+    bashArgs.push('--portal-url', portal);
+  }
+  const r = spawnSync('bash', bashArgs, {
+    encoding: 'utf8',
+    maxBuffer: 20 * 1024 * 1024,
+    timeout: 180000,
+    env: { ...process.env },
+  });
+  const lines = (r.stdout || '').split('\n').filter(Boolean);
+  const checks = [];
+  let summary = null;
+  for (let i = 0; i < lines.length; i++) {
+    try {
+      const o = JSON.parse(lines[i]);
+      if (o.type === 'summary') summary = o;
+      else checks.push(o);
+    } catch (_) { /* skip non-JSON */ }
+  }
+  const ok = !!(summary && summary.ok === true);
+  return res.status(200).json({
+    ok,
+    scriptExitCode: r.status,
+    signal: r.signal,
+    checks,
+    summary,
+    stderrTail: (r.stderr || '').slice(-4000),
   });
 });
 
@@ -500,18 +631,40 @@ app.get('/api/me', (req, res) => {
   const auth = getAuthConfig();
   const st = getEnvironmentsState();
   function attachEnvironment(payload) {
-    if (!st.active || !req.session) return payload;
-    const id = req.session.activeEnvironmentId || st.defaultId;
-    const entry = st.list.find((e) => e.id === id) || st.list[0];
-    if (!entry) return payload;
-    const sites = sitesFromEnvironmentEntry(entry);
-    payload.environment = {
-      id: entry.id,
-      label: entry.label,
-      shortLabel: entry.shortLabel || entry.label,
-      badgeColor: entry.badgeColor || null,
-      namespaces: (sites || []).map((s) => s.namespace),
-    };
+    if (!req.session) return payload;
+    if (st.active) {
+      const id = req.session.activeEnvironmentId || st.defaultId;
+      const entry = st.list.find((e) => e.id === id) || st.list[0];
+      if (!entry) return payload;
+      const sites = sitesFromEnvironmentEntry(entry);
+      payload.environment = {
+        id: entry.id,
+        label: entry.label,
+        shortLabel: entry.shortLabel || entry.label,
+        badgeColor: entry.badgeColor || null,
+        namespaces: (sites || []).map((s) => s.namespace),
+        multiEnv: true,
+      };
+      return payload;
+    }
+    try {
+      const sites = getSitesFromConfig();
+      if (sites && sites.length) {
+        const ns = sites.map((s) => s.namespace).filter(Boolean);
+        const ctxs = [...new Set(sites.map((s) => s.ocContext).filter(Boolean))];
+        const primaryNs = ns[0] || '';
+        payload.environment = {
+          id: 'default',
+          label: primaryNs ? `Namespace: ${primaryNs}` : 'Deployment target',
+          shortLabel: (primaryNs ? primaryNs.slice(0, 10) : 'NS').toUpperCase(),
+          badgeColor: '#6e7781',
+          namespaces: ns,
+          ocContexts: ctxs,
+          contextSummary: ctxs.join(', '),
+          singleDeployment: true,
+        };
+      }
+    } catch (_) { /* ignore */ }
     return payload;
   }
   if (!auth.enabled) return res.json(attachEnvironment({ ok: true, authRequired: false }));
@@ -881,11 +1034,20 @@ function getBootstrapServersForRequest(req) {
 // Avoid 404 in console: no favicon
 app.get('/favicon.ico', (req, res) => res.status(204).end());
 
-// Static with cache (1h for immutable assets)
-app.use(express.static(STATIC_DIR, { maxAge: 3600000 }));
+// Static: long cache for assets; never cache HTML (session-sensitive UI, back/forward after logout).
+app.use(express.static(STATIC_DIR, {
+  maxAge: 3600000,
+  setHeaders(res, filePath) {
+    if (/\.html$/i.test(filePath)) {
+      res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    }
+  },
+}));
 
 app.get('/api/version', (req, res) => {
-  res.json({ ok: true, version: APP_VERSION });
+  const sha = process.env.GIT_COMMIT || '';
+  const gitSha = typeof sha === 'string' && sha.length >= 7 ? sha.slice(0, 7) : '';
+  res.json({ ok: true, version: APP_VERSION, ...(gitSha ? { gitSha } : {}) });
 });
 
 app.get('/api/config', (req, res) => {
@@ -1065,16 +1227,26 @@ app.get('/api/topics', (req, res) => {
   try {
     if (!config) loadConfig();
   } catch (e) {
-    return res.status(500).json({ ok: false, error: e.message });
+    return res.status(500).json({
+      ok: false,
+      error: e.message,
+      setupPageUrl: `${clientFacingBaseUrl(req)}/setup.html`,
+    });
   }
   const { scriptPath, adminConfig, bootstrap } = getKafkaTopicsEnv(req);
+  const topicsSetupUrl = `${clientFacingBaseUrl(req)}/setup.html`;
   runShellScript(scriptPath, ['--bootstrap-server', bootstrap, '--command-config', adminConfig, '--list'], {}, req)
     .then(({ code, stdout, stderr }) => {
       const topics = (stdout || '').split('\n').map((t) => t.trim()).filter(Boolean);
       if (code !== 0 && (stderr || stdout)) {
         const msg = (stderr || stdout).trim().slice(0, 500);
         console.error('[topics]', code, msg);
-        const payload = { ok: false, error: 'List topics failed', detail: msg };
+        const payload = {
+          ok: false,
+          error: 'List topics failed',
+          detail: msg,
+          setupPageUrl: topicsSetupUrl,
+        };
         if (/Couldn't resolve server|DNS resolution failed|host1|host2|bootstrap\.servers/i.test(msg)) {
           payload.hint = 'Set gen.bootstrapServers in Docker/web.config.json to your real Kafka broker host:port (e.g. broker1:443,broker2:443). Replace placeholder host1:443,host2:443.';
         }
@@ -1089,7 +1261,7 @@ app.get('/api/topics', (req, res) => {
     })
     .catch((err) => {
       console.error('[topics]', err.message);
-      res.status(500).json({ ok: false, error: err.message });
+      res.status(500).json({ ok: false, error: err.message, setupPageUrl: topicsSetupUrl });
     });
 });
 

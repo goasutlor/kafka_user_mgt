@@ -32,6 +32,8 @@
 #
 # CHANGELOG
 # ---------
+# 2026-03-21  Go-Live verify: menu [7] and GEN_NONINTERACTIVE=1 GEN_MODE=7 — scripts/verify-golive.sh (ทุก namespace จาก master/environments, Kafka, optional Portal). Env: GOLIVE_PORTAL_URL, GOLIVE_JSON=1.
+# 2026-03-21  Preflight / Kafka admin list: menu [6] and GEN_NONINTERACTIVE=1 GEN_MODE=6 — kafka-topics.sh --list (parity with web setup Verify deep check). Web setup: deep verify runs same + oc whoami.
 # 2026-03-18  Add ACL for existing user: GEN_MODE=5 (CLI menu [5] + non-interactive). No new credential; add topic ACL + consumer group for user already in secret. Web: Add ACL to existing user (summary + confirm). Audit: create-topic label + add-acl-existing.
 # 2026-03-15  Create topic: use broker default for partitions and replication factor (rack-aware placement). No GEN_PARTITIONS/GEN_REPLICATION_FACTOR; kafka-topics.sh --create without --partitions/--replication-factor so broker default.num.partitions and default.replication.factor apply. CLI and Web parity.
 # 2026-03-15  Create topic (CLI + Web parity): GEN_MODE=4 — interactive menu [4] Create new topic; non-interactive env GEN_TOPIC_NAME (or GEN_TOPIC) only. validate_topic_name(); kafka-topics.sh --create; log CREATE_TOPIC to provisioning.log.
@@ -54,6 +56,9 @@
 # 1. FIXED CONFIGURATION (overridable by env for Web/non-interactive: GEN_BASE_DIR, GEN_KAFKA_BIN, GEN_OC_PATH)
 # Output directory: all generated .enc and pack files go here (same path as this script, easy to find)
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
+# Go-Live verify script: repo = scripts/verify-golive.sh; Docker image = /opt/kafka-usermgmt/verify-golive.sh
+GOLIVE_VERIFY_SCRIPT="${GOLIVE_VERIFY_SCRIPT:-$SCRIPT_DIR/scripts/verify-golive.sh}"
+[ ! -f "$GOLIVE_VERIFY_SCRIPT" ] && [ -f /opt/kafka-usermgmt/verify-golive.sh ] && GOLIVE_VERIFY_SCRIPT=/opt/kafka-usermgmt/verify-golive.sh
 USER_OUTPUT_DIR="${GEN_USER_OUTPUT_DIR:-$SCRIPT_DIR/user_output}"
 mkdir -p "$USER_OUTPUT_DIR"
 
@@ -361,6 +366,38 @@ verify_user_absent_from_secret() {
     return 0
 }
 
+# Non-interactive Mode 7: full Go-Live verify (before PRE-CHECK — รายงานไฟล์หาย/oc/kafka ครบในครั้งเดียว)
+if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "7" ]; then
+    _vsites=""
+    for ((i=0;i<NUM_SITES;i++)); do
+        [ -n "$_vsites" ] && _vsites="${_vsites},"
+        _vsites="${_vsites}${SITE_CTX[$i]}:${SITE_NS[$i]}"
+    done
+    export GEN_OCP_SITES="$_vsites"
+    export GEN_BASE_DIR="$BASE_DIR"
+    export GEN_CLIENT_CONFIG="$CLIENT_CONFIG"
+    export GEN_ADMIN_CONFIG="$ADMIN_CONFIG"
+    export GEN_KAFKA_BIN="$KAFKA_BIN"
+    export GEN_K8S_SECRET_NAME="$K8S_SECRET_NAME"
+    export GEN_ENVIRONMENTS_JSON="$ENV_JSON"
+    export GEN_VERIFY_BOOTSTRAP_CWDC="${BOOTSTRAP_CWDC}"
+    export GEN_VERIFY_BOOTSTRAP_BOTH="${BOOTSTRAP_BOTH}"
+    if [ "${GOLIVE_JSON:-}" = "1" ]; then
+        if [ -n "${GOLIVE_PORTAL_URL:-}" ]; then
+            bash "$GOLIVE_VERIFY_SCRIPT" --from-gen-env --json --portal-url "${GOLIVE_PORTAL_URL}"
+        else
+            bash "$GOLIVE_VERIFY_SCRIPT" --from-gen-env --json
+        fi
+    else
+        if [ -n "${GOLIVE_PORTAL_URL:-}" ]; then
+            bash "$GOLIVE_VERIFY_SCRIPT" --from-gen-env --portal-url "${GOLIVE_PORTAL_URL}"
+        else
+            bash "$GOLIVE_VERIFY_SCRIPT" --from-gen-env
+        fi
+    fi
+    exit $?
+fi
+
 # PRE-CHECK
 [ ! -f "$CLIENT_CONFIG" ] && error_exit "Config file not found at $CLIENT_CONFIG"
 [ ! -f "$ADMIN_CONFIG" ] && error_exit "Admin config not found at $ADMIN_CONFIG (needed for kafka-acls)"
@@ -387,6 +424,19 @@ for ((i=0;i<NUM_SITES;i++)); do
     done_msg
 done
 echo -e " ${GREEN}All OCP sites are reachable ($NUM_SITES site(s)).${NC}\n"
+
+# Non-interactive Mode 6: Kafka admin preflight (parity with web /api/setup/preview deepVerify)
+if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "6" ]; then
+    echo -e "\n${CYAN}[PREFLIGHT] kafka-topics.sh --list (bootstrap: $BOOTSTRAP_CWDC)${NC}"
+    list_out=$(timeout "$TIMEOUT_SEC" "$KAFKA_BIN/kafka-topics.sh" --bootstrap-server "$BOOTSTRAP_CWDC" --command-config "$ADMIN_CONFIG" --list 2>&1)
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+        echo -e " ${GREEN}OK — kafka-topics --list succeeded.${NC}"
+        exit 0
+    fi
+    echo "$list_out" | sed 's/^/   /'
+    error_exit "kafka-topics --list failed (exit $rc). Fix bootstrap, admin properties, truststore, or credentials."
+fi
 
 acquire_lock
 
@@ -559,10 +609,12 @@ while true; do
         echo "   [3] User management (remove user(s) + ACL, or change password)"
         echo "   [4] Create new topic (Kafka topic only; then use [1] to onboard user)"
         echo "   [5] Add ACL for existing user (add topic permission only; no new credential)"
+        echo "   [6] Preflight — list Kafka topics (admin config; same check as web setup Verify)"
+        echo "   [7] Go-Live verify — ตรวจทุกอย่าง (OC+Kafka+ทุก namespace+optional Portal URL)"
         echo "   [Q] Quit"
-        read -p "   Select mode [1-5/Q]: " SCRIPT_MODE
+        read -p "   Select mode [1-7/Q]: " SCRIPT_MODE
         [[ "$SCRIPT_MODE" =~ ^[Qq]$ ]] && { echo -e "   ${CYAN}Exiting...${NC}"; exit 0; }
-        [[ "$SCRIPT_MODE" != "2" && "$SCRIPT_MODE" != "3" && "$SCRIPT_MODE" != "4" && "$SCRIPT_MODE" != "5" ]] && SCRIPT_MODE="1"
+        [[ "$SCRIPT_MODE" != "2" && "$SCRIPT_MODE" != "3" && "$SCRIPT_MODE" != "4" && "$SCRIPT_MODE" != "5" && "$SCRIPT_MODE" != "6" && "$SCRIPT_MODE" != "7" ]] && SCRIPT_MODE="1"
     fi
 
     if [ "$SCRIPT_MODE" == "5" ]; then
@@ -618,6 +670,61 @@ while true; do
     echo -e "\n   ${CYAN}[M] Main menu  [Q] Quit${NC}"
     read -p "   Your choice [M/Q]: " ADD_ACL_CHOICE
     [[ "$ADD_ACL_CHOICE" =~ ^[Qq]$ ]] && { echo -e "   ${CYAN}Exiting...${NC}"; exit 0; }
+    continue
+    fi
+
+    if [ "$SCRIPT_MODE" == "6" ]; then
+    echo -e "\n-------------------------------------------------------"
+    echo "  PREFLIGHT — Kafka admin (list topics)"
+    echo "-------------------------------------------------------"
+    echo "   Bootstrap: $BOOTSTRAP_CWDC"
+    echo "   Admin config: $ADMIN_CONFIG"
+    status_msg "kafka-topics.sh --list"
+    list_out=$(timeout "$TIMEOUT_SEC" "$KAFKA_BIN/kafka-topics.sh" --bootstrap-server "$BOOTSTRAP_CWDC" --command-config "$ADMIN_CONFIG" --list 2>&1)
+    rc=$?
+    if [ "$rc" -eq 0 ]; then
+        done_msg
+        echo "$list_out" | head -n 40 | sed 's/^/   /'
+        echo -e "\n   ${GREEN}Preflight OK.${NC}"
+    else
+        echo "$list_out" | sed 's/^/   /'
+        echo -e "\n   ${RED}Preflight failed (exit $rc).${NC}"
+    fi
+    echo -e "\n   ${CYAN}[M] Main menu  [Q] Quit${NC}"
+    read -p "   Your choice [M/Q]: " PF6_CHOICE
+    [[ "$PF6_CHOICE" =~ ^[Qq]$ ]] && { echo -e "   ${CYAN}Exiting...${NC}"; exit 0; }
+    continue
+    fi
+
+    if [ "$SCRIPT_MODE" == "7" ]; then
+    echo -e "\n-------------------------------------------------------"
+    echo "  GO-LIVE VERIFY (scripts/verify-golive.sh)"
+    echo "-------------------------------------------------------"
+    _vsites=""
+    for ((i=0;i<NUM_SITES;i++)); do
+        [ -n "$_vsites" ] && _vsites="${_vsites},"
+        _vsites="${_vsites}${SITE_CTX[$i]}:${SITE_NS[$i]}"
+    done
+    export GEN_OCP_SITES="$_vsites"
+    export GEN_BASE_DIR="$BASE_DIR"
+    export GEN_CLIENT_CONFIG="$CLIENT_CONFIG"
+    export GEN_ADMIN_CONFIG="$ADMIN_CONFIG"
+    export GEN_KAFKA_BIN="$KAFKA_BIN"
+    export GEN_K8S_SECRET_NAME="$K8S_SECRET_NAME"
+    export GEN_ENVIRONMENTS_JSON="$ENV_JSON"
+    export GEN_VERIFY_BOOTSTRAP_CWDC="${BOOTSTRAP_CWDC}"
+    export GEN_VERIFY_BOOTSTRAP_BOTH="${BOOTSTRAP_BOTH}"
+    read -p "   Portal base URL for HTTP checks (optional, Enter=skip): " _golive_url
+    _golive_url=$(trim_ws "${_golive_url:-}")
+    if [ -n "$_golive_url" ]; then
+        bash "$GOLIVE_VERIFY_SCRIPT" --from-gen-env --portal-url "$_golive_url"
+    else
+        bash "$GOLIVE_VERIFY_SCRIPT" --from-gen-env
+    fi
+    _golive_rc=$?
+    echo -e "\n   ${CYAN}[M] Main menu  [Q] Quit${NC}"
+    read -p "   Your choice [M/Q]: " GL_CHOICE
+    [[ "$GL_CHOICE" =~ ^[Qq]$ ]] && { echo -e "   ${CYAN}Exiting...${NC}"; exit "${_golive_rc}"; }
     continue
     fi
 

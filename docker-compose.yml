@@ -33,7 +33,8 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        VERSION: ${APP_VERSION:-1.0.55}
+        VERSION: ${APP_VERSION:-1.0.61}
+        GIT_COMMIT: ${GIT_COMMIT:-}
         # Match broker-friendly client version when needed: KAFKA_VERSION, KAFKA_SCALA, KAFKA_LINK_NAME
         KAFKA_VERSION: ${KAFKA_VERSION:-3.8.1}
         KAFKA_SCALA: ${KAFKA_SCALA:-2.13}
@@ -43,8 +44,13 @@ services:
       - "${APP_PUBLISH_HOST_PORT:-3443}:3443"
     environment:
       CONFIG_PATH: /app/config/master.config.json
+      # Set to 0 in locked-down prod if you do not want /setup.html to overwrite master.config.json
+      ALLOW_SETUP_RECONFIGURE: ${ALLOW_SETUP_RECONFIGURE:-1}
       AUTH_ENABLED: ${AUTH_ENABLED:-0}
       SETUP_TOKEN: ${SETUP_TOKEN:-}
+      # Optional: GET /api/preflight/golive with header X-Golive-Token (same value) — runs scripts/verify-golive.sh inside container
+      GOLIVE_REPORT_TOKEN: ${GOLIVE_REPORT_TOKEN:-}
+      GOLIVE_PORTAL_BASE_URL: ${GOLIVE_PORTAL_BASE_URL:-}
       TRUST_PROXY: ${TRUST_PROXY:-0}
       USE_HTTPS: ${USE_HTTPS:-0}
       SSL_KEY_PATH: ${SSL_KEY_PATH:-}

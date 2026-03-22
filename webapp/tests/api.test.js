@@ -45,6 +45,38 @@ describe('API', () => {
     assert.strictEqual(res.body.ok, true);
     assert.strictEqual(res.body.setupRequired, false);
     assert.ok(typeof res.body.configPath === 'string');
+    assert.ok(typeof res.body.setupPageUrl === 'string' && res.body.setupPageUrl.includes('/setup.html'));
+    assert.ok(typeof res.body.appUrl === 'string');
+    assert.strictEqual(typeof res.body.reconfigureAllowed, 'boolean');
+  });
+
+  it('GET /api/setup/prefill returns 400 for legacy web.config (not master format)', async () => {
+    const res = await request(app).get('/api/setup/prefill').expect(400);
+    assert.strictEqual(res.body.ok, false);
+    assert.ok(String(res.body.error || '').includes('master'));
+  });
+
+  it('GET /api/preflight/golive without GOLIVE_REPORT_TOKEN returns 503', async () => {
+    const prev = process.env.GOLIVE_REPORT_TOKEN;
+    delete process.env.GOLIVE_REPORT_TOKEN;
+    try {
+      const res = await request(app).get('/api/preflight/golive').expect(503);
+      assert.strictEqual(res.body.ok, false);
+    } finally {
+      if (prev !== undefined) process.env.GOLIVE_REPORT_TOKEN = prev;
+    }
+  });
+
+  it('GET /api/preflight/golive with wrong X-Golive-Token returns 403', async () => {
+    const prev = process.env.GOLIVE_REPORT_TOKEN;
+    process.env.GOLIVE_REPORT_TOKEN = 'golive-test-token';
+    try {
+      await request(app).get('/api/preflight/golive').expect(403);
+      await request(app).get('/api/preflight/golive').set('X-Golive-Token', 'nope').expect(403);
+    } finally {
+      if (prev === undefined) delete process.env.GOLIVE_REPORT_TOKEN;
+      else process.env.GOLIVE_REPORT_TOKEN = prev;
+    }
   });
 
   it('POST /api/setup/preview accepts dual OCP topology and returns checks', async () => {

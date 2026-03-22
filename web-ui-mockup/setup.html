@@ -137,6 +137,22 @@
       font-size: 12px;
       max-height: 280px;
     }
+    .env-simple-row {
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 12px 40px 12px 12px;
+      margin-top: 10px;
+      background: #fafbfc;
+      position: relative;
+    }
+    .env-simple-row .row { margin-top: 8px; }
+    .env-row-remove {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      padding: 4px 8px;
+      font-size: 12px;
+    }
   </style>
 </head>
 <body>
@@ -151,9 +167,14 @@
     <div id="done-panel" class="card" style="display:none;">
       <h2>Already configured</h2>
       <p><a href="/">Open the application</a></p>
+      <p id="done-hint-reconfigure" class="hint" style="display:none;"></p>
     </div>
 
     <div id="wizard-wrap" style="display:none;">
+      <p class="hint" id="reconfigure-toolbar" style="display:none; margin-top:0;">
+        <button type="button" class="secondary" id="btn-load-prefill">โหลดค่าปัจจุบันจาก config บนเซิร์ฟเวอร์</button>
+        <span class="hint" style="margin-left:8px;">ถ้ามี <code>SETUP_TOKEN</code> ให้ใส่ในขั้น Portal ก่อน</span>
+      </p>
       <div class="steps" id="step-indicator">
         <span data-i="1" class="active">1 · Architecture</span>
         <span data-i="2">2 · Kafka &amp; runtime</span>
@@ -212,6 +233,14 @@
               <label for="adminPropertiesFile">Admin properties file</label>
               <input type="text" id="adminPropertiesFile" value="kafka-client-master.properties" />
             </div>
+          </div>
+          <div class="banner warn" style="margin-top:14px;">
+            <strong>Kafka client .properties (สำคัญ)</strong><br />
+            ไฟล์ต้องอยู่บน <strong>host</strong> ใต้โฟลเดอร์ที่ mount เป็น <code>{runtimeRoot}/configs/</code> (เช่น Podman: <code>~/kafka-usermgmt-runtime/configs/</code>).<br />
+            ช่องด้านบนคือ <strong>แค่ชื่อไฟล์</strong> ไม่ใช่ path เต็ม — ตัวอย่าง: ถ้าคุณมี <code>client-ssl-external.properties</code> ให้ใส่ชื่อนั้น แล้วคัดลอกไฟล์ไปที่
+            <code>…/configs/client-ssl-external.properties</code><br />
+            พาธในไฟล์ (เช่น <code>ssl.truststore.location</code>) ต้องชี้ไปที่ไฟล์ที่ <strong>container เห็นได้</strong> — แนะนำเก็บ <code>.jks</code> ไว้ใต้ <code>configs/</code> แล้วใช้ path แบบ
+            <code>/opt/kafka-usermgmt/configs/client.truststore.jks</code> (ให้ตรงกับ runtime root ที่ mount)
           </div>
           <div class="actions">
             <button type="button" class="secondary btn-back" data-back="1">Back</button>
@@ -321,11 +350,29 @@
               <div><label for="adminPassword">Admin password</label><input type="password" id="adminPassword" autocomplete="new-password" /></div>
             </div>
           </div>
-          <div class="check"><input type="checkbox" id="environmentsEnabled" /><label for="environmentsEnabled" style="margin:0;">Multi-environment (dev/SIT/UAT) JSON</label></div>
+          <div class="check"><input type="checkbox" id="environmentsEnabled" /><label for="environmentsEnabled" style="margin:0;">หลาย namespace / หลาย environment (Dev·SIT·UAT บน cluster เดียวกัน)</label></div>
           <div id="env-fields" style="display:none;">
-            <label for="environmentsJson"><code>environments</code> object</label>
-            <textarea id="environmentsJson" placeholder='{ "enabled": true, "defaultEnvironmentId": "dev", "environments": [] }'></textarea>
-            <p class="hint">Every <code>ocContext</code> in this JSON must have a matching API URL in step 3. See <code>/app/config-examples/</code>.</p>
+            <p class="hint" style="margin-top:0;">ใช้แถวด้านล่างได้เลย — ไม่ต้องแก้ JSON ยกเว้นต้องการ advanced</p>
+            <div class="check" style="margin-top:8px;">
+              <input type="radio" name="envEditorMode" id="envEditorSimple" value="simple" checked />
+              <label for="envEditorSimple" style="margin:0;">กรอกทีละแถว (แนะนำ)</label>
+            </div>
+            <div class="check">
+              <input type="radio" name="envEditorMode" id="envEditorJson" value="json" />
+              <label for="envEditorJson" style="margin:0;">วาง JSON เต็ม (<code>environments</code> object)</label>
+            </div>
+            <div id="env-simple-panel" style="margin-top:12px;">
+              <label for="defaultEnvironmentId">Environment เริ่มต้นหลังเปิดเว็บ (dropdown บน header)</label>
+              <input type="text" id="defaultEnvironmentId" value="dev" placeholder="dev" />
+              <p class="hint">แต่ละแถว = ชุด namespace หนึ่งชุดบน cluster เดียวกัน (context เดียวกับขั้น OpenShift)</p>
+              <div id="env-simple-rows"></div>
+              <button type="button" class="secondary" id="btn-env-add-row">+ เพิ่มแถว</button>
+            </div>
+            <div id="env-json-panel" style="display:none; margin-top:12px;">
+              <label for="environmentsJson"><code>environments</code> object</label>
+              <textarea id="environmentsJson" placeholder='{ "enabled": true, "defaultEnvironmentId": "dev", "environments": [] }'></textarea>
+              <p class="hint">ทุก <code>ocContext</code> ใน JSON ต้องตรง URL ในขั้น OpenShift — ดูตัวอย่างใน <code>/app/config-examples/</code></p>
+            </div>
           </div>
           <label for="ocLoginServersOverride">Optional: <code>loginServers</code> JSON (context → API URL)</label>
           <textarea id="ocLoginServersOverride" placeholder='Use when multi-environment JSON lists contexts; merge with step 3 URLs. Example: { "cwdc": "https://api..." }'></textarea>
@@ -345,7 +392,11 @@
 
         <div class="step-panel" data-step="5">
           <h2>Verify &amp; confirm</h2>
-          <p class="hint">Run server-side checks (paths, <code>oc</code>, API URLs, credentials coverage). Fix any <span class="badge err">error</span> items, then confirm to save.</p>
+          <p class="hint">รันการตรวจแบบเต็ม: ไฟล์ path, สิทธิ์ไฟล์ credential (Unix), <code>kafka-topics.sh</code>, truststore, <strong>ทดสอบจริง</strong> <code>kafka-topics --list</code> และ <code>oc whoami</code> แบบ<strong>ขนานต่อ context</strong> — แก้ <span class="badge err">error</span> ก่อนบันทึก</p>
+          <div class="check" style="margin-top:10px;">
+            <input type="checkbox" id="quickVerifyOnly" />
+            <label for="quickVerifyOnly" style="margin:0;">Quick verify — ไม่เรียก Kafka/OC จริง (เร็ว; ใช้ตอนยังไม่พร้อมเครือข่าย)</label>
+          </div>
           <div class="actions">
             <button type="button" class="secondary btn-back" data-back="4">Back</button>
             <button type="button" class="primary" id="btn-verify">Run verification</button>
@@ -387,12 +438,248 @@
       var btnSave = document.getElementById('btn-save');
       var btnVerify = document.getElementById('btn-verify');
       var lastPreviewOk = false;
+      var reconfigureMode = false;
+      var currentStep = 1;
+      var DRAFT_KEY = 'kafka-usermgmt-setup-draft-v3';
+      var draftTimer = null;
+
+      function scheduleDraftSave() {
+        clearTimeout(draftTimer);
+        draftTimer = setTimeout(saveSetupDraft, 400);
+      }
+
+      function serializeSetupDraft() {
+        var data = { step: currentStep, fields: {}, checks: {}, radios: {} };
+        form.querySelectorAll('input, textarea').forEach(function (el) {
+          if (!el.id || el.id === 'setupToken') return;
+          if (el.type === 'checkbox') {
+            data.checks[el.id] = el.checked;
+          } else if (el.type === 'radio') {
+            if (el.checked) data.radios[el.name] = el.value;
+          } else {
+            data.fields[el.id] = el.value;
+          }
+        });
+        data.envSimpleRows = [];
+        document.querySelectorAll('#env-simple-rows .env-simple-row').forEach(function (row) {
+          data.envSimpleRows.push({
+            id: (row.querySelector('.env-row-id') || {}).value || '',
+            label: (row.querySelector('.env-row-label') || {}).value || '',
+            ctx: (row.querySelector('.env-row-context') || {}).value || '',
+            ns: (row.querySelector('.env-row-ns') || {}).value || '',
+          });
+        });
+        return data;
+      }
+
+      function clearEnvSimpleRows() {
+        var wrap = document.getElementById('env-simple-rows');
+        if (wrap) wrap.innerHTML = '';
+      }
+
+      function addEnvSimpleRow(prefill) {
+        var wrap = document.getElementById('env-simple-rows');
+        if (!wrap) return;
+        var row = document.createElement('div');
+        row.className = 'env-simple-row';
+        row.innerHTML = '<button type="button" class="secondary env-row-remove" title="Remove row">ลบ</button>' +
+          '<div class="row"><div><label>Environment ID</label><input type="text" class="env-row-id" placeholder="dev" /></div>' +
+          '<div><label>Label</label><input type="text" class="env-row-label" placeholder="Development" /></div></div>' +
+          '<div class="row"><div><label>OC context</label><input type="text" class="env-row-context" placeholder="e.g. cwdc" /></div>' +
+          '<div><label>Namespace</label><input type="text" class="env-row-ns" placeholder="openshift-project" /></div></div>';
+        wrap.appendChild(row);
+        row.querySelector('.env-row-remove').addEventListener('click', function () {
+          if (wrap.querySelectorAll('.env-simple-row').length <= 1) return;
+          row.remove();
+          scheduleDraftSave();
+        });
+        ['.env-row-id', '.env-row-label', '.env-row-context', '.env-row-ns'].forEach(function (sel) {
+          row.querySelector(sel).addEventListener('input', scheduleDraftSave);
+        });
+        if (prefill) {
+          var idEl = row.querySelector('.env-row-id');
+          var lEl = row.querySelector('.env-row-label');
+          var cEl = row.querySelector('.env-row-context');
+          var nEl = row.querySelector('.env-row-ns');
+          if (idEl && prefill.id) idEl.value = prefill.id;
+          if (lEl && prefill.label) lEl.value = prefill.label;
+          if (cEl && prefill.ctx) cEl.value = prefill.ctx;
+          if (nEl && prefill.ns) nEl.value = prefill.ns;
+        }
+      }
+
+      function seedEnvRowFromOcSite() {
+        var ctxEl = document.querySelector('.site-context[data-site="0"]');
+        var nsEl = document.querySelector('.site-ns[data-site="0"]');
+        var ctx = ctxEl ? ctxEl.value.trim() : '';
+        var ns = nsEl ? nsEl.value.trim() : '';
+        var row = document.querySelector('#env-simple-rows .env-simple-row');
+        if (!row) return;
+        var cEl = row.querySelector('.env-row-context');
+        var nEl = row.querySelector('.env-row-ns');
+        if (cEl && !cEl.value.trim() && ctx) cEl.value = ctx;
+        if (nEl && !nEl.value.trim() && ns) nEl.value = ns;
+      }
+
+      function collectSimpleEnvironmentItems() {
+        var rows = document.querySelectorAll('#env-simple-rows .env-simple-row');
+        var items = [];
+        rows.forEach(function (row) {
+          var id = (row.querySelector('.env-row-id') || {}).value.trim();
+          var label = (row.querySelector('.env-row-label') || {}).value.trim() || id;
+          var ctx = (row.querySelector('.env-row-context') || {}).value.trim();
+          var ns = (row.querySelector('.env-row-ns') || {}).value.trim();
+          if (!id || !ctx || !ns) {
+            throw new Error('Multi-environment: each row needs Environment ID, OC context, and namespace');
+          }
+          var short = id.length <= 6 ? id.toUpperCase() : id.substring(0, 4).toUpperCase();
+          items.push({
+            id: id,
+            label: label,
+            shortLabel: short,
+            badgeColor: '#238636',
+            sites: [{ name: ctx, ocContext: ctx, namespace: ns }],
+          });
+        });
+        if (items.length === 0) throw new Error('Add at least one environment row, or turn off multi-environment');
+        return items;
+      }
+
+      function toggleEnvEditorPanels() {
+        var json = document.getElementById('envEditorJson').checked;
+        document.getElementById('env-simple-panel').style.display = json ? 'none' : 'block';
+        document.getElementById('env-json-panel').style.display = json ? 'block' : 'none';
+        scheduleDraftSave();
+      }
+
+      function saveSetupDraft() {
+        try {
+          localStorage.setItem(DRAFT_KEY, JSON.stringify(serializeSetupDraft()));
+        } catch (e) {}
+      }
+
+      function loadSetupDraft() {
+        try {
+          var raw = localStorage.getItem(DRAFT_KEY);
+          return raw ? JSON.parse(raw) : null;
+        } catch (e) {
+          return null;
+        }
+      }
+
+      function restoreSetupDraft(data) {
+        if (!data) return;
+        Object.keys(data.fields || {}).forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el && 'value' in el) el.value = data.fields[id];
+        });
+        Object.keys(data.checks || {}).forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el && el.type === 'checkbox') el.checked = !!data.checks[id];
+        });
+        Object.keys(data.radios || {}).forEach(function (name) {
+          var val = data.radios[name];
+          document.querySelectorAll('input[name="' + name + '"]').forEach(function (r) {
+            r.checked = r.value === val;
+          });
+        });
+        clearEnvSimpleRows();
+        (data.envSimpleRows || []).forEach(function (r) {
+          addEnvSimpleRow(r);
+        });
+        if (!(data.envSimpleRows || []).length && document.getElementById('environmentsEnabled').checked) {
+          addEnvSimpleRow();
+          seedEnvRowFromOcSite();
+        }
+        toggleEnvEditorPanels();
+        onArchChange();
+        syncSecretNameHint();
+        syncCredModeUi();
+        showStep(Math.min(Math.max(parseInt(data.step, 10) || 1, 1), 5));
+      }
 
       function banner(className, html) {
         var d = document.createElement('div');
         d.className = 'banner ' + className;
         d.innerHTML = html;
         banners.appendChild(d);
+      }
+
+      function applyServerPrefill(w) {
+        if (!w || typeof w !== 'object') return;
+        var ids = ['runtimeRoot', 'kafkaBootstrap', 'scriptName', 'k8sSecretName', 'clientPropertiesFile', 'adminPropertiesFile', 'ocPath', 'kubeconfig', 'portalPort', 'httpsKeyPath', 'httpsCertPath', 'credentialsFile', 'defaultEnvironmentId'];
+        ids.forEach(function (id) {
+          if (w[id] != null && String(w[id]) !== '' && document.getElementById(id)) {
+            document.getElementById(id).value = String(w[id]);
+          }
+        });
+        if (w.customK8sSecret) {
+          document.getElementById('customK8sSecret').checked = true;
+          var kin = document.getElementById('k8sSecretName');
+          kin.readOnly = false;
+          kin.style.background = '';
+        }
+        if (w.ocTopology === 'dual') {
+          document.getElementById('topoDual').checked = true;
+        } else {
+          document.getElementById('topoSingle').checked = true;
+        }
+        onArchChange();
+        if (w.ocSites && w.ocSites.length) {
+          w.ocSites.forEach(function (s, i) {
+            var ctx = document.querySelector('.site-context[data-site="' + i + '"]');
+            var ns = document.querySelector('.site-ns[data-site="' + i + '"]');
+            var api = document.querySelector('.site-api[data-site="' + i + '"]');
+            if (ctx) ctx.value = s.ocContext || '';
+            if (ns) ns.value = s.namespace || '';
+            if (api) api.value = s.apiServer || '';
+          });
+        }
+        document.getElementById('ocAutoLogin').checked = !!w.ocAutoLogin;
+        document.getElementById('authEnabled').checked = !!w.authEnabled;
+        document.getElementById('httpsEnabled').checked = !!w.httpsEnabled;
+        authFields.style.display = document.getElementById('authEnabled').checked ? 'block' : 'none';
+        var oca = document.getElementById('ocAutoLogin');
+        ocSharedCredBlock.style.display = oca.checked ? 'block' : 'none';
+        ocCredModeWrap.style.display = oca.checked ? 'block' : 'none';
+        envFields.style.display = w.environmentsEnabled ? 'block' : 'none';
+        document.getElementById('environmentsEnabled').checked = !!w.environmentsEnabled;
+        if (w.environmentsEnabled && Array.isArray(w.environmentItems) && w.environmentItems.length) {
+          document.getElementById('envEditorSimple').checked = true;
+          toggleEnvEditorPanels();
+          clearEnvSimpleRows();
+          w.environmentItems.forEach(function (env) {
+            var s0 = env.sites && env.sites[0];
+            addEnvSimpleRow({
+              id: env.id || '',
+              label: env.label || env.id || '',
+              ctx: s0 ? s0.ocContext : '',
+              ns: s0 ? s0.namespace : '',
+            });
+          });
+        }
+        syncSecretNameHint();
+        syncCredModeUi();
+      }
+
+      function tryPrefillFromServer() {
+        fetch('/api/setup/prefill', { credentials: 'same-origin', headers: authHeaders() })
+          .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }); })
+          .then(function (x) {
+            if (x.status === 200 && x.j && x.j.ok && x.j.wizard) {
+              applyServerPrefill(x.j.wizard);
+              banner('ok', 'โหลดค่าจากไฟล์ config บนเซิร์ฟเวอร์แล้ว — ตรวจสอบและเติมรหัสผ่าน (OC / portal) ที่ว่าง');
+              return;
+            }
+            if (x.status === 403) {
+              banner('warn', 'ต้องใส่ Setup token ในขั้น Portal แล้วลองโหลดอีกครั้ง');
+              return;
+            }
+            if (x.j && x.j.error) {
+              banner('warn', x.j.error);
+            }
+          })
+          .catch(function () {});
       }
 
       function parseJsonOptional(text, label) {
@@ -455,6 +742,31 @@
       });
       document.getElementById('environmentsEnabled').addEventListener('change', function () {
         envFields.style.display = this.checked ? 'block' : 'none';
+        if (this.checked) {
+          if (!document.querySelector('#env-simple-rows .env-simple-row')) {
+            addEnvSimpleRow();
+            seedEnvRowFromOcSite();
+          }
+          toggleEnvEditorPanels();
+        }
+        scheduleDraftSave();
+      });
+      document.getElementById('btn-env-add-row').addEventListener('click', function () {
+        addEnvSimpleRow();
+        var last = document.querySelectorAll('#env-simple-rows .env-simple-row');
+        if (last.length) {
+          var prev = last[last.length - 2];
+          var cur = last[last.length - 1];
+          if (prev && cur) {
+            var pc = prev.querySelector('.env-row-context');
+            var cc = cur.querySelector('.env-row-context');
+            if (pc && cc && !cc.value.trim()) cc.value = pc.value.trim();
+          }
+        }
+        scheduleDraftSave();
+      });
+      document.querySelectorAll('input[name="envEditorMode"]').forEach(function (r) {
+        r.addEventListener('change', toggleEnvEditorPanels);
       });
       document.querySelectorAll('input[name="ocCredMode"]').forEach(function (r) {
         r.addEventListener('change', syncCredModeUi);
@@ -537,11 +849,17 @@
           }
         }
         if (document.getElementById('environmentsEnabled').checked) {
-          var envObj = parseJsonOptional(document.getElementById('environmentsJson').value, 'Environments');
-          if (!envObj || typeof envObj !== 'object') {
-            throw new Error('Environments JSON is required when multi-environment is enabled');
+          if (document.getElementById('envEditorJson').checked) {
+            var envObj = parseJsonOptional(document.getElementById('environmentsJson').value, 'Environments');
+            if (!envObj || typeof envObj !== 'object') {
+              throw new Error('Environments JSON is required when JSON mode is selected');
+            }
+            body.environments = envObj;
+          } else {
+            body.environmentsEnabled = true;
+            body.defaultEnvironmentId = document.getElementById('defaultEnvironmentId').value.trim() || 'dev';
+            body.environmentItems = collectSimpleEnvironmentItems();
           }
-          body.environments = envObj;
         }
         var lsOvr = parseJsonOptional(document.getElementById('ocLoginServersOverride').value, 'loginServers');
         if (lsOvr !== undefined) {
@@ -564,6 +882,7 @@
       }
 
       function showStep(n) {
+        currentStep = n;
         document.querySelectorAll('.step-panel').forEach(function (p) {
           p.classList.toggle('active', parseInt(p.getAttribute('data-step'), 10) === n);
         });
@@ -595,11 +914,13 @@
             }
           }
           showStep(parseInt(b.getAttribute('data-next'), 10));
+          saveSetupDraft();
         });
       });
       document.querySelectorAll('.btn-back').forEach(function (b) {
         b.addEventListener('click', function () {
           showStep(parseInt(b.getAttribute('data-back'), 10));
+          saveSetupDraft();
         });
       });
 
@@ -614,6 +935,8 @@
           msg.textContent = e.message || String(e);
           return;
         }
+        body.deepVerify = true;
+        body.quickVerify = document.getElementById('quickVerifyOnly').checked;
         btnVerify.disabled = true;
         fetch('/api/setup/preview', {
           method: 'POST',
@@ -665,6 +988,10 @@
         btnSave.disabled = !(lastPreviewOk && this.checked);
       });
 
+      document.getElementById('btn-load-prefill').addEventListener('click', function () {
+        tryPrefillFromServer();
+      });
+
       fetch('/api/setup/status', { credentials: 'same-origin' })
         .then(function (r) { return r.json(); })
         .then(function (st) {
@@ -672,25 +999,68 @@
             banner('err', 'Could not load setup status.');
             return;
           }
+          var pageUrl = st.setupPageUrl || (window.location.origin + '/setup.html');
+          var appUrl = st.appUrl || (window.location.origin + '/');
+          banner('warn', 'หน้าตั้งค่า: <code><a href="' + pageUrl + '">' + pageUrl + '</a></code> · แอป: <a href="' + appUrl + '">' + appUrl + '</a>');
           banner('warn', 'Config file path: <code>' + (st.configPath || '') + '</code>');
           if (!st.configDirWritable) {
             banner('err', 'Config directory is not writable: ' + (st.configDirError || 'unknown'));
             return;
           }
-          if (!st.setupRequired) {
+          var confirmLbl = document.querySelector('label[for="confirmCheck"]');
+          var draft = loadSetupDraft();
+          if (!st.setupRequired && !st.reconfigureAllowed) {
+            reconfigureMode = false;
             donePanel.style.display = 'block';
+            var dh = document.getElementById('done-hint-reconfigure');
+            if (dh) {
+              dh.style.display = 'block';
+              dh.innerHTML = 'การเขียนทับ config จากเว็บถูกปิดอยู่ — ตั้งค่า <code>ALLOW_SETUP_RECONFIGURE=1</code> บน container (และใช้ <code>SETUP_TOKEN</code> ถ้ามี) แล้วเปิดหน้านี้อีกครั้ง';
+            }
             return;
+          }
+          if (!st.setupRequired && st.reconfigureAllowed) {
+            reconfigureMode = true;
+            donePanel.style.display = 'none';
+            document.getElementById('reconfigure-toolbar').style.display = 'block';
+            banner('ok', 'โหมดแก้ไขการตั้งค่า: บันทึกจะเขียนทับ <code>master.config.json</code> บน volume — ใช้ปุ่มโหลดค่าปัจจุบันเพื่อเติมฟอร์มจากเซิร์ฟเวอร์');
+            if (confirmLbl) {
+              confirmLbl.textContent = 'I understand this will overwrite the saved configuration on the server volume.';
+            }
+          } else {
+            reconfigureMode = false;
+            if (confirmLbl) {
+              confirmLbl.textContent = 'I confirm this configuration is correct for Confluent Kafka user management.';
+            }
           }
           if (st.setupTokenRequired) tokenWrap.style.display = 'block';
           wizardWrap.style.display = 'block';
           onArchChange();
           syncSecretNameHint();
           syncCredModeUi();
-          showStep(1);
+          if (st.setupRequired) {
+            if (draft) {
+              restoreSetupDraft(draft);
+              banner('ok', 'Restored draft from this browser — use Next/Back freely; progress is saved locally until you save setup.');
+            } else {
+              showStep(1);
+            }
+          } else if (st.reconfigureAllowed) {
+            if (draft) {
+              restoreSetupDraft(draft);
+              banner('ok', 'กู้ค่า draft ในเบราว์เซอร์แล้ว — กด &ldquo;โหลดค่าปัจจุบัน&rdquo; หากต้องการแทนที่ด้วย config บนเซิร์ฟเวอร์');
+            } else {
+              tryPrefillFromServer();
+            }
+            showStep(1);
+          }
         })
         .catch(function () {
           banner('err', 'Network error loading setup status.');
         });
+
+      form.addEventListener('input', scheduleDraftSave);
+      form.addEventListener('change', scheduleDraftSave);
 
       form.addEventListener('submit', function (e) {
         e.preventDefault();
@@ -714,6 +1084,7 @@
           .then(function (r) { return r.json().then(function (j) { return { status: r.status, j: j }; }); })
           .then(function (x) {
             if (x.j && x.j.ok) {
+              try { localStorage.removeItem(DRAFT_KEY); } catch (_) {}
               msg.style.color = 'var(--success)';
               msg.textContent = x.j.message || 'Saved.';
               setTimeout(function () { location.replace('/'); }, 900);

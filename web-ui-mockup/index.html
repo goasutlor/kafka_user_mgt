@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate" />
   <title>Confluent Kafka User Management</title>
   <!-- Font: use system stack to avoid ERR_NAME_NOT_RESOLVED on networks without internet -->
   <style>
@@ -151,6 +152,16 @@
     .breadcrumb a { color: var(--link); text-decoration: none; }
     .breadcrumb a:hover { text-decoration: underline; }
     .breadcrumb span { color: var(--text-muted); margin: 0 6px; }
+    .env-context-bar {
+      font-size: 13px;
+      color: var(--text);
+      font-weight: 600;
+      margin-top: 8px;
+      padding: 8px 12px;
+      background: var(--active-bg, #e8f4fc);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
 
     /* Layout: sidebar + main, max-width for balance on wide screens, centered */
     .layout {
@@ -711,7 +722,8 @@
       <a href="#cleanup">Cleanup ACLs</a>
       <a href="#audit-log">Audit Log</a>
       <a href="#download-history">Download History</a>
-      <a href="docs.html" class="header-cta">Documentation</a>
+      <a href="setup.html" class="header-cta" id="header-setup-link" title="First-time setup or reconfigure (when ALLOW_SETUP_RECONFIGURE=1)">Setup</a>
+      <a href="docs.html" class="header-cta" target="_blank" rel="noopener noreferrer">Documentation</a>
     </nav>
   </header>
 
@@ -724,7 +736,7 @@
 
   <div class="layout">
     <aside class="sidebar-left">
-      <div class="version" id="app-version">Confluent on OCP · CWDC + TLS2</div>
+      <div class="version" id="app-version">Loading version…</div>
       <nav>
         <div class="nav-section">Provisioning</div>
         <a href="#create-topic-onboard" class="nav-page" data-page="create-topic-onboard">Create Topic &amp; Onboard User</a>
@@ -1196,6 +1208,11 @@
       var loginEnvironmentsList = [];
       var loginDefaultEnvironmentId = '';
 
+      function fetchAuth(url, options) {
+        var o = Object.assign({ credentials: 'same-origin', cache: 'no-store' }, options || {});
+        return fetch(url, o);
+      }
+
       function fillEnvironmentSelect(selectEl, list, selectedId) {
         if (!selectEl) return;
         selectEl.innerHTML = '';
@@ -1209,7 +1226,7 @@
       }
 
       function loadLoginEnvironments(cb) {
-        fetch('/api/environments', { credentials: 'same-origin' })
+        fetchAuth('/api/environments')
           .then(function (r) { return r.json(); })
           .then(function (j) {
             loginEnvironmentsEnabled = j.enabled === true && Array.isArray(j.environments) && j.environments.length > 0;
@@ -1248,34 +1265,54 @@
         var wrap = document.getElementById('header-env-wrap');
         var badge = document.getElementById('header-env-badge');
         var hsel = document.getElementById('header-environment');
+        var ctxBar = document.getElementById('env-context-bar');
         if (!wrap || !badge || !hsel) return;
         if (!me || !me.environment) {
           wrap.classList.remove('visible');
+          if (ctxBar) { ctxBar.style.display = 'none'; ctxBar.textContent = ''; }
           return;
         }
         var env = me.environment;
-        var label = env.shortLabel || env.label || env.id || 'ENV';
-        badge.textContent = label;
-        badge.title = (env.label || env.id) + (env.namespaces && env.namespaces.length ? ' · ' + env.namespaces.join(', ') : '');
-        if (env.badgeColor) badge.style.background = env.badgeColor;
-        if (loginEnvironmentsList.length) {
-          fillEnvironmentSelect(hsel, loginEnvironmentsList, env.id);
-          hsel.value = env.id;
+        if (env.singleDeployment) {
+          badge.textContent = env.namespaces && env.namespaces.length === 1
+            ? env.namespaces[0]
+            : (env.shortLabel || 'TARGET');
+          badge.title = (env.namespaces && env.namespaces.length ? env.namespaces.join(', ') : '') +
+            (env.contextSummary ? ' · context: ' + env.contextSummary : '');
+          hsel.style.display = 'none';
+        } else {
+          var label = env.shortLabel || env.label || env.id || 'ENV';
+          badge.textContent = label;
+          badge.title = (env.label || env.id) + (env.namespaces && env.namespaces.length ? ' · ' + env.namespaces.join(', ') : '');
+          hsel.style.display = '';
+          if (loginEnvironmentsList.length) {
+            fillEnvironmentSelect(hsel, loginEnvironmentsList, env.id);
+            hsel.value = env.id;
+          }
         }
+        if (env.badgeColor) badge.style.background = env.badgeColor;
         wrap.classList.add('visible');
+        if (ctxBar) {
+          var bits = [];
+          if (env.multiEnv) bits.push('Environment: ' + (env.label || env.id));
+          else bits.push('Target (single mode — enable multi-environment in setup for Dev/SIT/UAT switch)');
+          if (env.namespaces && env.namespaces.length) bits.push('Namespace: ' + env.namespaces.join(', '));
+          if (env.contextSummary) bits.push('OC context: ' + env.contextSummary);
+          ctxBar.textContent = bits.join(' · ');
+          ctxBar.style.display = 'block';
+        }
       }
 
       function postSessionEnvironment(environmentId, cb) {
-        fetch('/api/session/environment', {
+        fetchAuth('/api/session/environment', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
           body: JSON.stringify({ environmentId: environmentId })
         })
           .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
           .then(function (x) {
             if (x.status === 200 && x.body.ok) {
-              fetch('/api/me', { credentials: 'same-origin' })
+              fetchAuth('/api/me')
                 .then(function (r) { return r.json(); })
                 .then(function (m) { applyHeaderEnvironmentFromMe(m); });
             }
@@ -1288,7 +1325,7 @@
         var wrap = document.getElementById('app-wrap');
         wrap.style.display = 'block';
         wrap.classList.add('authenticated');
-        fetch('/api/me', { credentials: 'same-origin' })
+        fetchAuth('/api/me')
           .then(function (r) { return r.json(); })
           .then(function (m) { applyHeaderEnvironmentFromMe(m); })
           .catch(function () {});
@@ -1316,7 +1353,7 @@
         });
       }
       function checkAuth(cb) {
-        fetch('/api/me', { credentials: 'same-origin' })
+        fetchAuth('/api/me')
           .then(function (r) {
             if (r.ok) return r.json();
             if (r.status === 401) throw new Error('Unauthorized');
@@ -1358,10 +1395,9 @@
         if (loginEnvironmentsEnabled && envSelect && envSelect.value) {
           envPayload.environmentId = envSelect.value;
         }
-        fetch('/api/login', {
+        fetchAuth('/api/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          credentials: 'same-origin',
           body: JSON.stringify(Object.assign({
             username: username || undefined,
             password: password,
@@ -1387,17 +1423,17 @@
         var btn = document.getElementById('btn-logout');
         if (btn) { btn.disabled = true; btn.textContent = 'Logging out...'; }
         try { localStorage.removeItem('kafka-user-mgmt-wizard'); } catch (_) {}
-        fetch('/api/logout', { method: 'POST', credentials: 'same-origin' })
+        fetchAuth('/api/logout', { method: 'POST' })
           .finally(function () {
             currentUser = null;
             var url = window.location.pathname + '?logout=1' + (window.location.hash || '#add');
-            window.location.href = url;
+            window.location.replace(url);
           });
       });
       function updateLoginFormAuthMode(cb) {
         var usernameGroup = document.getElementById('login-username-group');
         var codeGroup = document.getElementById('login-security-code-group');
-        fetch('/api/auth-mode', { credentials: 'same-origin' })
+        fetchAuth('/api/auth-mode')
           .then(function (r) { return r.json(); })
           .then(function (j) {
             if (usernameGroup) usernameGroup.style.display = (j.authRequired && j.authMode === 'password_only') ? 'none' : 'block';
@@ -1416,7 +1452,7 @@
         var group = document.getElementById('login-security-code-group');
         if (!group || group.style.display === 'none') return;
         if (box) box.textContent = '…';
-        fetch('/api/login-challenge', { credentials: 'same-origin' })
+        fetchAuth('/api/login-challenge')
           .then(function (r) {
             if (!r.ok) return r.json().then(function (j) { throw new Error(j.error || 'Request failed'); });
             return r.json();
@@ -1461,6 +1497,10 @@
           });
         });
       }
+
+      window.addEventListener('pageshow', function (ev) {
+        if (ev.persisted) checkAuth();
+      });
 
       (function () {
         var hsel = document.getElementById('header-environment');
@@ -1573,17 +1613,28 @@
         fetch('/api/setup/status', { credentials: 'same-origin' })
           .then(function (r) { return r.json(); })
           .then(function (j) {
-            if (j && j.setupRequired) location.replace('/setup.html');
+            var sl = document.getElementById('header-setup-link');
+            if (sl && j && j.setupPageUrl) sl.setAttribute('href', j.setupPageUrl);
+            if (j && j.setupRequired) location.replace((j.setupPageUrl || '/setup.html'));
           })
           .catch(function () {});
       })();
+      function formatAppVersionSidebar(j) {
+        if (!j || !j.ok || !j.version) return '—';
+        var v = String(j.version);
+        var semver = /^\d+\.\d+\.\d+/.test(v);
+        var line = semver ? ('v' + v) : (v.length > 12 ? ('build ' + v.slice(0, 8) + '…') : v);
+        if (j.gitSha) line += ' · git ' + String(j.gitSha).slice(0, 7);
+        return line;
+      }
       (function () {
-        fetch('/api/version').then(function(r){ return r.json(); }).then(function(j){
-          if (j.ok && j.version) {
-            var el = document.getElementById('app-version');
-            if (el) el.textContent = (el.textContent.trim() + ' · v' + j.version);
-          }
-        }).catch(function(){});
+        fetch('/api/version').then(function (r) { return r.json(); }).then(function (j) {
+          var el = document.getElementById('app-version');
+          if (el) el.textContent = formatAppVersionSidebar(j);
+        }).catch(function () {
+          var el = document.getElementById('app-version');
+          if (el) el.textContent = '—';
+        });
       })();
       (function () {
         var pageTitles = { add: 'Add new user', 'create-topic-onboard': 'Create Topic & Onboard User', 'add-acl-existing': 'Add ACL to existing user', test: 'Test existing user', remove: 'Remove user(s) + ACL', 'change-password': 'Change password', cleanup: 'Cleanup orphaned ACLs', 'audit-log': 'Audit Log', 'download-history': 'Download History' };
@@ -2010,7 +2061,9 @@
           try {
             var res = await fetch('/api/topics');
             var j = await res.json();
-            if (j.ok && j.topics && j.topics.length) { cachedTestTopicsList = j.topics; renderTopicsFilteredTest(); }
+            if (!j.ok && res.status === 503 && j.setupPageUrl) {
+              box.innerHTML = '<span class="hint">ต้องตั้งค่าก่อน: <a href="' + escapeHtml(j.setupPageUrl) + '">' + escapeHtml(j.setupPageUrl) + '</a></span>';
+            } else if (j.ok && j.topics && j.topics.length) { cachedTestTopicsList = j.topics; renderTopicsFilteredTest(); }
             else { box.innerHTML = '<span class="hint">' + escapeHtml((j && (j.hint || j.detail)) || 'ไม่มี topics') + '</span>'; }
           } catch (e) { box.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(e.message) + '</span>'; }
           if (btn) btn.disabled = false;
@@ -2070,7 +2123,9 @@
           try {
             var res = await fetch('/api/topics');
             var j = await res.json();
-            if (j.ok && j.topics) {
+            if (!j.ok && res.status === 503 && j.setupPageUrl) {
+              box.innerHTML = '<span class="hint">ต้องตั้งค่าก่อน: <a href="' + escapeHtml(j.setupPageUrl) + '">' + escapeHtml(j.setupPageUrl) + '</a></span>';
+            } else if (j.ok && j.topics) {
               if (j.topics.length) {
                 cachedTopicsList = j.topics;
                 renderTopicsFiltered();
@@ -2085,6 +2140,7 @@
               var hint = (j.hint || '').toString();
               var html = '<span style="color:var(--danger)">ดึง topic ไม่ได้: ' + escapeHtml(err) + '</span>';
               if (hint) html += '<p class="hint" style="margin-top:8px;">' + escapeHtml(hint) + '</p>';
+              if (j.setupPageUrl) html += '<p class="hint" style="margin-top:8px;">แก้การตั้งค่า: <a href="' + escapeHtml(j.setupPageUrl) + '">' + escapeHtml(j.setupPageUrl) + '</a></p>';
               box.innerHTML = html;
             }
           } catch (e) {
@@ -2436,7 +2492,9 @@
           try {
             var res = await fetch('/api/topics');
             var j = await res.json();
-            if (j.ok && j.topics && j.topics.length) { cachedAclExistingTopicsList = j.topics; renderTopicsFilteredAclExisting(); }
+            if (!j.ok && res.status === 503 && j.setupPageUrl) {
+              box.innerHTML = '<span class="hint">ต้องตั้งค่าก่อน: <a href="' + escapeHtml(j.setupPageUrl) + '">' + escapeHtml(j.setupPageUrl) + '</a></span>';
+            } else if (j.ok && j.topics && j.topics.length) { cachedAclExistingTopicsList = j.topics; renderTopicsFilteredAclExisting(); }
             else { box.innerHTML = '<span class="hint">' + escapeHtml((j && (j.hint || j.detail)) || 'ไม่มี topics') + '</span>'; }
           } catch (e) { box.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(e.message) + '</span>'; }
           if (btn) btn.disabled = false;

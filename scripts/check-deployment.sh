@@ -1,5 +1,7 @@
 #!/bin/bash
 # เทสทุก API ก่อน deploy — ใช้ curl (ไม่ต้องมี Node)
+# แนะนำรันก่อน: ./scripts/verify-golive.sh --config /path/to/master.config.json [--portal-url https://host:3443]
+# แล้วค่อยใช้สคริปต์นี้ทดสอบ HTTP + gen.sh จาก backend
 # ใช้: ./scripts/check-deployment.sh [BASE_URL]
 # ตัวอย่าง (ตอนนี้ On ด้วย HTTPS): ./scripts/check-deployment.sh https://10.235.160.31
 #           ./scripts/check-deployment.sh https://10.235.160.31:443
