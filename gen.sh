@@ -32,6 +32,7 @@
 #
 # CHANGELOG
 # ---------
+# 2026-03-22  Init Kafka client .properties templates: menu [8] and GEN_MODE=8 — scripts/ensure-kafka-client-props.sh (parity with web setup save; GEN_KAFKA_BOOTSTRAP optional). Full PEM/JKS + SASL materialization (no CHANGE_ME) is via the web setup wizard only — use mount configs/ to adjust later.
 # 2026-03-21  Go-Live verify: menu [7] and GEN_NONINTERACTIVE=1 GEN_MODE=7 — scripts/verify-golive.sh (ทุก namespace จาก master/environments, Kafka, optional Portal). Env: GOLIVE_PORTAL_URL, GOLIVE_JSON=1.
 # 2026-03-21  Preflight / Kafka admin list: menu [6] and GEN_NONINTERACTIVE=1 GEN_MODE=6 — kafka-topics.sh --list (parity with web setup Verify deep check). Web setup: deep verify runs same + oc whoami.
 # 2026-03-18  Add ACL for existing user: GEN_MODE=5 (CLI menu [5] + non-interactive). No new credential; add topic ACL + consumer group for user already in secret. Web: Add ACL to existing user (summary + confirm). Audit: create-topic label + add-acl-existing.
@@ -163,7 +164,7 @@ NUM_SITES=${#SITE_CTX[@]}
 [ "$NUM_SITES" -lt 1 ] && { echo "ERROR: At least one OCP site (context:namespace) required. Set GEN_OCP_SITES or OCP_CTX_/NS_ vars." >&2; exit 1; }
 
 # Dual-OCP / cross-region Confluent: same logical cluster, two OpenShift clusters — set GEN_OCP_SITES="ctx1:ns1,ctx2:ns2"
-# and a kubeconfig with both contexts (e.g. config-both). Web first-time setup: /setup.html (single vs two clusters + verify).
+# and a kubeconfig with both contexts (e.g. config-both). Web first-time setup: /setup.html (OCP clusters/namespaces first, then Kafka bootstrap, portal, verify).
 
 # Kubeconfig: use one that has BOTH cwdc and tls2 contexts (required for multi-site)
 # - If KUBECONFIG is set to old path (/app/user2) or single-cluster file, prefer BASE_DIR/.kube (single source of truth)
@@ -398,6 +399,16 @@ if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "7" ]; then
     exit $?
 fi
 
+# Non-interactive Mode 8: create kafka-client*.properties templates under BASE_DIR/configs/ if missing (parity with web /api/setup/apply)
+if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "8" ]; then
+    _BOOT8="${GEN_KAFKA_BOOTSTRAP:-$BOOTSTRAP_CWDC}"
+    _ENSURE="${SCRIPT_DIR}/scripts/ensure-kafka-client-props.sh"
+    [ ! -f "$_ENSURE" ] && [ -f /opt/kafka-usermgmt/ensure-kafka-client-props.sh ] && _ENSURE=/opt/kafka-usermgmt/ensure-kafka-client-props.sh
+    [ ! -f "$_ENSURE" ] && error_exit "ensure-kafka-client-props.sh not found (expected scripts/ or /opt/kafka-usermgmt/)"
+    bash "$_ENSURE" "$BASE_DIR" "$_BOOT8"
+    exit 0
+fi
+
 # PRE-CHECK
 [ ! -f "$CLIENT_CONFIG" ] && error_exit "Config file not found at $CLIENT_CONFIG"
 [ ! -f "$ADMIN_CONFIG" ] && error_exit "Admin config not found at $ADMIN_CONFIG (needed for kafka-acls)"
@@ -611,10 +622,11 @@ while true; do
         echo "   [5] Add ACL for existing user (add topic permission only; no new credential)"
         echo "   [6] Preflight — list Kafka topics (admin config; same check as web setup Verify)"
         echo "   [7] Go-Live verify — ตรวจทุกอย่าง (OC+Kafka+ทุก namespace+optional Portal URL)"
+        echo "   [8] Create Kafka client .properties templates (configs/; same as web setup save)"
         echo "   [Q] Quit"
-        read -p "   Select mode [1-7/Q]: " SCRIPT_MODE
+        read -p "   Select mode [1-8/Q]: " SCRIPT_MODE
         [[ "$SCRIPT_MODE" =~ ^[Qq]$ ]] && { echo -e "   ${CYAN}Exiting...${NC}"; exit 0; }
-        [[ "$SCRIPT_MODE" != "2" && "$SCRIPT_MODE" != "3" && "$SCRIPT_MODE" != "4" && "$SCRIPT_MODE" != "5" && "$SCRIPT_MODE" != "6" && "$SCRIPT_MODE" != "7" ]] && SCRIPT_MODE="1"
+        [[ "$SCRIPT_MODE" != "2" && "$SCRIPT_MODE" != "3" && "$SCRIPT_MODE" != "4" && "$SCRIPT_MODE" != "5" && "$SCRIPT_MODE" != "6" && "$SCRIPT_MODE" != "7" && "$SCRIPT_MODE" != "8" ]] && SCRIPT_MODE="1"
     fi
 
     if [ "$SCRIPT_MODE" == "5" ]; then
@@ -725,6 +737,28 @@ while true; do
     echo -e "\n   ${CYAN}[M] Main menu  [Q] Quit${NC}"
     read -p "   Your choice [M/Q]: " GL_CHOICE
     [[ "$GL_CHOICE" =~ ^[Qq]$ ]] && { echo -e "   ${CYAN}Exiting...${NC}"; exit "${_golive_rc}"; }
+    continue
+    fi
+
+    if [ "$SCRIPT_MODE" == "8" ]; then
+    echo -e "\n-------------------------------------------------------"
+    echo "  KAFKA CLIENT .PROPERTIES TEMPLATES (under \$BASE_DIR/configs/)"
+    echo "-------------------------------------------------------"
+    echo "   Creates kafka-client.properties + kafka-client-master.properties if missing."
+    echo "   Default bootstrap: $BOOTSTRAP_CWDC"
+    read -p "   Bootstrap servers (Enter=default): " _boot8
+    _boot8=$(trim_ws "${_boot8:-}")
+    [ -z "$_boot8" ] && _boot8="$BOOTSTRAP_CWDC"
+    _ENSURE="${SCRIPT_DIR}/scripts/ensure-kafka-client-props.sh"
+    [ ! -f "$_ENSURE" ] && [ -f /opt/kafka-usermgmt/ensure-kafka-client-props.sh ] && _ENSURE=/opt/kafka-usermgmt/ensure-kafka-client-props.sh
+    if [ ! -f "$_ENSURE" ]; then
+        echo -e "   ${RED}ensure-kafka-client-props.sh not found.${NC}"
+    else
+        bash "$_ENSURE" "$BASE_DIR" "$_boot8"
+    fi
+    echo -e "\n   ${CYAN}[M] Main menu  [Q] Quit${NC}"
+    read -p "   Your choice [M/Q]: " P8_CHOICE
+    [[ "$P8_CHOICE" =~ ^[Qq]$ ]] && { echo -e "   ${CYAN}Exiting...${NC}"; exit 0; }
     continue
     fi
 

@@ -20,6 +20,7 @@ const {
   masterToSetupWizardBody,
 } = require('./lib/setup-writer');
 const { runSetupPreview } = require('./lib/setup-validate');
+const { validateKafkaConnectionCompleteness } = require('./lib/setup-kafka-files');
 
 const CONFIG_PATH = process.env.CONFIG_PATH || path.join(__dirname, '..', 'config', 'web.config.json');
 const AUTH_USERS_FILE = process.env.AUTH_USERS_FILE || path.join(path.dirname(CONFIG_PATH), 'auth-users.json');
@@ -109,7 +110,18 @@ app.use((req, res, next) => {
   next();
 });
 
-app.use(express.json({ limit: '256kb' }));
+const jsonBodyLimitDefault = express.json({ limit: '256kb' });
+const jsonBodyLimitSetup = express.json({ limit: '12mb' });
+app.use((req, res, next) => {
+  const p = req.path || '';
+  if (
+    (req.method === 'POST' || req.method === 'PUT' || req.method === 'PATCH')
+    && (p === '/api/setup/preview' || p === '/api/setup/apply')
+  ) {
+    return jsonBodyLimitSetup(req, res, next);
+  }
+  return jsonBodyLimitDefault(req, res, next);
+});
 
 // Session (for login when server.auth.enabled). Set SESSION_SECRET in production.
 app.use(session({
@@ -510,10 +522,11 @@ app.post('/api/setup/apply', (req, res) => {
   try {
     const body = req.body || {};
     const built = buildFilesFromSetupBody(body, configAbs);
+    validateKafkaConnectionCompleteness(body);
     if (!isMasterConfig(built.master)) {
       return res.status(500).json({ ok: false, error: 'Internal error: invalid master configuration shape' });
     }
-    writeSetupFiles(configAbs, built.master, built.credentials, built.credentialsPath);
+    writeSetupFiles(configAbs, built.master, built.credentials, built.credentialsPath, body);
     SETUP_MODE = false;
     config = null;
     loadConfig();

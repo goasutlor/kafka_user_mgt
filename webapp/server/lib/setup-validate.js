@@ -5,6 +5,11 @@ const path = require('path');
 const { spawnSync, spawn } = require('child_process');
 const { expandMasterToLegacy } = require('./master-config');
 const { buildFilesFromSetupBody } = require('./setup-writer');
+const {
+  validateKafkaConnectionCompleteness,
+  hasFullKafkaConnection,
+  materializeKafkaConnectionFiles,
+} = require('./setup-kafka-files');
 
 /** Collect every ocContext from fallbackSites and from multi-environment definitions. */
 function collectOcContexts(master) {
@@ -37,7 +42,16 @@ function redactSecrets(obj) {
   for (const k of Object.keys(obj)) {
     const v = obj[k];
     const lk = k.toLowerCase();
-    if (lk.includes('password') || lk === 'token' || lk.includes('secret')) {
+    if (
+      lk.includes('password')
+      || lk === 'token'
+      || lk.includes('secret')
+      || lk === 'kafkatruststorejksbase64'
+      || lk === 'kafkatruststorepem'
+      || lk === 'kafkasaslpassword'
+      || lk === 'kafkaadminsaslpassword'
+      || lk === 'kafkatruststorepassword'
+    ) {
       out[k] = v ? '***' : v;
     } else if (typeof v === 'object' && v !== null) {
       out[k] = redactSecrets(v);
@@ -171,6 +185,11 @@ async function runSetupPreview(body, configAbsPath, options) {
   const deepVerify = options && options.deepVerify === true;
   const quickVerify = options && options.quickVerify === true;
   const built = buildFilesFromSetupBody(body, configAbsPath);
+  validateKafkaConnectionCompleteness(body);
+  let kafkaMaterializeResult = { mode: 'skipped' };
+  if (hasFullKafkaConnection(body)) {
+    kafkaMaterializeResult = materializeKafkaConnectionFiles(body, built.master);
+  }
   const expanded = expandMasterToLegacy(built.master, configAbsPath);
   if (built.credentials && built.credentials.oc) {
     mergeOcFromCredentialsIntoGen(expanded.gen, built.credentials.oc);
@@ -179,6 +198,14 @@ async function runSetupPreview(body, configAbsPath, options) {
   const checks = [];
   const g = expanded.gen || {};
   const master = built.master;
+
+  if (kafkaMaterializeResult.mode === 'full') {
+    checks.push({
+      id: 'kafka_wizard_materialized',
+      level: 'ok',
+      message: `Kafka client files written from setup form: ${(kafkaMaterializeResult.files || []).join(', ')} under runtime configs/ (Verify can use them immediately; same as Save).`,
+    });
+  }
 
   if (!String(g.bootstrapServers || '').trim()) {
     checks.push({ id: 'kafka_bootstrap', level: 'error', message: 'Kafka bootstrapServers is empty' });

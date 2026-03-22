@@ -10,7 +10,7 @@ RUN npm install --omit=dev --ignore-scripts
 
 FROM node:20-bookworm-slim
 # Semantic app version (shown in UI). Optional GIT_COMMIT for /api/version short hash.
-ARG VERSION=1.0.61
+ARG VERSION=1.0.62
 ARG GIT_COMMIT=
 ENV APP_VERSION=${VERSION}
 ENV GIT_COMMIT=${GIT_COMMIT}
@@ -50,7 +50,8 @@ RUN mkdir -p /app/config-examples \
 # master.config.json is created at first run via /setup.html (mount ./deploy/config for persistence).
 COPY gen.sh /opt/kafka-usermgmt/gen.sh
 COPY scripts/verify-golive.sh /opt/kafka-usermgmt/verify-golive.sh
-RUN chmod +x /opt/kafka-usermgmt/gen.sh /opt/kafka-usermgmt/verify-golive.sh
+COPY scripts/ensure-kafka-client-props.sh /opt/kafka-usermgmt/ensure-kafka-client-props.sh
+RUN chmod +x /opt/kafka-usermgmt/gen.sh /opt/kafka-usermgmt/verify-golive.sh /opt/kafka-usermgmt/ensure-kafka-client-props.sh
 
 EXPOSE 3443
 CMD ["node", "server/index.js"]

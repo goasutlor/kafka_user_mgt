@@ -1,7 +1,7 @@
 # All-in-one: image includes Node + gen.sh + Kafka CLI downloaded from Apache at build (see Dockerfile KAFKA_VERSION).
 #
 # CI/CD–safe image: no customer config baked in. On first start, open http://localhost:<host-port>/setup.html
-# (host port = APP_PUBLISH_HOST_PORT in .env, default 3443; production often 443).
+# (host port = APP_PUBLISH_HOST_PORT in .env, default 443 -> container 3443).
 # Prod-style HTTPS (no Nginx): mount server.key + server.crt to /app/ssl, set USE_HTTPS=1 (and SSL_KEY_PATH/SSL_CERT_PATH if not default).
 # Optional: reverse proxy instead → TRUST_PROXY=1 + X-Forwarded-Proto; optional HSTS via HSTS_MAX_AGE (HTTPS responses only).
 # and save configuration + credentials into the mounted volume (persists across image upgrades).
@@ -33,7 +33,7 @@ services:
       context: .
       dockerfile: Dockerfile
       args:
-        VERSION: ${APP_VERSION:-1.0.61}
+        VERSION: ${APP_VERSION:-1.0.62}
         GIT_COMMIT: ${GIT_COMMIT:-}
         # Match broker-friendly client version when needed: KAFKA_VERSION, KAFKA_SCALA, KAFKA_LINK_NAME
         KAFKA_VERSION: ${KAFKA_VERSION:-3.8.1}
@@ -41,7 +41,7 @@ services:
         KAFKA_LINK_NAME: ${KAFKA_LINK_NAME:-kafka_2.13-3.6.1}
     image: confluent-kafka-user-management:latest
     ports:
-      - "${APP_PUBLISH_HOST_PORT:-3443}:3443"
+      - "${APP_PUBLISH_HOST_PORT:-443}:3443"
     environment:
       CONFIG_PATH: /app/config/master.config.json
       # Set to 0 in locked-down prod if you do not want /setup.html to overwrite master.config.json

@@ -2,6 +2,77 @@
 
 const fs = require('fs');
 const path = require('path');
+const {
+  hasFullKafkaConnection,
+  materializeKafkaConnectionFiles,
+} = require('./setup-kafka-files');
+
+/** Fixed names in master.config and on disk under {runtimeRoot}/configs/ */
+const DEFAULT_CLIENT_PROPS_FILE = 'kafka-client.properties';
+const DEFAULT_ADMIN_PROPS_FILE = 'kafka-client-master.properties';
+
+/**
+ * Ensure SASL_SSL client templates exist under runtimeRoot/configs (do not overwrite).
+ * Truststore cannot be generated for org brokers — user copies .jks and edits CHANGE_ME.
+ * @returns {{ created: string[], skipped: string[] }}
+ */
+function ensureKafkaClientPropertyTemplates(runtimeRoot, bootstrapServers) {
+  const boot = String(bootstrapServers || '').trim();
+  if (!boot) return { created: [], skipped: [] };
+
+  const root = path.isAbsolute(runtimeRoot)
+    ? path.normalize(runtimeRoot)
+    : path.resolve(runtimeRoot);
+  const configsDir = path.join(root, 'configs');
+  if (!fs.existsSync(configsDir)) {
+    fs.mkdirSync(configsDir, { recursive: true });
+  }
+
+  const truststoreInContainer = path.posix.join(
+    root.replace(/\\/g, '/'),
+    'configs',
+    'client.truststore.jks',
+  );
+
+  const lines = (roleLine) =>
+    [
+      `# ${roleLine}`,
+      '# Created by portal setup (first save) or gen.sh GEN_MODE=8 — existing files are never overwritten.',
+      '# EDIT: ssl.truststore.password and sasl.jaas.config (username/password).',
+      '# Truststore: copy your org CA bundle as client.truststore.jks into configs/ (path below).',
+      '# Cannot auto-generate a truststore that trusts your corporate brokers without your CA.',
+      '',
+      `bootstrap.servers=${boot}`,
+      'security.protocol=SASL_SSL',
+      'sasl.mechanism=PLAIN',
+      'client.dns.lookup=use_all_dns_ips',
+      `ssl.truststore.location=${truststoreInContainer}`,
+      'ssl.truststore.password=CHANGE_ME',
+      'ssl.truststore.type=JKS',
+      'sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="CHANGE_ME" password="CHANGE_ME";',
+      'acks=all',
+      '',
+    ].join('\n');
+
+  const pairs = [
+    [DEFAULT_CLIENT_PROPS_FILE, 'Kafka client (application user)'],
+    [DEFAULT_ADMIN_PROPS_FILE, 'Kafka admin client (operator user)'],
+  ];
+  const created = [];
+  const skipped = [];
+  for (const [fname, role] of pairs) {
+    const dest = path.join(configsDir, fname);
+    if (fs.existsSync(dest)) {
+      skipped.push(fname);
+      continue;
+    }
+    const tmp = dest + '.tmp';
+    fs.writeFileSync(tmp, lines(role), 'utf8');
+    fs.renameSync(tmp, dest);
+    created.push(fname);
+  }
+  return { created, skipped };
+}
 
 function atomicWriteJson(filePath, obj) {
   const dir = path.dirname(filePath);
@@ -125,8 +196,8 @@ function buildFilesFromSetupBody(body, configAbsPath) {
       scriptName: String(body.scriptName || 'gen.sh').trim(),
       bootstrapServers: String(body.kafkaBootstrap || '').trim(),
       k8sSecretName: String(body.k8sSecretName || 'kafka-server-side-credentials').trim(),
-      clientPropertiesFile: String(body.clientPropertiesFile || 'kafka-client.properties').trim(),
-      adminPropertiesFile: String(body.adminPropertiesFile || 'kafka-client-master.properties').trim(),
+      clientPropertiesFile: DEFAULT_CLIENT_PROPS_FILE,
+      adminPropertiesFile: DEFAULT_ADMIN_PROPS_FILE,
     },
     oc: {
       ocPath: String(body.ocPath != null ? body.ocPath : '/host/usr/bin').trim(),
@@ -227,11 +298,21 @@ function buildFilesFromSetupBody(body, configAbsPath) {
   return { master, credentials, credentialsPath };
 }
 
-function writeSetupFiles(configAbsPath, master, credentials, credentialsPath) {
+function writeSetupFiles(configAbsPath, master, credentials, credentialsPath, setupBody) {
   atomicWriteJson(configAbsPath, master);
   const needCred = (credentials.users && Object.keys(credentials.users).length > 0) || credentials.oc;
   if (needCred) {
     atomicWriteJson(credentialsPath, credentials);
+  }
+  const rt = master && master.runtimeRoot;
+  const bs = master && master.kafka && master.kafka.bootstrapServers;
+  if (rt && bs) {
+    const body = setupBody && typeof setupBody === 'object' ? setupBody : {};
+    if (hasFullKafkaConnection(body)) {
+      materializeKafkaConnectionFiles(body, master);
+    } else {
+      ensureKafkaClientPropertyTemplates(rt, bs);
+    }
   }
 }
 
@@ -292,4 +373,7 @@ module.exports = {
   writeSetupFiles,
   normalizeOcSitesFromBody,
   masterToSetupWizardBody,
+  ensureKafkaClientPropertyTemplates,
+  DEFAULT_CLIENT_PROPS_FILE,
+  DEFAULT_ADMIN_PROPS_FILE,
 };
