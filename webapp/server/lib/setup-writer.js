@@ -249,6 +249,22 @@ function buildFilesFromSetupBody(body, configAbsPath) {
     master.fallbackSites = fallbackSites;
   }
 
+  // Per-environment OCP targets may carry apiServer; merge into loginServers for OC auto-login / verify.
+  {
+    const ls = { ...(master.oc.loginServers || {}) };
+    if (master.environments && master.environments.enabled && Array.isArray(master.environments.environments)) {
+      for (const e of master.environments.environments) {
+        if (!Array.isArray(e.sites)) continue;
+        for (const s of e.sites) {
+          const api = String(s.apiServer || '').trim();
+          const ctx = String(s.ocContext || '').trim();
+          if (ctx && api) ls[ctx] = api;
+        }
+      }
+    }
+    master.oc.loginServers = ls;
+  }
+
   if (master.oc.autoLogin === true) {
     const hasServers = master.oc.loginServers && typeof master.oc.loginServers === 'object'
       && Object.keys(master.oc.loginServers).length > 0;
@@ -355,8 +371,27 @@ function masterToSetupWizardBody(master) {
   }));
   const envBlock = master.environments;
   const envEnabled = !!(envBlock && envBlock.enabled === true);
-  const envItems = envEnabled && Array.isArray(envBlock.environments) ? envBlock.environments : [];
+  const rawEnvItems = envEnabled && Array.isArray(envBlock.environments) ? envBlock.environments : [];
   const environmentBootstrapOverrides = {};
+  const envItems = rawEnvItems.map((e) => {
+    if (!e || typeof e !== 'object') return e;
+    const copy = { ...e };
+    if (Array.isArray(copy.sites)) {
+      copy.sites = copy.sites.map((s) => {
+        if (!s || typeof s !== 'object') return s;
+        const api = String(s.apiServer || '').trim();
+        const ctx = String(s.ocContext || '').trim();
+        const fromLogin = oc.loginServers && ctx && oc.loginServers[ctx]
+          ? String(oc.loginServers[ctx]).trim()
+          : '';
+        return {
+          ...s,
+          apiServer: api || fromLogin,
+        };
+      });
+    }
+    return copy;
+  });
   for (const e of envItems) {
     if (e && e.id && typeof e.bootstrapServers === 'string' && e.bootstrapServers.trim()) {
       environmentBootstrapOverrides[e.id] = e.bootstrapServers.trim();

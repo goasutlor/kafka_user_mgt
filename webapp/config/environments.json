@@ -1,5 +1,5 @@
 {
-  "_comment": "One portal, multiple OCP namespaces (same cluster / same oc context). Copy and adapt for other systems.",
+  "_comment": "One portal, multiple OCP namespaces. ocContext must match `oc config get-contexts` NAME (e.g. cwdc-dev, not cwdc).",
   "enabled": true,
   "defaultEnvironmentId": "dev",
   "environments": [
@@ -9,7 +9,7 @@
       "shortLabel": "DEV",
       "badgeColor": "#238636",
       "sites": [
-        { "name": "cwdc", "ocContext": "cwdc", "namespace": "esb-dev-cwdc" }
+        { "name": "cwdc-dev", "ocContext": "cwdc-dev", "namespace": "esb-dev-cwdc" }
       ]
     },
     {
@@ -27,7 +27,7 @@
       "shortLabel": "UAT",
       "badgeColor": "#8250df",
       "sites": [
-        { "name": "cwdc", "ocContext": "cwdc", "namespace": "esb-uat-cwdc" }
+        { "name": "cwdc-uat", "ocContext": "cwdc-uat", "namespace": "esb-uat-cwdc" }
       ]
     }
   ]

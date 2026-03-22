@@ -130,7 +130,8 @@ NS_TLS2="${NS_TLS2:-esb-prod-tls2}"
 KAFKA_CR_NAME="kafka"
 
 # Multi-environment (parity with Web portal): GEN_ACTIVE_ENV_ID + environments.json under BASE_DIR (or GEN_ENVIRONMENTS_JSON).
-# File shape: { "environments": [ { "id": "dev", "sites": [ { "ocContext": "cwdc", "namespace": "esb-dev-cwdc" } ] } ] }
+# ocContext = exact NAME from `oc config get-contexts` in the kubeconfig you use (app does not create contexts). One OCP cluster may use different contexts per namespace (e.g. cwdc-dev / cwdc-sit / cwdc-uat).
+# File shape: { "environments": [ { "id": "dev", "sites": [ { "ocContext": "cwdc-dev", "namespace": "esb-dev-cwdc" }, ... ] } ] } — multiple sites = multi-region for that environment (GEN_OCP_SITES becomes ctx1:ns1,ctx2:ns2).
 ENV_JSON="${GEN_ENVIRONMENTS_JSON:-$BASE_DIR/environments.json}"
 if [ -z "${GEN_OCP_SITES:-}" ] && [ -n "${GEN_ACTIVE_ENV_ID:-}" ] && [ -f "$ENV_JSON" ] && command -v jq >/dev/null 2>&1; then
     _pairs=$(jq -r --arg id "$GEN_ACTIVE_ENV_ID" '

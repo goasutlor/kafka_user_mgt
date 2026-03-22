@@ -31,6 +31,34 @@ function isMasterConfig(raw) {
 }
 
 /**
+ * When fallbackSites is empty but environments are enabled, mirror the default env's sites into gen.sites
+ * so legacy paths (getSitesFromConfig, OC union) see the same OCP targets you configured in Setup.
+ */
+function deriveFallbackSitesFromEnvironments(envBlock) {
+  if (!envBlock || envBlock.enabled !== true || !Array.isArray(envBlock.environments)) return [];
+  const list = envBlock.environments.filter((e) => e && e.enabled !== false);
+  if (!list.length) return [];
+  const defId = envBlock.defaultEnvironmentId;
+  const entry = (defId && list.find((e) => e.id === defId)) || list[0];
+  if (!entry) return [];
+  if (Array.isArray(entry.sites) && entry.sites.length) {
+    return entry.sites
+      .map((s) => ({
+        name: (s.name && String(s.name).trim()) || String(s.ocContext || '').trim() || 'site',
+        namespace: String(s.namespace || '').trim(),
+        ocContext: String(s.ocContext || '').trim(),
+      }))
+      .filter((s) => s.namespace && s.ocContext);
+  }
+  if (entry.namespace && entry.ocContext) {
+    const ctx = String(entry.ocContext).trim();
+    const ns = String(entry.namespace).trim();
+    return [{ name: ctx, namespace: ns, ocContext: ctx }];
+  }
+  return [];
+}
+
+/**
  * Expand master JSON → legacy { gen, server } used by the rest of the app.
  * @param {object} raw - parsed JSON
  * @param {string} masterFileAbsPath - absolute path to the master file (for resolving relative credentials path)
@@ -74,12 +102,22 @@ function expandMasterToLegacy(raw, masterFileAbsPath) {
     logFile: path.join(rt, 'provisioning.log'),
     k8sSecretName: k.k8sSecretName || 'kafka-server-side-credentials',
     kubeconfigPath: expandRt(kubeTemplate, rt),
-    sites: Array.isArray(clean.fallbackSites) ? clean.fallbackSites : (Array.isArray(k.fallbackSites) ? k.fallbackSites : []),
+    sites: [],
   };
 
-  if (!gen.sites.length) {
-    gen.namespace = 'esb-prod-cwdc';
-    gen.ocContext = 'cwdc';
+  let sitesArr = Array.isArray(clean.fallbackSites) && clean.fallbackSites.length
+    ? [...clean.fallbackSites]
+    : (Array.isArray(k.fallbackSites) && k.fallbackSites.length ? [...k.fallbackSites] : []);
+  if (!sitesArr.length) {
+    sitesArr = deriveFallbackSitesFromEnvironments(envBlock);
+  }
+  gen.sites = sitesArr;
+  if (gen.sites.length) {
+    gen.namespace = gen.sites[0].namespace;
+    gen.ocContext = gen.sites[0].ocContext;
+  } else {
+    gen.namespace = '';
+    gen.ocContext = '';
   }
 
   if (oc.loginServers && typeof oc.loginServers === 'object') {

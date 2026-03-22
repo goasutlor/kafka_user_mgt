@@ -37,6 +37,35 @@ function collectOcContexts(master) {
   return [...out].filter(Boolean);
 }
 
+/** Every (context, namespace) pair — duplicate pair is an error; same context with different namespaces is OK. */
+function collectOcContextNamespacePairs(master) {
+  const pairs = [];
+  const add = (ctx, ns) => {
+    const c = String(ctx || '').trim();
+    const n = String(ns || '').trim();
+    if (c && n) pairs.push(`${c}\n${n}`);
+  };
+  if (Array.isArray(master.fallbackSites)) {
+    for (const s of master.fallbackSites) {
+      if (s) add(s.ocContext, s.namespace);
+    }
+  }
+  const env = master.environments;
+  if (env && env.enabled === true && Array.isArray(env.environments)) {
+    for (const e of env.environments) {
+      if (!e || e.enabled === false) continue;
+      if (Array.isArray(e.sites)) {
+        for (const s of e.sites) {
+          if (s) add(s.ocContext, s.namespace);
+        }
+      } else {
+        add(e.ocContext, e.namespace);
+      }
+    }
+  }
+  return pairs;
+}
+
 function redactSecrets(obj) {
   if (!obj || typeof obj !== 'object') return obj;
   if (Array.isArray(obj)) return obj.map(redactSecrets);
@@ -264,14 +293,19 @@ async function runSetupPreview(body, configAbsPath, options) {
           : 'No OCP contexts from fallbackSites or environments — defaults may not match your cluster',
     });
   } else {
-    const uniq = new Set(contexts);
-    if (uniq.size !== contexts.length) {
-      checks.push({ id: 'oc_contexts_unique', level: 'error', message: 'Duplicate ocContext values in sites / environments' });
+    const pairs = collectOcContextNamespacePairs(master);
+    const uniqPairs = new Set(pairs);
+    if (pairs.length && uniqPairs.size !== pairs.length) {
+      checks.push({
+        id: 'oc_site_pairs_unique',
+        level: 'error',
+        message: 'Duplicate OpenShift target: same ocContext + namespace pair appears twice (each region/stage row must be unique).',
+      });
     } else {
       checks.push({
         id: 'oc_contexts',
         level: 'ok',
-        message: `OCP contexts: ${contexts.join(', ')}`,
+        message: `OCP contexts (unique names): ${contexts.join(', ')} — same context name with different namespaces is allowed.`,
       });
     }
   }

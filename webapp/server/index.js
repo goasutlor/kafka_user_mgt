@@ -1403,10 +1403,11 @@ function getSitesFromConfig() {
       ocContext: s.ocContext
     })).filter((s) => s.namespace && s.ocContext);
   }
-  // Legacy single-site: ใช้ gen.namespace + gen.ocContext หรือ env (ไม่ยึดชื่อ site)
-  const ns = g.namespace || process.env.GEN_NAMESPACE || process.env.GEN_NS_CWDC || 'esb-prod-cwdc';
-  const ctx = g.ocContext || process.env.GEN_OC_CONTEXT || process.env.GEN_OCP_CTX_CWDC || 'cwdc';
-  return [{ name: ctx, namespace: ns, ocContext: ctx }];
+  // Legacy single-site: gen.namespace + gen.ocContext or env — no baked-in cluster names (must be set explicitly).
+  const ns = String(g.namespace || process.env.GEN_NAMESPACE || process.env.GEN_NS_CWDC || '').trim();
+  const ctx = String(g.ocContext || process.env.GEN_OC_CONTEXT || process.env.GEN_OCP_CTX_CWDC || '').trim();
+  if (ns && ctx) return [{ name: ctx, namespace: ns, ocContext: ctx }];
+  return [];
 }
 
 // Run oc login for each site when gen.ocAutoLogin is set.

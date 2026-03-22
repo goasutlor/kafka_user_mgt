@@ -490,6 +490,9 @@ describe('master.config', () => {
     const legacy = expandMasterToLegacy(JSON.parse(fs.readFileSync(p, 'utf8')), p);
     assert.strictEqual(legacy.gen.baseDir, path.normalize('/opt/kafka-US'));
     assert.strictEqual(legacy.gen.bootstrapServers, 'b:9092');
+    assert.strictEqual(legacy.gen.sites.length, 1);
+    assert.strictEqual(legacy.gen.sites[0].ocContext, 'cwdc');
+    assert.strictEqual(legacy.gen.sites[0].namespace, 'ns1');
     assert.strictEqual(legacy.server.port, 3000);
     assert.ok(legacy.server.environments.inlineData);
     assert.strictEqual(legacy.server.environments.inlineData.environments[0].id, 'dev');
