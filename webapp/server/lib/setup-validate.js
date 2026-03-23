@@ -555,6 +555,13 @@ async function runSetupPreview(body, configAbsPath, options) {
           const ge = ((gr.stderr || gr.stdout || '') + '').trim().slice(0, 220);
           diag += ` (oc config get-contexts failed: ${ge})`;
         }
+        try {
+          const kcDir = path.dirname(kcExpanded);
+          const sibling = path.join(kcDir, path.basename(kcExpanded) === 'config-both' ? 'config' : 'config-both');
+          if (fs.existsSync(sibling)) {
+            diag += ` Note: sibling file exists: ${sibling} — if oc on the host shows more contexts with KUBECONFIG pointing at that file, fix the mount or remove stale config-both / set oc.kubeconfig to the file that actually lists every context.`;
+          }
+        } catch (_) { /* ignore */ }
         checks.push({ id: 'oc_context_diagnostic', level: 'error', message: diag });
       }
     }

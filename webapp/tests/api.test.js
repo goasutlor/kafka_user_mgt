@@ -4,6 +4,7 @@ const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const path = require('path');
 const fs = require('fs');
+const os = require('node:os');
 const request = require('supertest');
 
 const configPath = path.join(__dirname, '..', 'config', 'web.config.json');
@@ -467,7 +468,7 @@ describe('Auth hash (Portal) and OC encrypt', () => {
 });
 
 describe('master.config', () => {
-  const { isMasterConfig, expandMasterToLegacy } = require('../server/lib/master-config');
+  const { isMasterConfig, expandMasterToLegacy, resolveRuntimeKubeconfigPath } = require('../server/lib/master-config');
   const fixturesDir = path.join(__dirname, 'fixtures');
 
   it('isMasterConfig recognizes master shape', () => {
@@ -496,5 +497,23 @@ describe('master.config', () => {
     assert.strictEqual(legacy.server.port, 3000);
     assert.ok(legacy.server.environments.inlineData);
     assert.strictEqual(legacy.server.environments.inlineData.environments[0].id, 'dev');
+  });
+
+  it('resolveRuntimeKubeconfigPath prefers config when it lists more contexts than config-both', () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'kube-'));
+    const kc = path.join(d, '.kube');
+    fs.mkdirSync(kc, { recursive: true });
+    fs.writeFileSync(
+      path.join(kc, 'config-both'),
+      'apiVersion: v1\nkind: Config\ncontexts:\n- name: only-one\n  context:\n    cluster: x\n    user: y\n',
+    );
+    fs.writeFileSync(
+      path.join(kc, 'config'),
+      'apiVersion: v1\nkind: Config\ncontexts:\n- name: a\n  context:\n    cluster: c1\n    user: u\n'
+        + '- name: b\n  context:\n    cluster: c2\n    user: u\n- name: c\n  context:\n    cluster: c3\n    user: u\n',
+    );
+    const chosen = resolveRuntimeKubeconfigPath(path.join(kc, 'config-both'), d);
+    assert.strictEqual(path.basename(chosen), 'config');
+    fs.rmSync(d, { recursive: true, force: true });
   });
 });

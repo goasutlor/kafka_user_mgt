@@ -20,30 +20,75 @@ function expandRt(str, runtimeRoot) {
 }
 
 /**
- * If the configured kubeconfig file is missing, fall back to the other common name under runtimeRoot/.kube
- * (oc login creates `config`; merged multi-cluster files are often `config-both`).
+ * Count named entries under the `contexts:` document section (best-effort YAML scan).
+ */
+function countKubeconfigNamedContexts(filePath) {
+  try {
+    const lines = fs.readFileSync(filePath, 'utf8').split(/\r?\n/);
+    let inContexts = false;
+    let count = 0;
+    for (const line of lines) {
+      if (/^contexts:\s*$/.test(line)) {
+        inContexts = true;
+        continue;
+      }
+      if (inContexts) {
+        if (/^[a-zA-Z][a-zA-Z0-9_-]*:\s*/.test(line) && !/^\s/.test(line)) {
+          inContexts = false;
+          continue;
+        }
+        if (/^\s*-\s+name:\s/.test(line)) count += 1;
+      }
+    }
+    return count;
+  } catch (_) {
+    return 0;
+  }
+}
+
+/**
+ * Pick kubeconfig under runtimeRoot/.kube:
+ * - If the primary file is missing, use the other common name when present.
+ * - If BOTH `config` and `config-both` exist, prefer the file with MORE named contexts
+ *   (fixes stale `config-both` left from an old merge while `oc login` updated `config`).
  */
 function resolveRuntimeKubeconfigPath(expandedAbs, runtimeRoot) {
   const norm = path.normalize(expandedAbs);
   const rt = path.normalize(runtimeRoot);
+  const base = path.basename(norm);
+  const kubeDir = path.join(rt, '.kube');
+  const configPath = path.join(kubeDir, 'config');
+  const bothPath = path.join(kubeDir, 'config-both');
+
+  function pickPrimaryOrAlt(primary, secondary) {
+    try {
+      const pOk = fs.existsSync(primary);
+      const sOk = fs.existsSync(secondary);
+      if (!pOk && sOk) return secondary;
+      if (pOk && !sOk) return primary;
+      if (!pOk && !sOk) return primary;
+      const nP = countKubeconfigNamedContexts(primary);
+      const nS = countKubeconfigNamedContexts(secondary);
+      if (nS > nP) return secondary;
+      if (nP > nS) return primary;
+      return primary;
+    } catch (_) {
+      return primary;
+    }
+  }
+
   try {
+    if (base === 'config-both') {
+      return pickPrimaryOrAlt(norm, configPath);
+    }
+    if (base === 'config') {
+      return pickPrimaryOrAlt(norm, bothPath);
+    }
     if (fs.existsSync(norm)) return norm;
+    return norm;
   } catch (_) {
     return norm;
   }
-  const base = path.basename(norm);
-  const kubeDir = path.join(rt, '.kube');
-  try {
-    if (base === 'config-both') {
-      const alt = path.join(kubeDir, 'config');
-      if (fs.existsSync(alt)) return alt;
-    }
-    if (base === 'config') {
-      const alt = path.join(kubeDir, 'config-both');
-      if (fs.existsSync(alt)) return alt;
-    }
-  } catch (_) { /* ignore */ }
-  return norm;
 }
 
 /** Matches Dockerfile KAFKA_TOOLS_BIN parent + symlink name (bind-mount hides /opt/kafka-usermgmt/kafka_*). */

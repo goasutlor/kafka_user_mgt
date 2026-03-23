@@ -2,6 +2,8 @@
 
 คู่มือนี้รวมขั้นตอนติดตั้งทั้งหมดตั้งแต่เตรียมเครื่องจนถึงเปิดใช้ได้
 
+**อัปเกรด Docker/Podman image:** การเปลี่ยน image ใหม่ = เปลี่ยน “เครื่องยนต์” แอปใน container เท่านั้น — ไฟล์ config / runtime ที่ **mount จาก host** ไม่ถูก image ทับ (ถ้าไม่ลบโฟลเดอร์บน host และ mount path เดิม) รายละเอียดและข้อยกเว้น: [UPGRADE-AND-PERSISTENCE.md](UPGRADE-AND-PERSISTENCE.md)
+
 ---
 
 ## เลือกทางรัน (ไม่ต้องติดตั้งเยอะ)
