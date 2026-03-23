@@ -189,6 +189,86 @@ function mergeEnvironmentBootstrapOverrides(envList, overrides) {
   return envList;
 }
 
+/** Match web-ui-mockup/setup.html — one env per OCP row (single-region multi-namespace). */
+function sanitizeEnvIdPart(s) {
+  let t = String(s || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9_-]/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^_|_$/g, '');
+  if (!t) t = 'x';
+  return t;
+}
+
+function shortBadgeFromDisplayName(text) {
+  const t = String(text || '').trim();
+  if (!t) return 'ENV';
+  if (t.length <= 6) return t.toUpperCase();
+  return t.substring(0, 4).toUpperCase();
+}
+
+function uniqueEnvironmentIdForOcpRow(namespace, ocContext, seenIds) {
+  const base = sanitizeEnvIdPart(namespace);
+  let id = base;
+  if (!seenIds[id]) {
+    seenIds[id] = true;
+    return id;
+  }
+  const ctx = sanitizeEnvIdPart(ocContext);
+  id = `${base}-ctx-${ctx}`;
+  let n = 2;
+  while (seenIds[id]) {
+    id = `${base}-ctx-${ctx}-${n++}`;
+  }
+  seenIds[id] = true;
+  return id;
+}
+
+/**
+ * When the wizard sends multiple ocSites (single topology) but environmentsEnabled was off,
+ * build the same environmentItems shape the browser would send — keeps master + Kafka file materialization aligned.
+ */
+function buildEnvironmentItemsFromOcSitesNorm(sites) {
+  const seen = Object.create(null);
+  const items = [];
+  for (const s of sites) {
+    const ns = String(s.namespace || '').trim();
+    const ctx = String(s.ocContext || '').trim();
+    let id = uniqueEnvironmentIdForOcpRow(ns, ctx, seen);
+    if (id.length > 64) id = id.substring(0, 64);
+    const api = String(s.apiServer || '').trim();
+    items.push({
+      id,
+      label: ns,
+      shortLabel: shortBadgeFromDisplayName(ns),
+      badgeColor: '#238636',
+      sites: [
+        {
+          name: String(s.name || ctx || 'site').trim(),
+          ocContext: ctx,
+          namespace: ns,
+          ...(api ? { apiServer: api } : {}),
+        },
+      ],
+    });
+  }
+  return items;
+}
+
+/**
+ * Dual region = one environment entry whose sites[] lists both clusters. Anything else is single topology.
+ */
+function inferOcTopologyFromMaster(master) {
+  const envBlock = master && master.environments;
+  const envOn = !!(envBlock && envBlock.enabled === true);
+  const items = envOn && Array.isArray(envBlock.environments) ? envBlock.environments : [];
+  if (items.length === 1) {
+    const st = items[0] && items[0].sites;
+    if (Array.isArray(st) && st.length >= 2) return 'dual';
+  }
+  return 'single';
+}
+
 function normalizeOcSitesFromBody(body) {
   const raw = body.ocSites;
   if (!Array.isArray(raw) || raw.length === 0) return null;
@@ -247,15 +327,33 @@ function buildFilesFromSetupBody(body, configAbsPath) {
   const rt = String(body.runtimeRoot || '/opt/kafka-usermgmt').trim();
   const credFileName = String(body.credentialsFile || 'credentials.json').trim() || 'credentials.json';
 
-  const environments = body.environments && typeof body.environments === 'object'
-    ? body.environments
-    : {
-      enabled: body.environmentsEnabled === true,
-      defaultEnvironmentId: String(body.defaultEnvironmentId || 'dev').trim(),
-      environments: Array.isArray(body.environmentItems) ? body.environmentItems : [],
-    };
-
   const ocSitesNorm = normalizeOcSitesFromBody(body);
+
+  const explicitEnvironmentsObject = body.environments && typeof body.environments === 'object';
+  let environments;
+  if (explicitEnvironmentsObject) {
+    environments = body.environments;
+  } else {
+    let enabled = body.environmentsEnabled === true;
+    const envItems = Array.isArray(body.environmentItems) ? [...body.environmentItems] : [];
+    const singleMulti =
+      body.ocTopology !== 'dual' && ocSitesNorm && ocSitesNorm.length > 1;
+    if (!enabled && singleMulti) {
+      enabled = true;
+      const built = buildEnvironmentItemsFromOcSitesNorm(ocSitesNorm);
+      environments = {
+        enabled: true,
+        defaultEnvironmentId: (built[0] && built[0].id) || String(body.defaultEnvironmentId || 'dev').trim(),
+        environments: built,
+      };
+    } else {
+      environments = {
+        enabled,
+        defaultEnvironmentId: String(body.defaultEnvironmentId || 'dev').trim(),
+        environments: envItems,
+      };
+    }
+  }
 
   let fallbackSites = Array.isArray(body.fallbackSites) ? [...body.fallbackSites] : [];
   let ocLoginServers = body.ocLoginServers && typeof body.ocLoginServers === 'object'
@@ -492,7 +590,7 @@ function masterToSetupWizardBody(master) {
     ocPath: String(oc.ocPath != null ? oc.ocPath : '/host/usr/bin').trim(),
     kubeconfig: String(oc.kubeconfig || '{runtimeRoot}/.kube/config').trim(),
     ocAutoLogin: oc.autoLogin === true,
-    ocTopology: sites.length >= 2 ? 'dual' : 'single',
+    ocTopology: inferOcTopologyFromMaster(master),
     ocSites: sites.length ? ocSites : undefined,
     portalPort: portal.port != null ? String(portal.port) : '3443',
     httpsEnabled: !!(portal.https && portal.https.enabled),
