@@ -114,3 +114,5 @@ You **can** wipe and start over. Old `config-both` references come from **persis
 ## English summary
 
 Upgrading the **container image** replaces application binaries and bundled files **inside** the image. Your **bind-mounted** directories on the host (`deploy/config`, `runtime`, optional `.kube` and SSL paths) are **not part of the image**; they persist on disk as long as you keep the same host paths and mount flags. Nothing in this design intentionally wipes those mounts when you pull a newer `ghcr.io/.../kafka_user_mgt` image and recreate the container.
+
+You **do not** need to run first-time setup again after a normal image upgrade — parameters, credentials, bootstrap URLs, and API endpoints in the mounted config **remain in use** until you explicitly reset or delete files. To wipe and re-run setup, use **`/reset-config.html`** (Portal username/password + phrase `RESET_PORTAL_CONFIG`) when Portal auth is enabled, or delete files on the host as described above.
