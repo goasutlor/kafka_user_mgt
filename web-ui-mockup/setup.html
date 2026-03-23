@@ -188,7 +188,7 @@
   <header class="header">
     <h1>First-time setup</h1>
     <p>
-      <strong>1)</strong> OpenShift — API URL, login, then add rows: <strong>namespace + context</strong> (<code>oc config get-contexts</code> NAME). <strong>2)</strong> Kafka — bootstrap per project/namespace; truststore/SASL (shared or one block). <strong>3)</strong> Portal. <strong>4)</strong> Verify. Config saves to <code>master.config.json</code> on your mounted volume.
+      <strong>1)</strong> OpenShift — API + login; แต่ละแถว = <strong>หนึ่ง environment</strong> ใน portal: <em>project (namespace)</em> + <em><code>oc</code> context</em> + ชื่อโชว์ใน header (ถ้าต้องการ). <strong>2)</strong> Kafka — bootstrap ต่อ environment; truststore/SASL ร่วมกันทุก project (ยกเว้นแก้ config เอง). <strong>3)</strong> Portal. <strong>4)</strong> Verify. บันทึกลง <code>master.config.json</code> บน volume.
     </p>
   </header>
   <main>
@@ -236,10 +236,16 @@
           <input type="radio" name="ocCredMode" id="credPer" value="per_cluster" style="display:none;" />
           <div id="oc-cred-mode-wrap" style="display:none;"></div>
 
-          <h3 style="margin-top:20px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">Projects (namespace + context)</h3>
-          <p class="hint">Add one row per OpenShift project. The portal header will list each row as an environment. <strong>+ Add</strong> for Dev, SIT, UAT, multi-region on same API, etc.</p>
+          <h3 style="margin-top:20px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">Environments (หนึ่งแถว = หนึ่งตัวเลือกใน header)</h3>
+          <p class="hint">
+            <strong>Project (namespace)</strong> = ชื่อ OpenShift project ที่มี Kafka / secret อยู่จริง.
+            <strong><code>oc</code> context</strong> = ชื่อ context ใน kubeconfig (<code>oc config get-contexts</code> → คอลัมน์ NAME).
+            <strong>Portal display name</strong> = ชื่อที่อ่านง่ายใน dropdown (ถ้าว่าง ใช้ namespace).
+            <strong>Environment id</strong> ในไฟล์ config สร้างจาก namespace (ถ้า namespace ซ้ำจะต่อ <code>-ctx-…</code>).
+            กด <strong>+ Add</strong> เพิ่ม Dev / SIT / UAT ฯลฯ
+          </p>
           <div id="ocp-project-rows"></div>
-          <button type="button" class="secondary" id="btn-ocp-project-add">+ Add namespace / context</button>
+          <button type="button" class="secondary" id="btn-ocp-project-add">+ Add environment (project row)</button>
 
           <details class="advanced-box" style="margin-top:18px;">
             <summary>Advanced: <code>oc</code> path, kubeconfig, dual cluster, legacy forms</summary>
@@ -341,15 +347,21 @@
         </div>
 
         <div class="step-panel" data-step="2">
-          <h2>Kafka (per OpenShift project)</h2>
-          <p class="hint">One bootstrap line per namespace from step 1. Truststore + SASL below apply to <strong>all</strong> projects (same cluster credentials); if a project needs different broker routes only, fill its row — the first non-empty row also fills the global default for templates.</p>
+          <h2>Kafka (ต่อ environment)</h2>
+          <p class="hint">
+            แต่ละแถวด้านล่างสัมพันธ์กับ <strong>environment</strong> ที่ตั้งในขั้น 1 (เดียวกับชื่อใน header ของ portal).
+            กรอก <strong>bootstrap</strong> เป็น <code>host:port</code> ของ Kafka TLS route สำหรับ project นั้น.
+            Truststore + SASL ด้านล่างใช้ <strong>ร่วมกันทุก environment</strong> (credentials เดียวกันหลาย namespace).
+            แถวแรกที่กรอก bootstrap จะเติมช่อง <strong>Default bootstrap</strong> ด้านล่างให้อัตโนมัติ (แก้ได้).
+          </p>
 
           <div id="kafka-per-ns-panel" style="margin-top:12px; padding:12px; border:1px solid #d0d7de; border-radius:8px; background:#f8fafc;">
-            <strong>Bootstrap servers</strong> <span class="hint">host:port (TLS route)</span>
+            <strong>Bootstrap ต่อ environment</strong>
+            <span class="hint"> — <code>host:port</code> (TLS)</span>
             <div id="kafka-per-ns-rows" style="margin-top:8px;"></div>
           </div>
 
-          <label for="kafkaBootstrap" style="margin-top:16px;">Default bootstrap <span class="hint">(auto-filled from first row; editable)</span></label>
+          <label for="kafkaBootstrap" style="margin-top:16px;">Default bootstrap <span class="hint">(ค่าเริ่มต้นใน config / templates — โดยปกติให้ตรงกับแถวแรกที่กรอก)</span></label>
           <input type="text" id="kafkaBootstrap" placeholder="kafka.apps.example.com:443" required />
 
           <div id="env-kafka-bootstrap-panel" style="display:none; margin-top:14px; padding:12px; border:1px solid #d0d7de; border-radius:8px; background:#f8fafc;">
@@ -518,7 +530,7 @@
       var lastPreviewOk = false;
       var reconfigureMode = false;
       var currentStep = 1;
-      var DRAFT_KEY = 'kafka-usermgmt-setup-draft-v6';
+      var DRAFT_KEY = 'kafka-usermgmt-setup-draft-v7';
       var draftTimer = null;
 
       function scheduleDraftSave() {
@@ -543,6 +555,7 @@
           data.ocpProjectRows.push({
             ns: (row.querySelector('.ocp-proj-ns') || {}).value || '',
             ctx: (row.querySelector('.ocp-proj-ctx') || {}).value || '',
+            portalLabel: (row.querySelector('.ocp-proj-portal-label') || {}).value || '',
           });
         });
         data.envSimpleRows = [];
@@ -582,6 +595,31 @@
           .replace(/_+/g, '_')
           .replace(/^_|_$/g, '');
         return t || 'x';
+      }
+
+      function shortBadgeFromDisplayName(text) {
+        var t = String(text || '').trim();
+        if (!t) return 'ENV';
+        if (t.length <= 6) return t.toUpperCase();
+        return t.substring(0, 4).toUpperCase();
+      }
+
+      /** One env per OCP row: id = namespace (readable). Disambiguate with context only if namespace repeats. */
+      function uniqueEnvironmentIdForOcpRow(namespace, ocContext, seenIds) {
+        var base = sanitizeEnvIdPart(namespace);
+        var id = base;
+        if (!seenIds[id]) {
+          seenIds[id] = true;
+          return id;
+        }
+        var ctx = sanitizeEnvIdPart(ocContext);
+        id = base + '-ctx-' + ctx;
+        var n = 2;
+        while (seenIds[id]) {
+          id = base + '-ctx-' + ctx + '-' + n++;
+        }
+        seenIds[id] = true;
+        return id;
       }
 
       function collectOcpProjectRowsFromDom() {
@@ -657,15 +695,10 @@
           var ocSites = [];
           ocpRows.forEach(function (r) {
             var api = clusterApi;
-            var id = sanitizeEnvIdPart(r.namespace) + '_' + sanitizeEnvIdPart(r.ocContext);
-            if (id.length > 48) id = id.substring(0, 48);
-            var orig = id;
-            var n = 2;
-            while (seenIds[id]) {
-              id = orig + '_' + n++;
-            }
-            seenIds[id] = true;
-            var short = id.length <= 6 ? id.toUpperCase() : id.substring(0, 4).toUpperCase();
+            var id = uniqueEnvironmentIdForOcpRow(r.namespace, r.ocContext, seenIds);
+            if (id.length > 64) id = id.substring(0, 64);
+            var displayLabel = (r.portalLabel && r.portalLabel.trim()) || r.namespace;
+            var short = shortBadgeFromDisplayName(displayLabel);
             var site = {
               name: r.ocContext,
               namespace: r.namespace,
@@ -675,7 +708,7 @@
             ocSites.push(site);
             environmentItems.push({
               id: id,
-              label: r.namespace,
+              label: displayLabel,
               shortLabel: short,
               badgeColor: '#238636',
               sites: [site],
@@ -706,8 +739,8 @@
             loginPassword: s0.loginPassword,
           },
         ];
-        var id = sanitizeEnvIdPart(s0.namespace) + '_' + sanitizeEnvIdPart(s0.ocContext);
-        var short = id.length <= 6 ? id.toUpperCase() : id.substring(0, 4).toUpperCase();
+        var id = uniqueEnvironmentIdForOcpRow(s0.namespace, s0.ocContext, {});
+        var short = shortBadgeFromDisplayName(s0.namespace);
         return {
           ocTopology: 'single',
           ocSites: ocSitesPayload,
@@ -738,11 +771,26 @@
         var row = document.createElement('div');
         row.className = 'ocp-project-row';
         row.innerHTML =
-          '<button type="button" class="secondary ocp-proj-remove" title="Remove row">ลบ</button>' +
+          '<button type="button" class="secondary ocp-proj-remove" title="Remove row">ลบแถว</button>' +
+          '<p class="hint" style="margin:0 0 8px;font-weight:600;color:var(--text);">Environment (portal header)</p>' +
           '<div class="row">' +
-          '<div><label>Namespace</label><input type="text" class="ocp-proj-ns" placeholder="openshift-project" autocomplete="off" /></div>' +
-          '<div><label><code>oc</code> context (NAME)</label><input type="text" class="ocp-proj-ctx" placeholder="from oc config get-contexts" autocomplete="off" /></div>' +
-          '</div>';
+          '<div>' +
+          '<label>OpenShift project <span class="hint">(namespace)</span></label>' +
+          '<p class="hint" style="margin:4px 0 0;">ชื่อ project จริงบน cluster — ใช้สร้าง <code>environment id</code> ใน config</p>' +
+          '<input type="text" class="ocp-proj-ns" placeholder="e.g. esb-dev-cwdc" autocomplete="off" />' +
+          '</div>' +
+          '<div>' +
+          '<label><code>oc</code> context <span class="hint">(kubeconfig NAME)</span></label>' +
+          '<p class="hint" style="margin:4px 0 0;">ต้องมีอยู่ใน kubeconfig แล้ว — ดูจาก <code>oc config get-contexts</code></p>' +
+          '<input type="text" class="ocp-proj-ctx" placeholder="exact context name" autocomplete="off" />' +
+          '</div>' +
+          '</div>' +
+          '<div class="row" style="margin-top:10px;">' +
+          '<div style="flex:1;min-width:100%;">' +
+          '<label>Portal display name <span class="hint">(optional)</span></label>' +
+          '<p class="hint" style="margin:4px 0 0;">ชื่อที่แสดงใน dropdown บน header — ถ้าว่าง จะใช้ namespace แทน</p>' +
+          '<input type="text" class="ocp-proj-portal-label" placeholder="e.g. Dev / SIT / UAT (ว่างได้)" autocomplete="off" />' +
+          '</div></div>';
         wrap.appendChild(row);
         var onChange = function () {
           syncKafkaPerNsRows();
@@ -753,14 +801,16 @@
           row.remove();
           onChange();
         });
-        row.querySelectorAll('.ocp-proj-ns, .ocp-proj-ctx').forEach(function (el) {
+        row.querySelectorAll('.ocp-proj-ns, .ocp-proj-ctx, .ocp-proj-portal-label').forEach(function (el) {
           el.addEventListener('input', onChange);
         });
         if (prefill) {
           var nEl = row.querySelector('.ocp-proj-ns');
           var cEl = row.querySelector('.ocp-proj-ctx');
+          var pEl = row.querySelector('.ocp-proj-portal-label');
           if (nEl && prefill.ns != null) nEl.value = prefill.ns;
           if (cEl && prefill.ctx != null) cEl.value = prefill.ctx;
+          if (pEl && prefill.portalLabel != null) pEl.value = prefill.portalLabel;
         }
         syncKafkaPerNsRows();
       }
@@ -781,13 +831,16 @@
               var id = (row.querySelector('.env-row-id') || {}).value.trim();
               var label = (row.querySelector('.env-row-label') || {}).value.trim() || id;
               if (!id) return;
-              items.push({ id: id, label: label || id });
+              var t0 = row.querySelector('.env-oc-target-row');
+              var ns = t0 ? (t0.querySelector('.env-oc-target-ns') || {}).value.trim() : '';
+              items.push({ id: id, label: label || id, namespace: ns });
             });
             return items;
           }
           var bundle = buildEnvironmentAndOcSitesForBody();
           return (bundle.environmentItems || []).map(function (e) {
-            return { id: e.id, label: e.label || e.id };
+            var ns = e.sites && e.sites[0] && e.sites[0].namespace ? String(e.sites[0].namespace) : '';
+            return { id: e.id, label: e.label || e.id, namespace: ns };
           });
         } catch (e) {
           return [];
@@ -815,11 +868,26 @@
           var label = document.createElement('label');
           var safeId = 'kafkaPerNs__' + String(e.id).replace(/[^a-zA-Z0-9_-]/g, '_');
           label.setAttribute('for', safeId);
-          label.appendChild(document.createTextNode('Bootstrap for '));
-          var code = document.createElement('code');
-          code.textContent = e.id;
-          label.appendChild(code);
-          label.appendChild(document.createTextNode(' (' + (e.label || '') + ')'));
+          var line1 = document.createElement('div');
+          line1.style.fontWeight = '600';
+          line1.appendChild(document.createTextNode('Bootstrap (TLS) · '));
+          var nameSpan = document.createElement('span');
+          nameSpan.textContent = e.label || e.id;
+          line1.appendChild(nameSpan);
+          label.appendChild(line1);
+          var sub = document.createElement('div');
+          sub.className = 'hint';
+          sub.style.marginTop = '4px';
+          sub.appendChild(document.createTextNode('OpenShift namespace: '));
+          var cNs = document.createElement('code');
+          cNs.textContent = e.namespace && String(e.namespace).trim() ? e.namespace : '—';
+          sub.appendChild(cNs);
+          sub.appendChild(document.createTextNode(' · '));
+          sub.appendChild(document.createTextNode('config id: '));
+          var cId = document.createElement('code');
+          cId.textContent = e.id;
+          sub.appendChild(cId);
+          label.appendChild(sub);
           var inp = document.createElement('input');
           inp.type = 'text';
           inp.id = safeId;
@@ -1107,7 +1175,11 @@
         clearOcpProjectRows();
         if ((data.ocpProjectRows || []).length) {
           (data.ocpProjectRows || []).forEach(function (r) {
-            addOcpProjectRow({ ns: r.ns != null ? r.ns : '', ctx: r.ctx != null ? r.ctx : '' });
+            addOcpProjectRow({
+              ns: r.ns != null ? r.ns : '',
+              ctx: r.ctx != null ? r.ctx : '',
+              portalLabel: r.portalLabel != null ? r.portalLabel : '',
+            });
           });
         } else {
           addOcpProjectRow();
@@ -1220,7 +1292,15 @@
             w.environmentItems.forEach(function (env) {
               var st = env.sites && env.sites[0];
               if (st && (st.namespace || st.ocContext)) {
-                addOcpProjectRow({ ns: st.namespace ? String(st.namespace) : '', ctx: st.ocContext ? String(st.ocContext) : '' });
+                var nsP = st.namespace ? String(st.namespace) : '';
+                var lblP = env.label ? String(env.label) : '';
+                var portalP = '';
+                if (lblP && (!nsP || lblP !== nsP)) portalP = lblP;
+                addOcpProjectRow({
+                  ns: nsP,
+                  ctx: st.ocContext ? String(st.ocContext) : '',
+                  portalLabel: portalP,
+                });
               }
             });
             if (!document.querySelector('#ocp-project-rows .ocp-project-row')) {
