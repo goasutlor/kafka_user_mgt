@@ -72,4 +72,26 @@ describe('getBootstrapServersForRequest (multi-env)', () => {
     const devBs = getBootstrapServersForRequest({ session: { activeEnvironmentId: 'dev' } });
     assert.strictEqual(devBs, 'kafka-dev.apps.example:443');
   });
+
+  it('throws when multi-env cannot resolve bootstrap (no silent fallback to gen.bootstrapServers)', () => {
+    fs.writeFileSync(
+      path.join(tmpDir, 'environments.json'),
+      JSON.stringify({
+        enabled: true,
+        defaultEnvironmentId: 'dev',
+        environments: [
+          { id: 'dev', label: 'Dev', sites: [{ namespace: 'n1', ocContext: 'c1' }] },
+          { id: 'sit', label: 'Sit', sites: [{ namespace: 'n2', ocContext: 'c2' }] },
+          { id: 'orphan', label: 'No props', sites: [{ namespace: 'n3', ocContext: 'c3' }] },
+        ],
+      }),
+    );
+    delete require.cache[require.resolve('../server/index.js')];
+    const { getBootstrapServersForRequest, loadConfig } = require('../server/index.js');
+    loadConfig();
+    assert.throws(
+      () => getBootstrapServersForRequest({ session: { activeEnvironmentId: 'orphan' } }),
+      /cannot resolve Kafka bootstrap|Refusing to fall back/i,
+    );
+  });
 });

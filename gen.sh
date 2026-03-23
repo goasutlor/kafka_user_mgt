@@ -48,6 +48,7 @@
 # 2026-03-15  PARITY note in header: every feature must exist in both CLI (gen.sh) and GUI/API (100%).
 # 2026-02-xx  Multi-site (names not fixed): GEN_OCP_SITES="ctx1:ns1,ctx2:ns2" for multiple OCP clusters; if unset use OCP_CTX_CWDC/NS_CWDC + OCP_CTX_TLS2/NS_TLS2. All flows (Add/Remove/Change password/Verify) iterate SITE_CTX/SITE_NS; revert previous site if a patch fails.
 # 2026-02-xx  All script output files (.enc packs) go to user_output in the same path as the script (USER_OUTPUT_DIR=$SCRIPT_DIR/user_output). Override with GEN_USER_OUTPUT_DIR. GEN_PACK_DIR echoes this so Web/download can find files.
+# 2026-03-23  Web multi-env: getBaseEnv sets GEN_USER_OUTPUT_DIR=$GEN_BASE_DIR/user_output/{environmentId} so .enc packs do not mix across Dev/SIT/UAT (parity with per-env audit.log under config/environments/{id}/).
 # 2026-02-19  Non-interactive Add user / Change password: GEN_PASSPHRASE for .enc file; script echoes GEN_PACK_FILE= and GEN_PACK_NAME= for Web download and decrypt instructions.
 # 2026-02-19  Non-interactive (Web): GEN_MODE=2 (Test user), GEN_MODE=3 with GEN_ACTION=1|2|3 (Remove, Change password, Cleanup ACL). Env: GEN_KAFKA_USER, GEN_TEST_PASS, GEN_TOPIC_NAME; GEN_USERS; GEN_CHANGE_USER, GEN_NEW_PASSWORD.
 #            Add user (GEN_MODE=1): optional GEN_VALIDATE_SKIP=1 (skip broker tests) or GEN_VALIDATE_CONSUME=0|1 (auth-only vs auth+consume); Web/API sends same via skipKafkaValidation / validateConsume.

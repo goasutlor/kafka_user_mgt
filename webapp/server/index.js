@@ -350,10 +350,33 @@ function getAuthenticatedUser(req) {
   return req.session && req.session.user;
 }
 
-function getDataDir() {
+/**
+ * When portal multi-environment is enabled, storage key for per-env audit/download-history and runtime user_output.
+ * Returns null if single-target mode or no session.
+ */
+function getPerEnvironmentStorageKey(req) {
+  try {
+    const st = getEnvironmentsState();
+    if (!st.active || !req || !req.session) return null;
+    const raw = req.session.activeEnvironmentId || st.defaultId;
+    const id = String(raw || '').trim();
+    if (!id || !/^[a-zA-Z0-9_-]+$/.test(id)) return null;
+    if (!st.list.some((e) => e.id === id)) return null;
+    return id;
+  } catch (_) {
+    return null;
+  }
+}
+
+/** Portal audit.log + download-history.json: base config dir, or config/environments/{id}/ when multi-env. */
+function getDataDir(req) {
   const authPath = getAuthUsersFilePath();
   if (!authPath) return null;
-  const dir = path.dirname(authPath);
+  let dir = path.dirname(authPath);
+  const envKey = getPerEnvironmentStorageKey(req);
+  if (envKey) {
+    dir = path.join(dir, 'environments', envKey);
+  }
   try {
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     return dir;
@@ -363,21 +386,23 @@ function getDataDir() {
 }
 
 function appendAuditLog(req, action, detail) {
-  const dataDir = getDataDir();
+  const dataDir = getDataDir(req);
   if (!dataDir) return;
   try {
+    const envKey = getPerEnvironmentStorageKey(req);
     const line = JSON.stringify({
       time: new Date().toISOString(),
       action,
       user: getAuthenticatedUser(req) || null,
       detail: detail || null,
+      ...(envKey ? { environmentId: envKey } : {}),
     }) + '\n';
     fs.appendFileSync(path.join(dataDir, 'audit.log'), line, 'utf8');
   } catch (_) {}
 }
 
 function appendDownloadHistory(req, filename, packName) {
-  const dataDir = getDataDir();
+  const dataDir = getDataDir(req);
   if (!dataDir) return;
   const filePath = path.join(dataDir, 'download-history.json');
   try {
@@ -388,12 +413,14 @@ function appendDownloadHistory(req, filename, packName) {
       } catch (_) {}
     }
     if (!Array.isArray(list)) list = [];
+    const envKey = getPerEnvironmentStorageKey(req);
     list.push({
       date: new Date().toISOString().slice(0, 10),
       datetime: new Date().toISOString(),
       filename: filename || '',
       packName: packName || '',
       user: getAuthenticatedUser(req) || null,
+      ...(envKey ? { environmentId: envKey } : {}),
     });
     fs.writeFileSync(filePath, JSON.stringify(list, null, 2), 'utf8');
   } catch (_) {}
@@ -1058,6 +1085,15 @@ function getBaseEnv(req) {
   if (portalBootstrap && String(portalBootstrap).trim()) {
     env.GEN_KAFKA_BOOTSTRAP = String(portalBootstrap).trim();
   }
+  const baseDirAbs = path.resolve(String(baseDir));
+  const envOutKey = getPerEnvironmentStorageKey(req);
+  if (envOutKey) {
+    env.GEN_USER_OUTPUT_DIR = path.join(baseDirAbs, 'user_output', envOutKey);
+  } else if (process.env.GEN_USER_OUTPUT_DIR) {
+    env.GEN_USER_OUTPUT_DIR = process.env.GEN_USER_OUTPUT_DIR;
+  } else {
+    env.GEN_USER_OUTPUT_DIR = path.join(baseDirAbs, 'user_output');
+  }
   return env;
 }
 
@@ -1120,7 +1156,12 @@ function runGen(envOverrides, req) {
   if (!scriptPath || !fs.existsSync(scriptPath)) {
     return Promise.reject(new Error(`gen.sh not found at ${scriptPath}`));
   }
-  const env = { ...getBaseEnv(req), ...envOverrides };
+  let env;
+  try {
+    env = { ...getBaseEnv(req), ...envOverrides };
+  } catch (e) {
+    return Promise.reject(e);
+  }
   const genCwd = getGenCwd() || path.dirname(path.resolve(scriptPath));
   return new Promise((resolve, reject) => {
     const proc = spawn(SHELL_CMD, [scriptPath], {
@@ -1145,7 +1186,12 @@ function runGenStream(envOverrides, onLine, req, onStderrLine) {
   if (!scriptPath || !fs.existsSync(scriptPath)) {
     return Promise.reject(new Error(`gen.sh not found at ${scriptPath}`));
   }
-  const env = { ...getBaseEnv(req), ...envOverrides };
+  let env;
+  try {
+    env = { ...getBaseEnv(req), ...envOverrides };
+  } catch (e) {
+    return Promise.reject(e);
+  }
   const genCwd = getGenCwd() || path.dirname(path.resolve(scriptPath));
   return new Promise((resolve, reject) => {
     const proc = spawn(SHELL_CMD, [scriptPath], {
@@ -1246,7 +1292,12 @@ function buildTaskAccumulatorFromOutput(stdout) {
 // cwd = baseDir so relative paths and Kafka config work
 function runShell(cmd, envOverrides = {}, req) {
   if (!config) loadConfig();
-  const env = { ...getBaseEnv(req), ...envOverrides };
+  let env;
+  try {
+    env = { ...getBaseEnv(req), ...envOverrides };
+  } catch (e) {
+    return Promise.reject(e);
+  }
   const baseDir = config.gen?.baseDir || process.env.GEN_BASE_DIR || '/tmp';
   const cwd = path.isAbsolute(baseDir) ? baseDir : path.resolve(process.cwd(), baseDir);
   return new Promise((resolve, reject) => {
@@ -1263,7 +1314,12 @@ function runShell(cmd, envOverrides = {}, req) {
 // Run a script with argv (so $0 inside script is the script path — required for Kafka bin scripts)
 function runShellScript(scriptPath, args, envOverrides = {}, req) {
   if (!config) loadConfig();
-  const env = { ...getBaseEnv(req), ...envOverrides };
+  let env;
+  try {
+    env = { ...getBaseEnv(req), ...envOverrides };
+  } catch (e) {
+    return Promise.reject(e);
+  }
   const baseDir = config.gen?.baseDir || process.env.GEN_BASE_DIR || '/tmp';
   const cwd = path.isAbsolute(baseDir) ? baseDir : path.resolve(process.cwd(), baseDir);
   return new Promise((resolve, reject) => {
@@ -1494,8 +1550,8 @@ function getBootstrapServersForRequest(req) {
   };
 
   const st = getEnvironmentsState();
-  // Multi-env: never let global gen.bootstrapServers override the active env's client props —
-  // otherwise the header shows SIT/UAT but list topics / create topic / GEN_KAFKA_BOOTSTRAP still hit DEV.
+  // Multi-env + portal session: resolve bootstrap only for that env — never fall back to gen.bootstrapServers
+  // or GEN_BOOTSTRAP (often another cluster e.g. DEV); wrong cluster is worse than a hard failure.
   if (st.active && req && req.session) {
     const id = req.session.activeEnvironmentId || st.defaultId;
     const entry = st.list.find((e) => e.id === id) || st.list[0];
@@ -1504,8 +1560,13 @@ function getBootstrapServersForRequest(req) {
     }
     const fromEnvFile = readBootstrapFromResolvedAdmin();
     if (fromEnvFile) return fromEnvFile;
-    if (g.bootstrapServers) return g.bootstrapServers;
-    return process.env.GEN_BOOTSTRAP || 'localhost:9092';
+    const { adminConfig } = resolveKafkaCommandConfigPaths(req);
+    const hintFile = path.basename(adminConfig);
+    throw new Error(
+      `Multi-environment "${id || 'unknown'}": cannot resolve Kafka bootstrap for this env. `
+      + `Set bootstrapServers on this environment in environments.json, or add configs/${hintFile} with bootstrap.servers=... `
+      + `(expected admin properties for this env). Refusing to fall back to gen.bootstrapServers to avoid hitting the wrong cluster.`
+    );
   }
 
   if (g.bootstrapServers) return g.bootstrapServers;
@@ -1569,26 +1630,27 @@ function normalizeAuditEntries(raw) {
   const action = raw.action || null;
   const who = raw.user || null;
   const d = raw.detail || {};
+  const envRow = raw.environmentId != null ? { environmentId: String(raw.environmentId) } : {};
   const system = d.systemName != null ? String(d.systemName) : null;
   const topic = d.topic != null ? String(d.topic) : null;
   if (action === 'create-topic' && (topic || (d && d.topic))) {
     const t = topic || (d && d.topic);
-    return [{ time, action, who, system: null, topic: t, target: t }];
+    return [{ time, action, who, system: null, topic: t, target: t, ...envRow }];
   }
   if (action === 'remove-user' && Array.isArray(d.users) && d.users.length > 0) {
-    return d.users.map((u) => ({ time, action, who, system: null, topic: null, target: String(u) }));
+    return d.users.map((u) => ({ time, action, who, system: null, topic: null, target: String(u), ...envRow }));
   }
   if (action === 'add-acl-existing' && (d.username != null || d.topic != null)) {
-    return [{ time, action, who, system: null, topic: d.topic != null ? String(d.topic) : null, target: d.username != null ? String(d.username) : null }];
+    return [{ time, action, who, system: null, topic: d.topic != null ? String(d.topic) : null, target: d.username != null ? String(d.username) : null, ...envRow }];
   }
   const target = d.username != null ? String(d.username) : null;
-  return [{ time, action, who, system, topic, target }];
+  return [{ time, action, who, system, topic, target, ...envRow }];
 }
 
 // GET /api/audit-log — entries from audit.log and optionally gen.auditLogPath (CLI). Optional from, to YYYY-MM-DD in GMT+7.
 app.get('/api/audit-log', (req, res) => {
   if (!config) try { loadConfig(); } catch (_) {}
-  const dataDir = getDataDir();
+  const dataDir = getDataDir(req);
   const from = (req.query.from || '').trim();
   const to = (req.query.to || '').trim();
   let raw = [];
@@ -1603,7 +1665,8 @@ app.get('/api/audit-log', (req, res) => {
       } catch (_) {}
     }
   }
-  if (config && config.gen && config.gen.auditLogPath) {
+  const stAudit = getEnvironmentsState();
+  if (config && config.gen && config.gen.auditLogPath && !stAudit.active) {
     const extraPath = path.resolve(config.gen.auditLogPath);
     if (fs.existsSync(extraPath) && fs.statSync(extraPath).isFile()) {
       try {
@@ -1645,7 +1708,7 @@ function sweepEncFilesFromDir(dir) {
 
 // GET /api/download-history — by day (only days with activity), with download links. Includes packs from download-history.json (web) and sweep of user_output / downloadDir (CLI).
 app.get('/api/download-history', (req, res) => {
-  const dataDir = getDataDir();
+  const dataDir = getDataDir(req);
   let list = [];
   if (dataDir) {
     const filePath = path.join(dataDir, 'download-history.json');
@@ -1662,7 +1725,11 @@ app.get('/api/download-history', (req, res) => {
       const g = config.gen || {};
       const baseDir = g.baseDir ? path.resolve(g.baseDir) : null;
       const downloadDir = g.downloadDir ? path.resolve(g.downloadDir) : null;
-      for (const dir of [downloadDir, baseDir ? path.join(baseDir, 'user_output') : null, baseDir].filter(Boolean)) {
+      const envKey = getPerEnvironmentStorageKey(req);
+      const sweepDirs = envKey && baseDir
+        ? [path.join(baseDir, 'user_output', envKey)]
+        : [downloadDir, baseDir ? path.join(baseDir, 'user_output') : null, baseDir].filter(Boolean);
+      for (const dir of sweepDirs) {
         for (const item of sweepEncFilesFromDir(dir)) {
           if (item.filename && !seen.has(item.filename.toLowerCase())) {
             seen.add(item.filename.toLowerCase());
@@ -1716,8 +1783,13 @@ app.get('/api/topics', (req, res) => {
       setupPageUrl: `${clientFacingBaseUrl(req)}/setup.html`,
     });
   }
-  const { scriptPath, adminConfig, bootstrap } = getKafkaTopicsEnv(req);
   const topicsSetupUrl = `${clientFacingBaseUrl(req)}/setup.html`;
+  let scriptPath; let adminConfig; let bootstrap;
+  try {
+    ({ scriptPath, adminConfig, bootstrap } = getKafkaTopicsEnv(req));
+  } catch (e) {
+    return res.status(503).json({ ok: false, error: e.message, setupPageUrl: topicsSetupUrl });
+  }
   runShellScript(scriptPath, ['--bootstrap-server', bootstrap, '--command-config', adminConfig, '--list'], {}, req)
     .then(({ code, stdout, stderr }) => {
       const topics = (stdout || '').split('\n').map((t) => t.trim()).filter(Boolean);
@@ -1763,7 +1835,12 @@ app.post('/api/create-topic', (req, res) => {
   if (errors.length) return res.status(400).json({ ok: false, errors });
 
   const topicName = String(topic).trim();
-  const { scriptPath, adminConfig, bootstrap } = getKafkaTopicsEnv(req);
+  let scriptPath; let adminConfig; let bootstrap;
+  try {
+    ({ scriptPath, adminConfig, bootstrap } = getKafkaTopicsEnv(req));
+  } catch (e) {
+    return res.status(503).json({ ok: false, error: e.message });
+  }
   const args = [
     '--create',
     '--topic', topicName,
@@ -1805,7 +1882,12 @@ app.get('/api/list-acls', (req, res) => {
   const err = validateSafeName(username, 'username', MAX_USERNAME_LEN);
   if (err) return res.status(400).json({ ok: false, error: err });
   if (!username) return res.status(400).json({ ok: false, error: 'username required' });
-  const { kafkaAclsPath, adminConfig, bootstrap } = getKafkaTopicsEnv(req);
+  let kafkaAclsPath; let adminConfig; let bootstrap;
+  try {
+    ({ kafkaAclsPath, adminConfig, bootstrap } = getKafkaTopicsEnv(req));
+  } catch (e) {
+    return res.status(503).json({ ok: false, error: e.message });
+  }
   const args = ['--bootstrap-server', bootstrap, '--command-config', adminConfig, '--list', '--principal', `User:${username}`];
   runShellScript(kafkaAclsPath, args, {}, req)
     .then(({ code, stdout, stderr }) => {
@@ -2218,6 +2300,60 @@ function getGenCwd() {
   return dir;
 }
 
+const lastPackDirByEnvKey = new Map();
+
+function packStorageKey(req) {
+  return getPerEnvironmentStorageKey(req) || '_default';
+}
+
+function setLastPackDir(req, packDir) {
+  if (!packDir || typeof packDir !== 'string') return;
+  try {
+    lastPackDirByEnvKey.set(packStorageKey(req), path.resolve(packDir.trim()));
+  } catch (_) {}
+}
+
+function getLastPackDir(req) {
+  return lastPackDirByEnvKey.get(packStorageKey(req)) || null;
+}
+
+/** Ordered dirs to resolve .enc packs (download API, resolvePackFilePath, download-check). */
+function getPackLookupDirectories(req) {
+  if (!config) try { loadConfig(); } catch (_) { return [path.resolve('.')]; }
+  const g = config.gen || {};
+  const scriptDir = path.resolve(path.dirname(g.scriptPath || ''));
+  const baseDir = path.resolve(g.baseDir || scriptDir || '.');
+  const downloadDir = g.downloadDir ? path.resolve(g.downloadDir) : null;
+  const genCwd = getGenCwd();
+  const out = [];
+  const push = (d) => {
+    if (d && typeof d === 'string' && !out.includes(d)) out.push(d);
+  };
+  const lp = getLastPackDir(req);
+  if (lp) push(lp);
+  const envKey = getPerEnvironmentStorageKey(req);
+  if (envKey) {
+    push(path.join(baseDir, 'user_output', envKey));
+    if (genCwd) push(genCwd);
+    if (downloadDir) {
+      const flat = path.join(baseDir, 'user_output');
+      if (downloadDir !== flat) push(downloadDir);
+    }
+    push(scriptDir);
+    push(baseDir);
+    if (out.length === 0) push(path.resolve('.'));
+    return out;
+  }
+  if (genCwd) push(genCwd);
+  if (downloadDir) push(downloadDir);
+  push(scriptDir);
+  push(path.join(scriptDir, 'user_output'));
+  push(baseDir);
+  push(path.join(baseDir, 'user_output'));
+  if (out.length === 0) push(path.resolve('.'));
+  return out;
+}
+
 // GET /api/download/:filename — serve generated .enc file (path traversal safe)
 // gen.sh creates the file in its cwd; we look in the same dir we use for runGenStream first
 app.get('/api/download/:filename', (req, res) => {
@@ -2231,17 +2367,7 @@ app.get('/api/download/:filename', (req, res) => {
   if (!filename || filename !== raw || filename.includes('..')) {
     return res.status(400).json({ ok: false, error: 'Invalid filename' });
   }
-  const genCwd = getGenCwd();
-  const scriptDir = path.resolve(path.dirname(config.gen?.scriptPath || ''));
-  const baseDir = path.resolve(config.gen?.baseDir || scriptDir || '.');
-  const downloadDir = config.gen?.downloadDir ? path.resolve(config.gen.downloadDir) : null;
-  const candidates = [];
-  if (lastPackDir && path.isAbsolute(lastPackDir)) candidates.push(lastPackDir);
-  if (genCwd && !candidates.includes(genCwd)) candidates.push(genCwd);
-  if (downloadDir && !candidates.includes(downloadDir)) candidates.push(downloadDir);
-  if (scriptDir && !candidates.includes(scriptDir)) candidates.push(scriptDir);
-  if (baseDir && !candidates.includes(baseDir)) candidates.push(baseDir);
-  if (candidates.length === 0) candidates.push(path.resolve('.'));
+  const candidates = getPackLookupDirectories(req);
   let fullPath = null;
   for (const dir of candidates) {
     const fp = path.resolve(dir, filename);
@@ -2277,19 +2403,9 @@ app.get('/api/download-check', (req, res) => {
   if (!filename || filename !== raw || filename.includes('..')) {
     return res.status(400).json({ ok: false, error: 'Invalid or missing filename' });
   }
-  const genCwd = getGenCwd();
-  const scriptDir = path.resolve(path.dirname(config.gen?.scriptPath || ''));
-  const baseDir = path.resolve(config.gen?.baseDir || scriptDir || '.');
-  const downloadDir = config.gen?.downloadDir ? path.resolve(config.gen.downloadDir) : null;
-  const candidates = [];
-  if (lastPackDir && path.isAbsolute(lastPackDir)) candidates.push(lastPackDir);
-  if (genCwd && !candidates.includes(genCwd)) candidates.push(genCwd);
-  if (downloadDir && !candidates.includes(downloadDir)) candidates.push(downloadDir);
-  if (scriptDir && !candidates.includes(scriptDir)) candidates.push(scriptDir);
-  if (baseDir && !candidates.includes(baseDir)) candidates.push(baseDir);
+  const candidates = getPackLookupDirectories(req);
   const nodeCwd = path.resolve(process.cwd());
   if (nodeCwd && !candidates.includes(nodeCwd)) candidates.push(nodeCwd);
-  if (candidates.length === 0) candidates.push(path.resolve('.'));
   const checked = [];
   let foundAt = null;
   for (const dir of candidates) {
@@ -2298,13 +2414,14 @@ app.get('/api/download-check', (req, res) => {
     checked.push({ dir, fullPath, exists });
     if (exists && !foundAt) foundAt = fullPath;
   }
-  const hint = !foundAt && !lastPackDir
+  const lpCheck = getLastPackDir(req);
+  const hint = !foundAt && !lpCheck
     ? 'ถ้า lastPackDir เป็น (none): สคริปต์บน server ยังไม่ส่ง GEN_PACK_DIR — ให้อัปเดต gen.sh ให้มีบรรทัด echo GEN_PACK_DIR=$(pwd) ก่อน GEN_PACK_FILE แล้ว restart server. หรือบนเครื่องที่รัน: ls -la /opt/kafka-usermgmt/user_output/*.enc เพื่อดูว่าไฟล์อยู่ที่ไหน'
     : null;
   return res.json({
     ok: true,
     filename,
-    lastPackDir: lastPackDir || null,
+    lastPackDir: lpCheck || null,
     candidates: checked,
     foundAt,
     message: foundAt ? 'ไฟล์เจอที่: ' + foundAt : 'ไม่เจอไฟล์ใน path ใดที่ลอง (ดู candidates ด้านบน)',
@@ -2312,11 +2429,8 @@ app.get('/api/download-check', (req, res) => {
   });
 });
 
-// Last directory where add-user wrote the .enc file (from GEN_PACK_DIR); used by download so path matches.
-let lastPackDir = null;
-
 // Parse gen.sh stdout for GEN_PACK_DIR=, GEN_PACK_FILE=, GEN_PACK_NAME=, GEN_VALIDATE_PASSED= (one per line)
-function parsePackFromStdout(stdout) {
+function parsePackFromStdout(stdout, req) {
   let packFile = '';
   let packName = '';
   let packDir = '';
@@ -2337,7 +2451,7 @@ function parsePackFromStdout(stdout) {
     }
   }
   if (!packName && packFile) packName = packFile.replace(/\.enc$/, '');
-  if (packDir) lastPackDir = path.resolve(packDir);
+  if (packDir) setLastPackDir(req, packDir);
   return { packFile, packName, verificationOutcome };
 }
 
@@ -2355,23 +2469,11 @@ function buildDecryptInstructions(packFile, packName) {
 }
 
 // Returns absolute path if pack file exists in any candidate dir, else null (so we can fail add-user when file missing)
-function resolvePackFilePath(packFile) {
+function resolvePackFilePath(packFile, req) {
   if (!packFile || !config) return null;
   const filename = path.basename(packFile);
   if (filename !== packFile || filename.includes('..')) return null;
-  const scriptDir = path.resolve(path.dirname(config.gen?.scriptPath || ''));
-  const baseDir = path.resolve(config.gen?.baseDir || scriptDir || '.');
-  const downloadDir = config.gen?.downloadDir ? path.resolve(config.gen.downloadDir) : null;
-  const candidates = [];
-  if (lastPackDir && path.isAbsolute(lastPackDir)) candidates.push(lastPackDir);
-  if (downloadDir && !candidates.includes(downloadDir)) candidates.push(downloadDir);
-  if (scriptDir && !candidates.includes(scriptDir)) candidates.push(scriptDir);
-  const userOutputScript = path.join(scriptDir, 'user_output');
-  if (userOutputScript && !candidates.includes(userOutputScript)) candidates.push(userOutputScript);
-  if (baseDir && !candidates.includes(baseDir)) candidates.push(baseDir);
-  const userOutputBase = path.join(baseDir, 'user_output');
-  if (userOutputBase && !candidates.includes(userOutputBase)) candidates.push(userOutputBase);
-  if (candidates.length === 0) candidates.push(path.resolve('.'));
+  const candidates = getPackLookupDirectories(req);
   for (const dir of candidates) {
     const fp = path.resolve(dir, filename);
     if ((fp.startsWith(dir + path.sep) || fp === dir) && fs.existsSync(fp) && fs.statSync(fp).isFile()) return fp;
@@ -2379,9 +2481,9 @@ function resolvePackFilePath(packFile) {
   return null;
 }
 
-function buildAddUserPayload(stdout) {
-  const { packFile, packName, verificationOutcome } = parsePackFromStdout(stdout);
-  const exists = packFile ? resolvePackFilePath(packFile) : null;
+function buildAddUserPayload(stdout, req) {
+  const { packFile, packName, verificationOutcome } = parsePackFromStdout(stdout, req);
+  const exists = packFile ? resolvePackFilePath(packFile, req) : null;
   const ok = !!exists;
   const verificationPassed = verificationOutcome === 'pass';
   const verificationSkipped = verificationOutcome === 'skipped';
@@ -2506,7 +2608,7 @@ app.post('/api/add-user', (req, res) => {
             tasks,
           }) + '\n');
         } else {
-          const payload = buildAddUserPayload(stdout);
+          const payload = buildAddUserPayload(stdout, req);
           appendAuditLog(req, 'add-user', {
             username: String(username || '').trim(),
             systemName: String(systemName || '').trim(),
@@ -2541,7 +2643,7 @@ app.post('/api/add-user', (req, res) => {
         });
         return;
       }
-      const payload = buildAddUserPayload(stdout);
+      const payload = buildAddUserPayload(stdout, req);
       appendAuditLog(req, 'add-user', {
         username: String(username || '').trim(),
         systemName: String(systemName || '').trim(),
