@@ -37,6 +37,21 @@ function collectOcContexts(master) {
   return [...out].filter(Boolean);
 }
 
+/**
+ * When environments.enabled and sites are defined, master.fallbackSites is a mirror of the same OCP rows —
+ * collecting from both would falsely flag "duplicate" pairs (matches verify-golive.sh jq merge + unique).
+ */
+function masterEnvironmentsDefineOcSites(master) {
+  const env = master.environments;
+  if (!env || env.enabled !== true || !Array.isArray(env.environments)) return false;
+  for (const e of env.environments) {
+    if (!e || e.enabled === false) continue;
+    if (Array.isArray(e.sites) && e.sites.length) return true;
+    if (e.ocContext && e.namespace) return true;
+  }
+  return false;
+}
+
 /** Every (context, namespace) pair — duplicate pair is an error; same context with different namespaces is OK. */
 function collectOcContextNamespacePairs(master) {
   const pairs = [];
@@ -45,13 +60,9 @@ function collectOcContextNamespacePairs(master) {
     const n = String(ns || '').trim();
     if (c && n) pairs.push(`${c}\n${n}`);
   };
-  if (Array.isArray(master.fallbackSites)) {
-    for (const s of master.fallbackSites) {
-      if (s) add(s.ocContext, s.namespace);
-    }
-  }
-  const env = master.environments;
-  if (env && env.enabled === true && Array.isArray(env.environments)) {
+  const fromEnvs = masterEnvironmentsDefineOcSites(master);
+  if (fromEnvs) {
+    const env = master.environments;
     for (const e of env.environments) {
       if (!e || e.enabled === false) continue;
       if (Array.isArray(e.sites)) {
@@ -61,6 +72,10 @@ function collectOcContextNamespacePairs(master) {
       } else {
         add(e.ocContext, e.namespace);
       }
+    }
+  } else if (Array.isArray(master.fallbackSites)) {
+    for (const s of master.fallbackSites) {
+      if (s) add(s.ocContext, s.namespace);
     }
   }
   return pairs;
@@ -611,5 +626,6 @@ async function runSetupPreview(body, configAbsPath, options) {
 module.exports = {
   runSetupPreview,
   collectOcContexts,
+  collectOcContextNamespacePairs,
   redactSecrets,
 };
