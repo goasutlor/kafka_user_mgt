@@ -1,0 +1,21 @@
+---
+description: After push that triggers Docker GHCR CI, check workflow and inform user when done.
+globs:
+alwaysApply: false
+---
+
+# Docker push / GHCR — check build and inform
+
+When the user **pushes** to `main` / `master` (or otherwise triggers `.github/workflows/docker-ghcr.yml`) and asks to **wait for the build**, **check when done**, or **inform when finished**:
+
+1. **If the session has network + `gh` available** (and repo is `goasutlor/kafka_user_mgt` or user’s fork):
+   - Run `gh run watch` on the latest run for workflow `docker-ghcr.yml` on the pushed branch, **or** run the project script:
+     - Bash/WSL: `scripts/wait-ghcr-build.sh [branch]`
+     - PowerShell: `.\scripts\wait-ghcr-build.ps1 [-Branch main]`
+   - Report **success** (include `docker pull ghcr.io/goasutlor/kafka_user_mgt:latest`) or **failure** (suggest `gh run view … --log-failed` or link to Actions).
+
+2. **If `gh` is not available**: give the Actions URL  
+   `https://github.com/goasutlor/kafka_user_mgt/actions/workflows/docker-ghcr.yml`  
+   and state that the assistant cannot poll after the chat ends unless the user runs the wait script locally.
+
+3. **Parity**: This is about **CI notification / verification**, not CLI vs GUI product features — no need to duplicate in `gen.sh` or the web app.

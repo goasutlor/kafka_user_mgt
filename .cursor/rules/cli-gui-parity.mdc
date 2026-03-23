@@ -1,0 +1,27 @@
+---
+description: CLI and GUI must have 100% feature parity in this project
+alwaysApply: true
+---
+
+# CLI / GUI Parity (100%)
+
+In this project (**gen-kafka-user** / Confluent Kafka User Management), every feature and function must exist in **both**:
+
+1. **CLI** — `gen.sh` (interactive menu + non-interactive via env, e.g. `GEN_MODE`, `GEN_ACTION`)
+2. **GUI / API** — Web UI (web-ui-mockup) and Node backend (webapp/server)
+
+## Rule
+
+- When you **add a new feature**, implement it in **both**:
+  - In **gen.sh**: add a menu option and/or a `GEN_MODE` (non-interactive) branch with the same behaviour and validation.
+  - In **Web**: add the corresponding API route(s) and UI (pages/wizard steps).
+- When you **change behaviour** (validation, limits, error messages), keep **gen.sh** and the **API/UI** in sync so they stay 100% aligned.
+- **Validation** (e.g. topic name, username, partitions) must match: same allowed characters, same min/max limits, same error semantics.
+
+## Reference
+
+- CLI entry: `gen.sh` (modes 1=Add user, 2=Test user, 3=User management, 4=Create topic; non-interactive via `GEN_NONINTERACTIVE=1` + `GEN_MODE`).
+- Web backend: `webapp/server/index.js` (API routes and kafka-topics.sh / gen.sh invocation).
+- Web frontend: `web-ui-mockup/index.html` (pages and wizards).
+
+Do not add or change a feature in only one of CLI or GUI; always do both in parallel.

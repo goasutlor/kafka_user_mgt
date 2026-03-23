@@ -583,6 +583,187 @@
     .acl-matrix-table { box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06); border-radius: 8px; overflow: hidden; }
     .acl-matrix-table tbody tr:hover { background: var(--active-bg); }
     .error-topic-hint { margin-top: 12px; padding: 12px 14px; background: #fff8e6; border: 1px solid #d4a574; border-radius: 8px; font-size: 13px; line-height: 1.55; color: var(--text); }
+
+    /* ── ACL Designer — full-width card layout ── */
+    .acl-role-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 12px;
+      margin-bottom: 8px;
+    }
+    .acl-role-card {
+      background: var(--content-bg);
+      border: 2px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 16px;
+      cursor: pointer;
+      transition: border-color .15s, background .15s, box-shadow .15s;
+      text-align: left;
+    }
+    .acl-role-card:hover { border-color: #93c5fd; background: #f0f9ff; }
+    .acl-role-card.active {
+      border-color: var(--btn-primary);
+      background: rgba(14, 165, 233, .10);
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, .12);
+    }
+    .acl-role-card .acl-role-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; color: var(--text); }
+    .acl-role-card .acl-role-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; line-height: 1.45; }
+    .acl-role-badge {
+      display: inline-block;
+      font-size: 11px;
+      font-weight: 600;
+      padding: 2px 10px;
+      border-radius: 12px;
+      line-height: 1.5;
+    }
+    .acl-badge-write  { background: #dcfce7; color: #166534; }
+    .acl-badge-read   { background: #dbeafe; color: #1e40af; }
+    .acl-badge-rw     { background: #e0e7ff; color: #3730a3; }
+    .acl-badge-txn    { background: #fef3c7; color: #92400e; }
+    .acl-badge-meta   { background: #f1f5f9; color: #475569; }
+    .acl-badge-int    { background: #cffafe; color: #0e7490; }
+    .acl-badge-admin  { background: #fee2e2; color: #991b1b; }
+
+    /* Resource cards */
+    .acl-resource-card {
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 20px 24px;
+      margin-bottom: 16px;
+      background: var(--content-bg);
+    }
+    .acl-resource-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 16px;
+      gap: 8px;
+    }
+    .acl-resource-header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .acl-resource-type-select {
+      font-weight: 700;
+      font-size: 13px;
+      text-transform: uppercase;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: #f8fafc;
+      cursor: pointer;
+    }
+    .acl-resource-name-input {
+      font-family: ui-monospace, 'SF Mono', 'Consolas', monospace;
+      font-size: 13px;
+      padding: 6px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      min-width: 160px;
+      max-width: 280px;
+    }
+    .acl-resource-name-fixed {
+      font-family: ui-monospace, 'SF Mono', 'Consolas', monospace;
+      font-size: 13px;
+      padding: 6px 10px;
+      background: #f1f5f9;
+      border-radius: 6px;
+      color: var(--text-muted);
+    }
+    .acl-resource-pattern-select {
+      font-size: 12px;
+      font-weight: 600;
+      padding: 4px 10px;
+      border-radius: 6px;
+      background: #f1f5f9;
+      color: #475569;
+      cursor: pointer;
+      border: 1px solid var(--border);
+    }
+    .acl-resource-sep { color: var(--text-muted); font-size: 14px; }
+    .acl-resource-remove {
+      font-size: 20px;
+      line-height: 1;
+      padding: 4px 10px;
+      border-radius: 6px;
+      color: var(--text-muted);
+      background: none;
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: color .15s, border-color .15s;
+    }
+    .acl-resource-remove:hover { color: var(--danger); border-color: var(--danger); }
+
+    /* Operation tiles */
+    .acl-ops-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(195px, 1fr));
+      gap: 10px;
+    }
+    .acl-op-tile {
+      border: 2px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      cursor: pointer;
+      transition: border-color .15s, background .15s;
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      user-select: none;
+      background: #f8fafc;
+    }
+    .acl-op-tile:hover { border-color: #93c5fd; }
+    .acl-op-check {
+      width: 22px;
+      height: 22px;
+      border-radius: 6px;
+      border: 2px solid #cbd5e1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      font-size: 13px;
+      font-weight: 700;
+      color: #fff;
+      transition: background .15s, border-color .15s;
+      margin-top: 1px;
+    }
+    .acl-op-info { flex: 1; min-width: 0; }
+    .acl-op-name { font-weight: 700; font-size: 13px; margin-bottom: 2px; color: #64748b; }
+    .acl-op-desc { font-size: 11px; color: #94a3b8; line-height: 1.35; }
+
+    .acl-op-tile.op-active-blue   { background: #eff6ff; border-color: #93c5fd; }
+    .acl-op-tile.op-active-blue   .acl-op-check { background: #3b82f6; border-color: #3b82f6; }
+    .acl-op-tile.op-active-blue   .acl-op-name  { color: #1e40af; }
+    .acl-op-tile.op-active-blue   .acl-op-desc  { color: #3b82f6; }
+
+    .acl-op-tile.op-active-green  { background: #f0fdf4; border-color: #86efac; }
+    .acl-op-tile.op-active-green  .acl-op-check { background: #22c55e; border-color: #22c55e; }
+    .acl-op-tile.op-active-green  .acl-op-name  { color: #166534; }
+    .acl-op-tile.op-active-green  .acl-op-desc  { color: #16a34a; }
+
+    .acl-op-tile.op-active-purple { background: #f5f3ff; border-color: #c4b5fd; }
+    .acl-op-tile.op-active-purple .acl-op-check { background: #8b5cf6; border-color: #8b5cf6; }
+    .acl-op-tile.op-active-purple .acl-op-name  { color: #5b21b6; }
+    .acl-op-tile.op-active-purple .acl-op-desc  { color: #7c3aed; }
+
+    .acl-op-tile.op-active-amber  { background: #fffbeb; border-color: #fcd34d; }
+    .acl-op-tile.op-active-amber  .acl-op-check { background: #f59e0b; border-color: #f59e0b; }
+    .acl-op-tile.op-active-amber  .acl-op-name  { color: #92400e; }
+    .acl-op-tile.op-active-amber  .acl-op-desc  { color: #d97706; }
+
+    .acl-op-tile.op-active-red    { background: #fef2f2; border-color: #fca5a5; }
+    .acl-op-tile.op-active-red    .acl-op-check { background: #ef4444; border-color: #ef4444; }
+    .acl-op-tile.op-active-red    .acl-op-name  { color: #991b1b; }
+    .acl-op-tile.op-active-red    .acl-op-desc  { color: #dc2626; }
+
+    .acl-op-tile.op-active-teal   { background: #f0fdfa; border-color: #5eead4; }
+    .acl-op-tile.op-active-teal   .acl-op-check { background: #14b8a6; border-color: #14b8a6; }
+    .acl-op-tile.op-active-teal   .acl-op-name  { color: #115e59; }
+    .acl-op-tile.op-active-teal   .acl-op-desc  { color: #0d9488; }
+
     .progress-wrap {
       margin-top: 1rem;
       display: none;
@@ -998,8 +1179,8 @@
           <h3>Permission (ACL)</h3>
           <p class="step-desc">Role template + Resource + Operation — <strong>ชุดเดียวกับ</strong> Add ACL to existing user. Topic จากขั้นก่อนจะถูก sync เข้า topic ตัวแรกเมื่อเข้าขั้นนี้ (แก้ไขได้).</p>
           <div class="form-group">
-            <label>Role Template (Production-grade)</label>
-            <div id="acl-role-grid-add" class="users-list" style="display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:10px;"></div>
+            <label>เลือก Role Template (Production-grade)</label>
+            <div id="acl-role-grid-add" class="acl-role-grid"></div>
           </div>
           <div class="form-group">
             <label>Identity fields</label>
@@ -1179,8 +1360,8 @@
           <h3>Permission (ACL)</h3>
           <p class="step-desc">Role template + Resource + Operation — <strong>ชุดเดียวกับ</strong> Add new user / Add ACL to existing user. Topic จากขั้นก่อนจะ sync เข้า topic ตัวแรก.</p>
           <div class="form-group">
-            <label>Role Template (Production-grade)</label>
-            <div id="acl-role-grid-ct" class="users-list" style="display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:10px;"></div>
+            <label>เลือก Role Template (Production-grade)</label>
+            <div id="acl-role-grid-ct" class="acl-role-grid"></div>
           </div>
           <div class="form-group">
             <label>Identity fields</label>
@@ -1281,8 +1462,8 @@
         <div id="topics-list-box-acl-existing" class="topics-list" style="display:block; margin-top:6px;"></div>
       </div>
       <div class="form-group">
-        <label>Role Template (Production-grade)</label>
-        <div id="acl-role-grid-exist" class="users-list" style="display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:10px;"></div>
+        <label>เลือก Role Template (Production-grade)</label>
+        <div id="acl-role-grid-exist" class="acl-role-grid"></div>
       </div>
       <div class="form-group">
         <label>Identity fields</label>
@@ -2951,15 +3132,44 @@
           ]
         };
         var ACL_ROLE_CARDS = [
-          { key: 'producer', title: 'Producer', badge: 'Write only', desc: 'Service ที่ส่งข้อมูลเข้า topic เท่านั้น' },
-          { key: 'consumer', title: 'Consumer', badge: 'Read only · ใช้บ่อยที่สุด', desc: 'Service ที่อ่านข้อมูลผ่าน consumer group' },
-          { key: 'prosumer', title: 'Prosumer', badge: 'Read + Write', desc: 'อ่านและเขียน เช่น Stream processor' },
-          { key: 'idempotent', title: 'Idempotent Producer', badge: 'Write + Txn', desc: 'Producer ที่ต้องการ exactly-once' },
-          { key: 'monitor', title: 'Monitor / Audit', badge: 'Read-meta only', desc: 'Observability tools, Kafka UI' },
-          { key: 'connector', title: 'Kafka Connect', badge: 'Read + Write + Internal', desc: 'Source/Sink connector' },
-          { key: 'streams', title: 'Kafka Streams App', badge: 'Write + Create + Group', desc: 'ต้องสร้าง internal changelog/repartition' },
-          { key: 'admin', title: 'Topic Admin', badge: 'Full topic admin', desc: 'Platform/DevOps only' }
+          { key: 'producer', title: 'Producer', badge: 'Write only', bc: 'acl-badge-write', desc: 'Service ที่ส่งข้อมูลเข้า topic เท่านั้น ไม่ต้องอ่าน' },
+          { key: 'consumer', title: 'Consumer', badge: 'Read only', bc: 'acl-badge-read', desc: 'Service ที่อ่านข้อมูลผ่าน consumer group' },
+          { key: 'prosumer', title: 'Prosumer', badge: 'Read + Write', bc: 'acl-badge-rw', desc: 'อ่านและเขียน เช่น Stream processor (Kafka Streams, Flink)' },
+          { key: 'idempotent', title: 'Idempotent Producer', badge: 'Write + Txn', bc: 'acl-badge-txn', desc: 'Producer ที่ต้องการ exactly-once หรือ transactional' },
+          { key: 'monitor', title: 'Monitor / Audit', badge: 'Read-meta only', bc: 'acl-badge-meta', desc: 'Observability tools, Kafka UI, audit logging เท่านั้น' },
+          { key: 'connector', title: 'Kafka Connect', badge: 'Read + Write + Internal', bc: 'acl-badge-int', desc: 'Source/Sink connector ต้องการ internal topics ด้วย' },
+          { key: 'streams', title: 'Kafka Streams App', badge: 'Write + Create + Group', bc: 'acl-badge-int', desc: 'ต้องการสร้าง internal changelog + repartition topics' },
+          { key: 'admin', title: 'Topic Admin', badge: 'Full topic admin', bc: 'acl-badge-admin', desc: 'DevOps/Platform team สร้าง/ลบ/แก้ config topic' }
         ];
+        var ACL_OP_META = {
+          topic: {
+            READ: { d: 'อ่าน/consume messages', c: 'blue' },
+            WRITE: { d: 'เขียน/produce messages', c: 'green' },
+            DESCRIBE: { d: 'ดู partition metadata', c: 'purple' },
+            DESCRIBE_CONFIGS: { d: 'ดู config ของ topic', c: 'purple' },
+            CREATE: { d: 'สร้าง topic', c: 'amber' },
+            DELETE: { d: 'ลบ topic', c: 'red' },
+            ALTER: { d: 'แก้ไข topic', c: 'amber' },
+            ALTER_CONFIGS: { d: 'แก้ config', c: 'amber' }
+          },
+          group: {
+            READ: { d: 'Join consumer group', c: 'blue' },
+            DESCRIBE: { d: 'Monitor lag', c: 'purple' },
+            DELETE: { d: 'ลบ consumer group', c: 'red' }
+          },
+          cluster: {
+            DESCRIBE: { d: 'ดู cluster info', c: 'purple' },
+            IDEMPOTENT_WRITE: { d: 'exactly-once write', c: 'teal' },
+            CREATE: { d: 'สร้าง topic (cluster)', c: 'amber' },
+            ALTER: { d: 'แก้ไข cluster', c: 'amber' },
+            CLUSTER_ACTION: { d: 'internal replication', c: 'purple' },
+            DESCRIBE_CONFIGS: { d: 'ดู broker config', c: 'purple' }
+          },
+          'transactional-id': {
+            WRITE: { d: 'เขียน transactional', c: 'green' },
+            DESCRIBE: { d: 'ดู txn metadata', c: 'purple' }
+          }
+        };
         var ACL_DESIGNER_SUFFIXES = ['add', 'ct', 'exist'];
         var ACL_PAGE_META = {
           add: { usernameId: 'username', topicId: 'topic' },
@@ -3000,7 +3210,11 @@
           var st = aclDesignerStates[suffix];
           grid.innerHTML = ACL_ROLE_CARDS.map(function (c) {
             var active = c.key === st.selectedRole;
-            return '<button type="button" class="btn btn-secondary acl-role-card" data-role="' + c.key + '" style="text-align:left; border:' + (active ? '2px solid var(--primary)' : '1px solid var(--border)') + '; background:' + (active ? 'rgba(55,138,221,0.14)' : 'var(--card-bg)') + ';"><strong>' + escapeHtml(c.title) + '</strong><br><span class="hint">' + escapeHtml(c.desc) + '</span><br><span class="hint" style="font-weight:600;">' + escapeHtml(c.badge) + '</span></button>';
+            return '<div class="acl-role-card' + (active ? ' active' : '') + '" data-role="' + c.key + '">'
+              + '<div class="acl-role-title">' + escapeHtml(c.title) + '</div>'
+              + '<div class="acl-role-desc">' + escapeHtml(c.desc) + '</div>'
+              + '<span class="acl-role-badge ' + (c.bc || '') + '">' + escapeHtml(c.badge) + '</span>'
+              + '</div>';
           }).join('');
           grid.querySelectorAll('.acl-role-card').forEach(function (btn) {
             btn.addEventListener('click', function () {
@@ -3072,18 +3286,34 @@
           var preview = document.getElementById('acl-command-preview-' + suffix);
           if (!wrap || !preview) return;
           var st = aclDesignerStates[suffix];
+          var typeOpts = [
+            { v: 'topic', l: 'TOPIC' }, { v: 'group', l: 'GROUP' },
+            { v: 'cluster', l: 'CLUSTER' }, { v: 'transactional-id', l: 'TRANSACTIONAL_ID' }
+          ];
           wrap.innerHTML = st.resources.map(function (r, idx) {
             var ops = ACL_OPS_BY_TYPE[r.type] || [];
-            var opHtml = ops.map(function (op) {
-              var checked = (r.ops || []).map(normalizeAclOperation).indexOf(op) !== -1;
-              return '<label style="display:inline-flex; align-items:center; gap:6px; margin-right:10px; opacity:' + (checked ? '1' : '.65') + '; text-decoration:' + (checked ? 'none' : 'line-through') + ';"><input type="checkbox" data-acl-suf="' + suffix + '" data-acl-op="' + op + '" data-acl-idx="' + idx + '" ' + (checked ? 'checked' : '') + ' />' + op + '</label>';
+            var activeOps = (r.ops || []).map(normalizeAclOperation);
+            var tSel = '<select class="acl-resource-type-select" data-acl-suf="' + suffix + '" data-acl-type="' + idx + '">'
+              + typeOpts.map(function (t) { return '<option value="' + t.v + '"' + (r.type === t.v ? ' selected' : '') + '>' + t.l + '</option>'; }).join('') + '</select>';
+            var nameEl = r.type === 'cluster'
+              ? '<code class="acl-resource-name-fixed">kafka-cluster</code>'
+              : '<input type="text" class="acl-resource-name-input" data-acl-suf="' + suffix + '" data-acl-name="' + idx + '" value="' + escapeHtml(r.name || '') + '" placeholder="Resource name" />';
+            var pSel = '<select class="acl-resource-pattern-select" data-acl-suf="' + suffix + '" data-acl-pattern="' + idx + '">'
+              + '<option value="LITERAL"' + ((r.pattern || 'LITERAL') === 'LITERAL' ? ' selected' : '') + '>LITERAL</option>'
+              + '<option value="PREFIXED"' + ((r.pattern || '') === 'PREFIXED' ? ' selected' : '') + '>PREFIXED</option></select>';
+            var opTiles = ops.map(function (op) {
+              var on = activeOps.indexOf(op) !== -1;
+              var m = (ACL_OP_META[r.type] || {})[op] || { d: op, c: 'blue' };
+              return '<div class="acl-op-tile' + (on ? ' op-active-' + m.c : '') + '" data-acl-suf="' + suffix + '" data-acl-idx="' + idx + '" data-acl-op="' + op + '">'
+                + '<div class="acl-op-check">' + (on ? '✓' : '') + '</div>'
+                + '<div class="acl-op-info"><div class="acl-op-name">' + op + '</div>'
+                + '<div class="acl-op-desc">' + escapeHtml(on ? m.d : 'ไม่ได้ใช้') + '</div></div></div>';
             }).join('');
-            return '<div style="border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px;">'
-              + '<div style="display:flex; gap:8px; margin-bottom:8px;">'
-              + '<select data-acl-suf="' + suffix + '" data-acl-type="' + idx + '"><option value="topic"' + (r.type === 'topic' ? ' selected' : '') + '>TOPIC</option><option value="group"' + (r.type === 'group' ? ' selected' : '') + '>GROUP</option><option value="cluster"' + (r.type === 'cluster' ? ' selected' : '') + '>CLUSTER</option><option value="transactional-id"' + (r.type === 'transactional-id' ? ' selected' : '') + '>TRANSACTIONAL_ID</option></select>'
-              + '<input type="text" data-acl-suf="' + suffix + '" data-acl-name="' + idx + '" value="' + escapeHtml(r.name || '') + '" placeholder="Resource name" ' + (r.type === 'cluster' ? 'disabled' : '') + ' />'
-              + '<select data-acl-suf="' + suffix + '" data-acl-pattern="' + idx + '"><option value="LITERAL"' + ((r.pattern || 'LITERAL') === 'LITERAL' ? ' selected' : '') + '>LITERAL</option><option value="PREFIXED"' + ((r.pattern || '') === 'PREFIXED' ? ' selected' : '') + '>PREFIXED</option></select>'
-              + '<button type="button" class="btn btn-secondary" data-acl-suf="' + suffix + '" data-acl-remove="' + idx + '">×</button></div><div>' + opHtml + '</div></div>';
+            return '<div class="acl-resource-card">'
+              + '<div class="acl-resource-header"><div class="acl-resource-header-left">'
+              + tSel + '<span class="acl-resource-sep">—</span>' + nameEl + pSel
+              + '</div><button type="button" class="acl-resource-remove" data-acl-suf="' + suffix + '" data-acl-remove="' + idx + '" title="Remove resource">×</button></div>'
+              + '<div class="acl-ops-grid">' + opTiles + '</div></div>';
           }).join('');
           preview.textContent = buildAclCommandsPreview(suffix) || '# No ACL command generated yet';
           var warningBox = document.getElementById('acl-warning-box-' + suffix);
@@ -3092,11 +3322,10 @@
             if (!ws.length) { warningBox.style.display = 'none'; warningBox.innerHTML = ''; }
             else { warningBox.style.display = 'block'; warningBox.innerHTML = '<div style="border:1px solid #d2a100; border-radius:8px; background:rgba(210,161,0,.08); padding:10px;">⚠ ' + ws.map(escapeHtml).join('<br>⚠ ') + '</div>'; }
           }
-          wrap.querySelectorAll('[data-acl-remove]').forEach(function (el) {
+          wrap.querySelectorAll('.acl-resource-remove').forEach(function (el) {
             el.addEventListener('click', function () {
               var suf = el.getAttribute('data-acl-suf');
-              var i = parseInt(el.getAttribute('data-acl-remove'), 10);
-              aclDesignerStates[suf].resources.splice(i, 1);
+              aclDesignerStates[suf].resources.splice(parseInt(el.getAttribute('data-acl-remove'), 10), 1);
               renderAclDesigner(suf);
             });
           });
@@ -3117,25 +3346,24 @@
               var i = parseInt(el.getAttribute('data-acl-name'), 10);
               aclDesignerStates[suf].resources[i].name = el.value;
               syncAclTopicFromFirstTopicResource(suf);
-              renderAclDesigner(suf);
+              if (preview) preview.textContent = buildAclCommandsPreview(suf) || '# No ACL command generated yet';
             });
           });
           wrap.querySelectorAll('[data-acl-pattern]').forEach(function (el) {
             el.addEventListener('change', function () {
               var suf = el.getAttribute('data-acl-suf');
-              var i = parseInt(el.getAttribute('data-acl-pattern'), 10);
-              aclDesignerStates[suf].resources[i].pattern = el.value === 'PREFIXED' ? 'PREFIXED' : 'LITERAL';
+              aclDesignerStates[suf].resources[parseInt(el.getAttribute('data-acl-pattern'), 10)].pattern = el.value === 'PREFIXED' ? 'PREFIXED' : 'LITERAL';
               renderAclDesigner(suf);
             });
           });
-          wrap.querySelectorAll('[data-acl-op]').forEach(function (el) {
-            el.addEventListener('change', function () {
+          wrap.querySelectorAll('.acl-op-tile[data-acl-op]').forEach(function (el) {
+            el.addEventListener('click', function () {
               var suf = el.getAttribute('data-acl-suf');
               var i = parseInt(el.getAttribute('data-acl-idx'), 10);
               var op = normalizeAclOperation(el.getAttribute('data-acl-op'));
               var arr = (aclDesignerStates[suf].resources[i].ops || []).map(normalizeAclOperation);
-              if (el.checked && arr.indexOf(op) === -1) arr.push(op);
-              if (!el.checked) arr = arr.filter(function (x) { return x !== op; });
+              if (arr.indexOf(op) !== -1) arr = arr.filter(function (x) { return x !== op; });
+              else arr.push(op);
               aclDesignerStates[suf].resources[i].ops = arr;
               renderAclDesigner(suf);
             });
