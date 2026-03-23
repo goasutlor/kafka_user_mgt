@@ -551,6 +551,14 @@ async function runSetupPreview(body, configAbsPath, options) {
           `Fix: merge kubeconfigs / oc login so each required name exists, or change environments fallbackSites/sites ocContext to match an existing NAME. ` +
           `Confirm on host (same file as container): KUBECONFIG="${kcEsc}" oc config get-contexts` +
           ` && KUBECONFIG="${kcEsc}" oc whoami --context '<name>'.`;
+        if (present.length === 1 && missing.length > 0) {
+          const sole = present[0];
+          const soleEsc = sole.replace(/"/g, '\\"');
+          diag +=
+            ` Common case: OpenShift created a long default NAME; your Portal still says cwdc-dev style aliases. ` +
+            `Either paste that exact NAME into each site's ocContext (allowed when namespaces differ per env), ` +
+            `or on the host: oc config rename-context "${soleEsc}" cwdc-dev (then oc login / merge for sit-uat if those are other clusters).`;
+        }
         if (gr.status !== 0) {
           const ge = ((gr.stderr || gr.stdout || '') + '').trim().slice(0, 220);
           diag += ` (oc config get-contexts failed: ${ge})`;
