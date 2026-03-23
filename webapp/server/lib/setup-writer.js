@@ -7,6 +7,7 @@ const {
   materializeKafkaConnectionFiles,
   sanitizeKafkaEnvIdForFile,
 } = require('./setup-kafka-files');
+const { shortEnvBadge } = require('./env-badge');
 
 /** Fixed names in master.config and on disk under {runtimeRoot}/configs/ */
 const DEFAULT_CLIENT_PROPS_FILE = 'kafka-client.properties';
@@ -201,10 +202,7 @@ function sanitizeEnvIdPart(s) {
 }
 
 function shortBadgeFromDisplayName(text) {
-  const t = String(text || '').trim();
-  if (!t) return 'ENV';
-  if (t.length <= 6) return t.toUpperCase();
-  return t.substring(0, 4).toUpperCase();
+  return shortEnvBadge(String(text || '').trim(), '', '');
 }
 
 function uniqueEnvironmentIdForOcpRow(namespace, ocContext, seenIds) {

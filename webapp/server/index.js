@@ -28,6 +28,7 @@ const {
   verifyPortalCredentialsForWipe,
   performWipe,
 } = require('./lib/setup-reset');
+const { shortEnvBadge } = require('./lib/env-badge');
 
 const CONFIG_PATH = process.env.CONFIG_PATH || path.join(__dirname, '..', 'config', 'web.config.json');
 const AUTH_USERS_FILE = process.env.AUTH_USERS_FILE || path.join(path.dirname(CONFIG_PATH), 'auth-users.json');
@@ -755,12 +756,17 @@ app.get('/api/environments', (req, res) => {
   }
   const st = getEnvironmentsState();
   if (st.active && st.list.length) {
-    const environments = (st.list || []).map((e) => ({
-      id: e.id,
-      label: e.label || e.id,
-      shortLabel: e.shortLabel || e.label || e.id,
-      badgeColor: e.badgeColor || null,
-    }));
+    const environments = (st.list || []).map((e) => {
+      const sites = sitesFromEnvironmentEntry(e);
+      const primaryNs = (sites[0] && sites[0].namespace) || '';
+      const lab = e.label || e.id;
+      return {
+        id: e.id,
+        label: lab,
+        shortLabel: shortEnvBadge(primaryNs, lab, e.id),
+        badgeColor: e.badgeColor || null,
+      };
+    });
     return res.json({
       ok: true,
       enabled: true,
@@ -777,10 +783,11 @@ app.get('/api/environments', (req, res) => {
         const environments = sites.map((s, i) => {
           const ns = String(s.namespace || '').trim();
           const ctx = String(s.ocContext || '').trim();
-          const shortLabel = (ns ? ns.slice(0, 10) : `S${i}`).toUpperCase();
+          const label = ns ? `${ns} (${ctx || 'context'})` : (ctx || `Site ${i}`);
+          const shortLabel = shortEnvBadge(ns, label, `lns-${i}`);
           return {
             id: `lns-${i}`,
-            label: ns ? `${ns} (${ctx || 'context'})` : (ctx || `Site ${i}`),
+            label,
             shortLabel,
             badgeColor: '#6e7781',
           };
@@ -797,7 +804,8 @@ app.get('/api/environments', (req, res) => {
       }
       const ns = sites.map((s) => s.namespace).filter(Boolean);
       const primaryNs = ns[0] || '';
-      const shortLabel = (primaryNs ? primaryNs.slice(0, 10) : 'NS').toUpperCase();
+      const label0 = primaryNs ? `Namespace: ${primaryNs}` : 'Deployment target';
+      const shortLabel = shortEnvBadge(primaryNs, label0, 'lns-0');
       return res.json({
         ok: true,
         enabled: true,
@@ -805,7 +813,7 @@ app.get('/api/environments', (req, res) => {
         singleDeployment: true,
         environments: [{
           id: 'lns-0',
-          label: primaryNs ? `Namespace: ${primaryNs}` : 'Deployment target',
+          label: label0,
           shortLabel,
           badgeColor: '#6e7781',
         }],
@@ -921,10 +929,11 @@ app.get('/api/me', (req, res) => {
       const entry = st.list.find((e) => e.id === id) || st.list[0];
       if (!entry) return payload;
       const sites = sitesFromEnvironmentEntry(entry);
+      const primaryNs = (sites[0] && sites[0].namespace) || '';
       payload.environment = {
         id: entry.id,
         label: entry.label,
-        shortLabel: entry.shortLabel || entry.label,
+        shortLabel: shortEnvBadge(primaryNs, entry.label, entry.id),
         badgeColor: entry.badgeColor || null,
         namespaces: (sites || []).map((s) => s.namespace),
         multiEnv: true,
@@ -942,10 +951,12 @@ app.get('/api/me', (req, res) => {
         const idx = (req.session && typeof req.session.legacySiteIndex === 'number')
           ? req.session.legacySiteIndex
           : 0;
+        const legLabel = primaryNs ? `Namespace: ${primaryNs}` : 'Deployment target';
+        const legId = multiNs ? `lns-${idx}` : 'lns-0';
         payload.environment = {
-          id: multiNs ? `lns-${idx}` : 'lns-0',
-          label: primaryNs ? `Namespace: ${primaryNs}` : 'Deployment target',
-          shortLabel: (primaryNs ? primaryNs.slice(0, 10) : 'NS').toUpperCase(),
+          id: legId,
+          label: legLabel,
+          shortLabel: shortEnvBadge(primaryNs, legLabel, legId),
           badgeColor: '#6e7781',
           namespaces: ns,
           ocContexts: ctxs,
@@ -986,12 +997,13 @@ app.post('/api/session/environment', (req, res) => {
       if (err) return res.status(500).json({ ok: false, error: 'Session error' });
       const entry = st.list.find((e) => e.id === eid);
       const sites = sitesFromEnvironmentEntry(entry);
+      const primaryNs = (sites[0] && sites[0].namespace) || '';
       res.json({
         ok: true,
         environment: {
           id: entry.id,
           label: entry.label,
-          shortLabel: entry.shortLabel || entry.label,
+          shortLabel: shortEnvBadge(primaryNs, entry.label, entry.id),
           badgeColor: entry.badgeColor || null,
           namespaces: (sites || []).map((s) => s.namespace),
         },
@@ -1017,14 +1029,16 @@ app.post('/api/session/environment', (req, res) => {
   const one = sitesAll[idx];
   const ns = String(one.namespace || '').trim();
   const ctx = String(one.ocContext || '').trim();
+  const swLabel = ns ? `Namespace: ${ns}` : 'Deployment target';
+  const swId = `lns-${idx}`;
   req.session.save((err) => {
     if (err) return res.status(500).json({ ok: false, error: 'Session error' });
     res.json({
       ok: true,
       environment: {
-        id: `lns-${idx}`,
-        label: ns ? `Namespace: ${ns}` : 'Deployment target',
-        shortLabel: (ns ? ns.slice(0, 10) : 'NS').toUpperCase(),
+        id: swId,
+        label: swLabel,
+        shortLabel: shortEnvBadge(ns, swLabel, swId),
         badgeColor: '#6e7781',
         namespaces: ns ? [ns] : [],
         ocContexts: ctx ? [ctx] : [],
