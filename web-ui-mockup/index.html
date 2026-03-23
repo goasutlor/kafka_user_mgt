@@ -15,7 +15,7 @@
       --header-muted: rgba(248, 250, 252, 0.7);
       --header-accent: #38bdf8;
       --header-accent-solid: #0ea5e9;
-      --app-header-h: 58px;
+      --app-header-h: 64px;
       --body-bg: #eef2f7;
       --sidebar-bg: #ffffff;
       --content-bg: #ffffff;
@@ -89,8 +89,8 @@
     }
     .header-logo--wordmark {
       width: auto;
-      height: 26px;
-      max-width: min(200px, 28vw);
+      height: 40px;
+      max-width: min(320px, 46vw);
       object-fit: contain;
       object-position: left center;
     }
@@ -103,7 +103,7 @@
     }
     .header-title {
       font-weight: 600;
-      font-size: 14px;
+      font-size: 15px;
       letter-spacing: -0.01em;
       line-height: 1.2;
       color: var(--header-text);
@@ -170,7 +170,6 @@
       scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
       max-width: min(58vw, 920px);
       padding: 4px 0;
-      mask-image: linear-gradient(to right, #000 92%, transparent 100%);
     }
     .header-nav::-webkit-scrollbar { height: 4px; }
     .header-nav::-webkit-scrollbar-thumb {
@@ -198,10 +197,10 @@
     }
     /* Ghost actions — same bar, no bright “second row” */
     .header-cta {
-      background: rgba(255, 255, 255, 0.1);
-      color: var(--header-text) !important;
+      background: rgba(255, 255, 255, 0.12);
+      color: #f8fafc !important;
       font-weight: 600;
-      border: 1px solid rgba(255, 255, 255, 0.16);
+      border: 1px solid rgba(255, 255, 255, 0.22);
     }
     .header-cta:hover {
       background: rgba(255, 255, 255, 0.16);
@@ -871,7 +870,7 @@
   <header class="header">
     <div class="header-brand">
       <div class="header-logo-wrap" aria-hidden="true">
-        <img src="confluent-wordmark.png" alt="" class="header-logo header-logo--wordmark" width="200" height="28" />
+        <img src="confluent-wordmark.png" alt="" class="header-logo header-logo--wordmark" width="320" height="40" />
       </div>
       <div class="header-brand-text">
         <span class="header-title">Kafka User Management</span>
@@ -1754,6 +1753,14 @@
       });
 
       function escapeHtml(s) { var d = document.createElement('div'); if (s == null) return ''; d.textContent = s; return d.innerHTML; }
+      function stripAnsiDisplay(s) {
+        if (s == null || typeof s !== 'string') return s;
+        return s
+          .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+          .replace(/\x1b\[?[0-9;]*[a-zA-Z]?/g, '')
+          .replace(/\r/g, '')
+          .trim();
+      }
       // fetch with timeout (AbortController). Returns { promise, abort } so caller can Cancel.
       function fetchWithTimeout(url, options, timeoutMs) {
         var c = new AbortController();
@@ -1779,9 +1786,9 @@
           msg += '<br><small style="color:var(--text-muted)">' + parts.join(' · ') + '</small>';
         }
         if (j.stderr && j.stderr.trim())
-          msg += '<br><details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;">Details (stderr)</summary><pre style="margin-top:4px;font-size:11px;white-space:pre-wrap;max-height:200px;overflow:auto;background:var(--code-bg);padding:8px;">' + escapeHtml(j.stderr.trim().slice(-2000)) + '</pre></details>';
+          msg += '<br><details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;">Details (stderr)</summary><pre style="margin-top:4px;font-size:11px;white-space:pre-wrap;max-height:200px;overflow:auto;background:var(--code-bg);padding:8px;">' + escapeHtml(stripAnsiDisplay(j.stderr.trim().slice(-2000))) + '</pre></details>';
         else if (j.stdout && j.stdout.trim())
-          msg += '<br><details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;">Details (stdout)</summary><pre style="margin-top:4px;font-size:11px;white-space:pre-wrap;max-height:120px;overflow:auto;background:var(--code-bg);padding:8px;">' + escapeHtml(j.stdout.trim().slice(-1000)) + '</pre></details>';
+          msg += '<br><details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;">Details (stdout)</summary><pre style="margin-top:4px;font-size:11px;white-space:pre-wrap;max-height:200px;overflow:auto;background:var(--code-bg);padding:8px;">' + escapeHtml(stripAnsiDisplay(j.stdout.trim().slice(-1500))) + '</pre></details>';
         if (j.tasks && j.tasks.length)
           msg += '<div style="margin-top:10px;font-size:12px;"><strong>Task status</strong>' + renderGenTasksBlockHtml(j.tasks) + '</div>';
         return msg;
@@ -1830,8 +1837,8 @@
           if (detail.step) lines.push('Step: ' + detail.step);
           if (detail.phase) lines.push('Phase: ' + detail.phase);
           if (detail.exitCode != null) lines.push('Exit code: ' + detail.exitCode);
-          if (detail.stderr && detail.stderr.trim()) lines.push('Stderr:\n' + detail.stderr.trim().slice(-2000));
-          if (detail.stdout && detail.stdout.trim()) lines.push('Stdout:\n' + detail.stdout.trim().slice(-1000));
+          if (detail.stderr && detail.stderr.trim()) lines.push('Stderr:\n' + stripAnsiDisplay(detail.stderr.trim().slice(-2000)));
+          if (detail.stdout && detail.stdout.trim()) lines.push('Stdout:\n' + stripAnsiDisplay(detail.stdout.trim().slice(-1500)));
           if (detail.tasks && detail.tasks.length) {
             lines.push('Task status:');
             detail.tasks.forEach(function (t) {

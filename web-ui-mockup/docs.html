@@ -38,7 +38,8 @@
       background: var(--header-bg);
       color: var(--header-text);
       padding: 0 24px;
-      height: 56px;
+      min-height: 64px;
+      height: 64px;
       display: flex;
       align-items: center;
       justify-content: space-between;
@@ -48,8 +49,8 @@
       border-bottom: 1px solid rgba(255,255,255,0.08);
     }
     .header-brand { display: flex; align-items: center; gap: 14px; }
-    .header-logo { height: 26px; width: auto; max-width: 200px; object-fit: contain; object-position: left center; }
-    .header-title { font-weight: 600; font-size: 14px; }
+    .header-logo { height: 40px; width: auto; max-width: 320px; object-fit: contain; object-position: left center; }
+    .header-title { font-weight: 600; font-size: 15px; }
     .header-nav { display: flex; align-items: center; gap: 8px; }
     .header-nav a {
       color: rgba(255,255,255,0.85);
@@ -80,9 +81,9 @@
       border-right: 1px solid var(--border);
       padding: 20px 12px;
       position: sticky;
-      top: 57px;
+      top: 65px;
       align-self: flex-start;
-      max-height: calc(100vh - 57px);
+      max-height: calc(100vh - 65px);
       overflow-y: auto;
     }
     .sidebar-left .nav-section {
@@ -176,7 +177,7 @@
 <body>
   <header class="header">
     <div class="header-brand">
-      <img src="confluent-wordmark.png" alt="Confluent" class="header-logo" width="200" height="28" />
+      <img src="confluent-wordmark.png" alt="Confluent" class="header-logo" width="320" height="40" />
       <span class="header-title">Kafka User Management</span>
     </div>
     <nav class="header-nav">

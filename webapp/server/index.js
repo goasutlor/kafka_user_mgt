@@ -57,9 +57,14 @@ if (!APP_VERSION) {
 }
 APP_VERSION = APP_VERSION || '0.0.0';
 
+/** Remove ANSI escapes from gen.sh / oc output for API + UI readability */
 function stripAnsi(str) {
   if (typeof str !== 'string') return str;
-  return str.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').replace(/\x1b\[?[0-9;]*[a-zA-Z]?/g, '').trim();
+  return str
+    .replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '')
+    .replace(/\x1b\[?[0-9;]*[a-zA-Z]?/g, '')
+    .replace(/\r/g, '')
+    .trim();
 }
 
 const app = express();
@@ -1087,8 +1092,14 @@ function apiError(res, route, err, options = {}) {
   const payload = { ok: false, error: errorMessage };
   if (step) payload.step = step;
   if (phase) payload.phase = phase;
-  if (stderr != null) payload.stderr = typeof stderr === 'string' ? stderr.slice(-3000) : stderr;
-  if (stdout != null) payload.stdout = typeof stdout === 'string' ? stdout.slice(-1500) : stdout;
+  if (stderr != null) {
+    const s = typeof stderr === 'string' ? stderr.slice(-3000) : stderr;
+    payload.stderr = typeof s === 'string' ? stripAnsi(s) : s;
+  }
+  if (stdout != null) {
+    const s = typeof stdout === 'string' ? stdout.slice(-1500) : stdout;
+    payload.stdout = typeof s === 'string' ? stripAnsi(s) : s;
+  }
   if (code != null) payload.exitCode = code;
   if (Array.isArray(tasks) && tasks.length) payload.tasks = tasks;
   const logLine = `[${route}] ${status} ${step || ''} ${phase || ''} code=${code ?? '?'} ${errorMessage || ''}`.trim();
@@ -1163,14 +1174,9 @@ function runGenStream(envOverrides, onLine, req, onStderrLine) {
   });
 }
 
-// Strip ANSI escape codes for progress message
-function stripAnsi(s) {
-  return String(s).replace(/\x1b\[[0-9;]*m/g, '').trim();
-}
-
 // Extract progress step from gen.sh status_msg output like " [PROCESSING] Validating Topic..."
 function parseProgressLine(line) {
-  const plain = stripAnsi(line);
+  const plain = stripAnsi(String(line));
   const m = plain.match(/\[PROCESSING\]\s*(.+?)(\.\.\.)?$/);
   if (m) return m[1].trim();
   if (/\u2713|DONE|✅/.test(plain)) return null; // done marker, keep previous step
@@ -2317,8 +2323,8 @@ app.post('/api/add-user', (req, res) => {
             step: 'add-user',
             phase: 'gen',
             exitCode: code,
-            stderr: (stderr || '').slice(-2000),
-            stdout: (stdout || '').slice(-1500),
+            stderr: stripAnsi((stderr || '').slice(-2000)),
+            stdout: stripAnsi((stdout || '').slice(-1500)),
             tasks,
           }) + '\n');
         } else {
