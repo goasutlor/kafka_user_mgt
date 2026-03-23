@@ -153,6 +153,22 @@
       padding: 4px 8px;
       font-size: 12px;
     }
+    .ocp-project-row {
+      border: 1px dashed var(--border);
+      border-radius: 8px;
+      padding: 12px 40px 12px 12px;
+      margin-top: 10px;
+      background: #fafbfc;
+      position: relative;
+    }
+    .ocp-project-row .row { margin-top: 8px; }
+    .ocp-proj-remove {
+      position: absolute;
+      top: 8px;
+      right: 8px;
+      padding: 4px 8px;
+      font-size: 12px;
+    }
     details.advanced-box {
       margin-top: 14px;
       border: 1px solid var(--border);
@@ -172,8 +188,7 @@
   <header class="header">
     <h1>First-time setup</h1>
     <p>
-      Flow: <strong>OpenShift first</strong> (clusters, API URLs, namespace per cluster), then add <strong>extra projects/namespaces</strong> on the same cluster if one portal serves Dev·SIT·UAT. Next: <strong>Kafka bootstrap</strong> (and optional advanced Docker paths). Paths like <code>/opt/kafka-usermgmt</code> match the container mount - use <strong>Advanced</strong> only if you know you need to change them.
-      <strong>OC contexts</strong> are <em>not</em> created here: they must already exist in the kubeconfig you mount. You type the <strong>exact NAME</strong> from <code>oc config get-contexts</code> for every OpenShift row — any names your org uses (no fixed names in the app). Saved config lives in <code>master.config.json</code> on the host volume (e.g. <code>deploy/config/</code>), not inside the image.
+      <strong>1)</strong> OpenShift — API URL, login, then add rows: <strong>namespace + context</strong> (<code>oc config get-contexts</code> NAME). <strong>2)</strong> Kafka — bootstrap per project/namespace; truststore/SASL (shared or one block). <strong>3)</strong> Portal. <strong>4)</strong> Verify. Config saves to <code>master.config.json</code> on your mounted volume.
     </p>
   </header>
   <main>
@@ -187,46 +202,47 @@
     <div id="wizard-wrap" style="display:none;">
       <p class="hint" id="reconfigure-toolbar" style="display:none; margin-top:0;">
         <button type="button" class="secondary" id="btn-load-prefill">โหลดค่าปัจจุบันจาก config บนเซิร์ฟเวอร์</button>
-        <span class="hint" style="margin-left:8px;">ถ้ามี <code>SETUP_TOKEN</code> ให้ใส่ในขั้น Portal (ขั้น 4) ก่อน</span>
+        <span class="hint" style="margin-left:8px;">ถ้ามี <code>SETUP_TOKEN</code> ให้ใส่ในขั้น Portal (ขั้น 3) ก่อน</span>
       </p>
       <div class="steps" id="step-indicator">
-        <span data-i="1" class="active">1 · Architecture</span>
-        <span data-i="2">2 · OpenShift &amp; projects</span>
-        <span data-i="3">3 · Kafka</span>
-        <span data-i="4">4 · Portal</span>
-        <span data-i="5">5 · Verify</span>
+        <span data-i="1" class="active">1 · OpenShift</span>
+        <span data-i="2">2 · Kafka</span>
+        <span data-i="3">3 · Portal</span>
+        <span data-i="4">4 · Verify</span>
       </div>
 
       <form id="setup-form" class="card">
         <div class="step-panel active" data-step="1">
-          <h2>Confluent architecture</h2>
-          <p class="hint">Choose how many OpenShift clusters host your Confluent Kafka footprint for <strong>user / ACL management</strong> (where we run <code>oc</code> to patch credentials).</p>
-          <div class="check" style="margin-top:0;">
-            <input type="radio" name="ocTopology" id="topoSingle" value="single" checked />
-            <label for="topoSingle" style="margin:0;"><strong>Single region</strong> — one OCP cluster; typically <strong>one</strong> namespace where the Kafka CR and secrets live.</label>
-          </div>
-          <div class="check">
-            <input type="radio" name="ocTopology" id="topoDual" value="dual" />
-            <label for="topoDual" style="margin:0;"><strong>2 regions</strong> — two OCP clusters; <strong>one Confluent namespace per cluster</strong> (names may differ by region). You will enter the full OpenShift API URL and OC credentials for <em>each</em> region.</label>
-          </div>
-          <div class="actions">
-            <button type="button" class="primary btn-next" data-next="2" data-skip-validate="1">Next</button>
-          </div>
-        </div>
+          <h2>OpenShift cluster</h2>
+          <p class="hint">Context names must already exist in your mounted kubeconfig (<code>oc config get-contexts</code> → NAME column). One API URL is enough when every row is the same cluster.</p>
 
-        <div class="step-panel" data-step="2">
-          <h2>OpenShift — clusters &amp; namespaces</h2>
-          <p class="hint" style="padding:10px 12px;background:#fff8e6;border:1px solid #e3b341;border-radius:6px;">
-            <strong>แก้ error context:</strong> กรอกชื่อ context ใน<strong>ขั้นนี้</strong> และใน<strong>OCP target</strong> ต่อ environment ให้ตรงคอลัมน์ NAME จาก <code>oc config get-contexts</code>
-            — หรือแก้ไฟล์ <code>deploy/config/master.config.json</code> บน host ที่ mount แล้ว Save / restart (ไม่ต้อง rebuild image)
-          </p>
-          <p class="hint">
-            <strong>Primary namespace</strong> per cluster = the OpenShift <strong>project</strong> where Confluent Kafka runs and where we patch the user-list secret (<code id="secret-name-hint">kafka-server-side-credentials</code> by default). Two regions = two rows below. Add <strong>extra projects</strong> on the <em>same</em> cluster in the next section if one portal serves Dev·SIT·UAT.
-          </p>
+          <label for="ocpClusterApiUrl">OpenShift API URL</label>
+          <input type="text" id="ocpClusterApiUrl" placeholder="https://api.your-cluster.example.com:6443" autocomplete="off" />
+          <p class="hint">Used for OC auto-login and written to <code>loginServers</code> for each context below.</p>
 
-          <details class="advanced-box">
-            <summary>Advanced: <code>oc</code> + kubeconfig paths (Docker/Podman defaults)</summary>
-            <p class="hint">Leave unchanged unless your image or mounts differ.</p>
+          <div class="check" style="margin-top:14px;">
+            <input type="checkbox" id="ocAutoLogin" checked />
+            <label for="ocAutoLogin" style="margin:0;">Enable OC auto-login when the server starts</label>
+          </div>
+          <div id="oc-shared-cred-block" style="margin-top:10px;">
+            <div class="row">
+              <div><label for="ocLoginUser">OpenShift username</label><input type="text" id="ocLoginUser" autocomplete="off" /></div>
+              <div><label for="ocLoginPassword">OpenShift password</label><input type="password" id="ocLoginPassword" autocomplete="new-password" /></div>
+            </div>
+          </div>
+          <input type="hidden" id="ocUseSimpleFlow" value="1" />
+          <input type="checkbox" id="environmentsEnabled" checked style="display:none;" aria-hidden="true" />
+          <input type="radio" name="ocCredMode" id="credShared" value="shared" checked style="display:none;" />
+          <input type="radio" name="ocCredMode" id="credPer" value="per_cluster" style="display:none;" />
+          <div id="oc-cred-mode-wrap" style="display:none;"></div>
+
+          <h3 style="margin-top:20px;font-size:13px;color:var(--muted);text-transform:uppercase;letter-spacing:0.04em;">Projects (namespace + context)</h3>
+          <p class="hint">Add one row per OpenShift project. The portal header will list each row as an environment. <strong>+ Add</strong> for Dev, SIT, UAT, multi-region on same API, etc.</p>
+          <div id="ocp-project-rows"></div>
+          <button type="button" class="secondary" id="btn-ocp-project-add">+ Add namespace / context</button>
+
+          <details class="advanced-box" style="margin-top:18px;">
+            <summary>Advanced: <code>oc</code> path, kubeconfig, dual cluster, legacy forms</summary>
             <div class="row" style="margin-top:8px;">
               <div>
                 <label for="ocPath"><code>oc</code> directory (in container)</label>
@@ -237,7 +253,15 @@
                 <input type="text" id="kubeconfig" value="{runtimeRoot}/.kube/config-both" />
               </div>
             </div>
-          </details>
+            <p class="hint" style="margin-top:12px;"><strong>Dual cluster</strong> (optional) — two regions with different API URLs:</p>
+            <div class="check">
+              <input type="radio" name="ocTopology" id="topoSingle" value="single" checked />
+              <label for="topoSingle" style="margin:0;">Single API URL above for all rows</label>
+            </div>
+            <div class="check">
+              <input type="radio" name="ocTopology" id="topoDual" value="dual" />
+              <label for="topoDual" style="margin:0;">Two clusters — use Region 1 / Region 2 below (overrides simple list for those two sites only; you can still add more rows above for extra namespaces on region 1)</label>
+            </div>
 
           <div id="site-primary" class="site-block">
             <h3 id="site-a-title">Region 1 — OpenShift cluster</h3>
@@ -282,31 +306,10 @@
             </div>
           </div>
 
-          <div class="check" style="margin-top:16px;">
-            <input type="checkbox" id="ocAutoLogin" />
-            <label for="ocAutoLogin" style="margin:0;">Enable OC auto-login on server start</label>
-          </div>
-          <div id="oc-shared-cred-block" style="display:none; margin-top:8px;">
-            <p class="hint">Same user/password for every cluster (typical when one service account is used on both OCPs).</p>
-            <div class="row">
-              <div><label for="ocLoginUser">OC username</label><input type="text" id="ocLoginUser" autocomplete="off" /></div>
-              <div><label for="ocLoginPassword">OC password</label><input type="password" id="ocLoginPassword" autocomplete="new-password" /></div>
-            </div>
-          </div>
-          <div id="oc-cred-mode-wrap" style="display:none; margin-top:12px;">
-            <span class="hint" style="display:block;margin-bottom:6px;">OpenShift login credentials</span>
-            <div class="check"><input type="radio" name="ocCredMode" id="credShared" value="shared" checked /><label for="credShared" style="margin:0;">Same OC user/password for every cluster (one account can log in to both API URLs)</label></div>
-            <div class="check"><input type="radio" name="ocCredMode" id="credPer" value="per_cluster" /><label for="credPer" style="margin:0;">Different OC user/password per region (typical for 2 regions)</label></div>
-          </div>
-
           <div class="site-block" style="margin-top:20px;">
-            <h3>More OpenShift projects (same cluster)</h3>
-            <p class="hint" style="margin-top:0;">Optional. One portal, several header environments (Dev / SIT / UAT / …). Each environment has <strong>one or more OCP targets</strong> (context + namespace per target; <strong>+ Add OCP target</strong> for multi-region). You always type your real context names — nothing is hard-coded in the app.</p>
-            <div class="check">
-              <input type="checkbox" id="environmentsEnabled" />
-              <label for="environmentsEnabled" style="margin:0;">Add multiple projects / namespaces on this cluster</label>
-            </div>
-            <div id="env-fields" style="display:none;">
+            <h3>Legacy — manual environment builder</h3>
+            <p class="hint" style="margin-top:0;">Optional. Use only if you are not using the simple <strong>Projects</strong> list above. Same fields as before: multiple OCP targets per environment, JSON mode, etc.</p>
+            <div id="env-fields" style="display:block;">
               <p class="hint" style="margin-top:10px;">Add a row per environment. Bootstrap in the next step is shared unless you later edit <code>master.config.json</code> for per-route brokers.</p>
               <div class="check" style="margin-top:8px;">
                 <input type="radio" name="envEditorMode" id="envEditorSimple" value="simple" checked />
@@ -330,21 +333,27 @@
               </div>
             </div>
           </div>
+          </details>
 
           <div class="actions">
-            <button type="button" class="secondary btn-back" data-back="1">Back</button>
-            <button type="button" class="primary btn-next" data-next="3">Next</button>
+            <button type="button" class="primary btn-next" data-next="2">Next</button>
           </div>
         </div>
 
-        <div class="step-panel" data-step="3">
-          <h2>Kafka (Confluent clients)</h2>
-          <p class="hint">Dev / SIT / UAT in step 2 choose which <strong>OpenShift namespace</strong> we patch for each environment — they are not three Kafka forms. The field below is the <strong>default bootstrap</strong> for Kafka clients (and for setup verify / property templates). If each environment uses a <em>different</em> broker hostname, expand &ldquo;Per-environment bootstrap&rdquo; (or add <code>bootstrapServers</code> on each env in JSON mode).</p>
-          <label for="kafkaBootstrap">Kafka bootstrap servers <span class="hint">(required — default for all envs)</span></label>
+        <div class="step-panel" data-step="2">
+          <h2>Kafka (per OpenShift project)</h2>
+          <p class="hint">One bootstrap line per namespace from step 1. Truststore + SASL below apply to <strong>all</strong> projects (same cluster credentials); if a project needs different broker routes only, fill its row — the first non-empty row also fills the global default for templates.</p>
+
+          <div id="kafka-per-ns-panel" style="margin-top:12px; padding:12px; border:1px solid #d0d7de; border-radius:8px; background:#f8fafc;">
+            <strong>Bootstrap servers</strong> <span class="hint">host:port (TLS route)</span>
+            <div id="kafka-per-ns-rows" style="margin-top:8px;"></div>
+          </div>
+
+          <label for="kafkaBootstrap" style="margin-top:16px;">Default bootstrap <span class="hint">(auto-filled from first row; editable)</span></label>
           <input type="text" id="kafkaBootstrap" placeholder="kafka.apps.example.com:443" required />
 
           <div id="env-kafka-bootstrap-panel" style="display:none; margin-top:14px; padding:12px; border:1px solid #d0d7de; border-radius:8px; background:#f8fafc;">
-            <strong>Per-environment bootstrap</strong> <span class="hint">optional — only when SIT/UAT use a different <code>host:port</code> than Dev; empty row = use the main field above. The portal uses this when you switch the environment badge.</span>
+            <strong>Per-environment bootstrap</strong> <span class="hint">(legacy UI)</span>
             <div id="env-kafka-bootstrap-rows" style="margin-top:8px;"></div>
           </div>
 
@@ -411,17 +420,17 @@
               <input type="checkbox" id="customK8sSecret" />
               <label for="customK8sSecret" style="margin:0;">Different Kubernetes secret name for that user list</label>
             </div>
-            <label for="k8sSecretName">Secret name (must exist in <em>each</em> namespace from step 2)</label>
+            <label for="k8sSecretName">Secret name (must exist in <em>each</em> namespace from step 1)</label>
             <input type="text" id="k8sSecretName" value="kafka-server-side-credentials" readonly style="background:#f6f8fa;" />
           </details>
 
           <div class="actions">
-            <button type="button" class="secondary btn-back" data-back="2">Back</button>
-            <button type="button" class="primary btn-next" data-next="4">Next</button>
+            <button type="button" class="secondary btn-back" data-back="1">Back</button>
+            <button type="button" class="primary btn-next" data-next="3">Next</button>
           </div>
         </div>
 
-        <div class="step-panel" data-step="4">
+        <div class="step-panel" data-step="3">
           <h2>Portal &amp; advanced</h2>
           <label for="portalPort">Listen port</label>
           <input type="number" id="portalPort" min="1" max="65535" value="3443" />
@@ -445,7 +454,7 @@
             <label for="ocLoginServersOverride"><code>loginServers</code> JSON (context to API URL)</label>
             <textarea id="ocLoginServersOverride" placeholder='Optional JSON: { "&lt;ocContext-exact-name&gt;": "https://api...:6443", ... } — keys must match every ocContext you use'></textarea>
             <label for="fallbackSitesJson">Override <code>fallbackSites</code> (JSON array)</label>
-            <textarea id="fallbackSitesJson" placeholder='Leave empty when using OpenShift rows in step 2'></textarea>
+            <textarea id="fallbackSitesJson" placeholder='Leave empty when using OpenShift rows in step 1'></textarea>
           </details>
 
           <div id="token-wrap" style="display:none; margin-top:16px;">
@@ -454,12 +463,12 @@
           </div>
 
           <div class="actions">
-            <button type="button" class="secondary btn-back" data-back="3">Back</button>
-            <button type="button" class="primary btn-next" data-next="5">Review</button>
+            <button type="button" class="secondary btn-back" data-back="2">Back</button>
+            <button type="button" class="primary btn-next" data-next="4">Review</button>
           </div>
         </div>
 
-        <div class="step-panel" data-step="5">
+        <div class="step-panel" data-step="4">
           <h2>Verify &amp; confirm</h2>
           <p class="hint">รันการตรวจแบบเต็ม: ไฟล์ path, สิทธิ์ไฟล์ credential (Unix), <code>kafka-topics.sh</code>, truststore, <strong>ทดสอบจริง</strong> <code>kafka-topics --list</code> และ <code>oc whoami</code> แบบ<strong>ขนานต่อ context</strong> — แก้ <span class="badge err">error</span> ก่อนบันทึก ถ้ากรอก Kafka SSL/SASL ครบในขั้น Kafka การ Run verification จะเขียน <code>client.truststore.jks</code> + <code>kafka-client*.properties</code> ลง runtime mount ทันที (เหมือนตอน Save) เพื่อให้ทดสอบ broker ได้</p>
           <div class="check" style="margin-top:10px;">
@@ -467,7 +476,7 @@
             <label for="quickVerifyOnly" style="margin:0;">Quick verify — ไม่เรียก Kafka/OC จริง (เร็ว; ใช้ตอนยังไม่พร้อมเครือข่าย)</label>
           </div>
           <div class="actions">
-            <button type="button" class="secondary btn-back" data-back="4">Back</button>
+            <button type="button" class="secondary btn-back" data-back="3">Back</button>
             <button type="button" class="primary" id="btn-verify">Run verification</button>
           </div>
           <div id="verify-out" style="display:none; margin-top:16px;">
@@ -509,7 +518,7 @@
       var lastPreviewOk = false;
       var reconfigureMode = false;
       var currentStep = 1;
-      var DRAFT_KEY = 'kafka-usermgmt-setup-draft-v5';
+      var DRAFT_KEY = 'kafka-usermgmt-setup-draft-v6';
       var draftTimer = null;
 
       function scheduleDraftSave() {
@@ -528,6 +537,13 @@
           } else {
             data.fields[el.id] = el.value;
           }
+        });
+        data.ocpProjectRows = [];
+        document.querySelectorAll('#ocp-project-rows .ocp-project-row').forEach(function (row) {
+          data.ocpProjectRows.push({
+            ns: (row.querySelector('.ocp-proj-ns') || {}).value || '',
+            ctx: (row.querySelector('.ocp-proj-ctx') || {}).value || '',
+          });
         });
         data.envSimpleRows = [];
         document.querySelectorAll('#env-simple-rows .env-simple-row').forEach(function (row) {
@@ -552,6 +568,296 @@
       function clearEnvSimpleRows() {
         var wrap = document.getElementById('env-simple-rows');
         if (wrap) wrap.innerHTML = '';
+      }
+
+      function clearOcpProjectRows() {
+        var wrap = document.getElementById('ocp-project-rows');
+        if (wrap) wrap.innerHTML = '';
+      }
+
+      function sanitizeEnvIdPart(s) {
+        var t = String(s || '')
+          .trim()
+          .replace(/[^a-zA-Z0-9_-]/g, '_')
+          .replace(/_+/g, '_')
+          .replace(/^_|_$/g, '');
+        return t || 'x';
+      }
+
+      function collectOcpProjectRowsFromDom() {
+        var out = [];
+        document.querySelectorAll('#ocp-project-rows .ocp-project-row').forEach(function (row) {
+          var ns = (row.querySelector('.ocp-proj-ns') || {}).value.trim();
+          var ctx = (row.querySelector('.ocp-proj-ctx') || {}).value.trim();
+          if (ns || ctx) out.push({ namespace: ns, ocContext: ctx });
+        });
+        return out;
+      }
+
+      function hasLegacyEnvSimpleRows() {
+        var rows = document.querySelectorAll('#env-simple-rows .env-simple-row');
+        for (var i = 0; i < rows.length; i++) {
+          var id = (rows[i].querySelector('.env-row-id') || {}).value.trim();
+          if (id) return true;
+        }
+        return false;
+      }
+
+      function buildEnvironmentAndOcSitesForBody() {
+        var clusterApi = document.getElementById('ocpClusterApiUrl').value.trim();
+        var ocpRows = collectOcpProjectRowsFromDom().filter(function (r) {
+          return r.namespace && r.ocContext;
+        });
+        var dual = topoDual();
+
+        if (dual) {
+          var sites = collectOcSites();
+          var eff = [sites[0], sites[1]];
+          if (!eff[0] || !eff[0].ocContext || !eff[0].namespace || !eff[1] || !eff[1].ocContext || !eff[1].namespace) {
+            throw new Error('Dual region: fill OC context and namespace for both clusters (Advanced).');
+          }
+          var ocSitesPayload = eff.map(function (s, i) {
+            return {
+              name: s.ocContext || 'site' + (i + 1),
+              namespace: s.namespace,
+              ocContext: s.ocContext,
+              apiServer: (s.apiServer || '').trim(),
+              loginUser: s.loginUser,
+              loginPassword: s.loginPassword,
+            };
+          });
+          var envId = 'default';
+          return {
+            ocTopology: 'dual',
+            ocSites: ocSitesPayload,
+            environmentsEnabled: true,
+            defaultEnvironmentId: envId,
+            environmentItems: [
+              {
+                id: envId,
+                label: 'Default (dual cluster)',
+                shortLabel: 'DEF',
+                badgeColor: '#238636',
+                sites: ocSitesPayload.map(function (s) {
+                  return {
+                    name: s.name,
+                    ocContext: s.ocContext,
+                    namespace: s.namespace,
+                    apiServer: s.apiServer,
+                  };
+                }),
+              },
+            ],
+          };
+        }
+
+        if (ocpRows.length) {
+          var seenIds = {};
+          var environmentItems = [];
+          var ocSites = [];
+          ocpRows.forEach(function (r) {
+            var api = clusterApi;
+            var id = sanitizeEnvIdPart(r.namespace) + '_' + sanitizeEnvIdPart(r.ocContext);
+            if (id.length > 48) id = id.substring(0, 48);
+            var orig = id;
+            var n = 2;
+            while (seenIds[id]) {
+              id = orig + '_' + n++;
+            }
+            seenIds[id] = true;
+            var short = id.length <= 6 ? id.toUpperCase() : id.substring(0, 4).toUpperCase();
+            var site = {
+              name: r.ocContext,
+              namespace: r.namespace,
+              ocContext: r.ocContext,
+              apiServer: api,
+            };
+            ocSites.push(site);
+            environmentItems.push({
+              id: id,
+              label: r.namespace,
+              shortLabel: short,
+              badgeColor: '#238636',
+              sites: [site],
+            });
+          });
+          return {
+            ocTopology: 'single',
+            ocSites: ocSites,
+            environmentsEnabled: true,
+            defaultEnvironmentId: environmentItems[0].id,
+            environmentItems: environmentItems,
+          };
+        }
+
+        var sites = collectOcSites();
+        var s0 = sites[0];
+        if (!s0 || !s0.ocContext || !s0.namespace) {
+          throw new Error('Add at least one namespace + context row, or fill the Advanced single-region cluster block.');
+        }
+        var api = (s0.apiServer || '').trim() || clusterApi;
+        var ocSitesPayload = [
+          {
+            name: s0.ocContext,
+            namespace: s0.namespace,
+            ocContext: s0.ocContext,
+            apiServer: api,
+            loginUser: s0.loginUser,
+            loginPassword: s0.loginPassword,
+          },
+        ];
+        var id = sanitizeEnvIdPart(s0.namespace) + '_' + sanitizeEnvIdPart(s0.ocContext);
+        var short = id.length <= 6 ? id.toUpperCase() : id.substring(0, 4).toUpperCase();
+        return {
+          ocTopology: 'single',
+          ocSites: ocSitesPayload,
+          environmentsEnabled: true,
+          defaultEnvironmentId: id,
+          environmentItems: [
+            {
+              id: id,
+              label: s0.namespace,
+              shortLabel: short,
+              badgeColor: '#238636',
+              sites: [
+                {
+                  name: s0.ocContext,
+                  ocContext: s0.ocContext,
+                  namespace: s0.namespace,
+                  apiServer: api,
+                },
+              ],
+            },
+          ],
+        };
+      }
+
+      function addOcpProjectRow(prefill) {
+        var wrap = document.getElementById('ocp-project-rows');
+        if (!wrap) return;
+        var row = document.createElement('div');
+        row.className = 'ocp-project-row';
+        row.innerHTML =
+          '<button type="button" class="secondary ocp-proj-remove" title="Remove row">ลบ</button>' +
+          '<div class="row">' +
+          '<div><label>Namespace</label><input type="text" class="ocp-proj-ns" placeholder="openshift-project" autocomplete="off" /></div>' +
+          '<div><label><code>oc</code> context (NAME)</label><input type="text" class="ocp-proj-ctx" placeholder="from oc config get-contexts" autocomplete="off" /></div>' +
+          '</div>';
+        wrap.appendChild(row);
+        var onChange = function () {
+          syncKafkaPerNsRows();
+          scheduleDraftSave();
+        };
+        row.querySelector('.ocp-proj-remove').addEventListener('click', function () {
+          if (wrap.querySelectorAll('.ocp-project-row').length <= 1) return;
+          row.remove();
+          onChange();
+        });
+        row.querySelectorAll('.ocp-proj-ns, .ocp-proj-ctx').forEach(function (el) {
+          el.addEventListener('input', onChange);
+        });
+        if (prefill) {
+          var nEl = row.querySelector('.ocp-proj-ns');
+          var cEl = row.querySelector('.ocp-proj-ctx');
+          if (nEl && prefill.ns != null) nEl.value = prefill.ns;
+          if (cEl && prefill.ctx != null) cEl.value = prefill.ctx;
+        }
+        syncKafkaPerNsRows();
+      }
+
+      function ensureAtLeastOneOcpRow() {
+        if (!document.querySelector('#ocp-project-rows .ocp-project-row')) {
+          addOcpProjectRow();
+        }
+      }
+
+      function getPlannedEnvironmentItemsForKafkaUi() {
+        try {
+          if (document.getElementById('envEditorJson').checked) return [];
+          if (hasLegacyEnvSimpleRows()) {
+            var rows = document.querySelectorAll('#env-simple-rows .env-simple-row');
+            var items = [];
+            rows.forEach(function (row) {
+              var id = (row.querySelector('.env-row-id') || {}).value.trim();
+              var label = (row.querySelector('.env-row-label') || {}).value.trim() || id;
+              if (!id) return;
+              items.push({ id: id, label: label || id });
+            });
+            return items;
+          }
+          var bundle = buildEnvironmentAndOcSitesForBody();
+          return (bundle.environmentItems || []).map(function (e) {
+            return { id: e.id, label: e.label || e.id };
+          });
+        } catch (e) {
+          return [];
+        }
+      }
+
+      function syncKafkaPerNsRows() {
+        var wrap = document.getElementById('kafka-per-ns-rows');
+        if (!wrap) return;
+        var items = getPlannedEnvironmentItemsForKafkaUi();
+        var existing = {};
+        wrap.querySelectorAll('input.kafka-per-ns-bootstrap').forEach(function (inp) {
+          var eid = inp.getAttribute('data-env-id');
+          if (eid) existing[eid] = inp.value;
+        });
+        wrap.innerHTML = '';
+        if (!items.length) return;
+        items.forEach(function (e) {
+          var rowEl = document.createElement('div');
+          rowEl.className = 'row kafka-per-ns-row';
+          rowEl.style.marginTop = '8px';
+          rowEl.setAttribute('data-env-id', e.id);
+          var div = document.createElement('div');
+          div.style.flex = '1';
+          var label = document.createElement('label');
+          var safeId = 'kafkaPerNs__' + String(e.id).replace(/[^a-zA-Z0-9_-]/g, '_');
+          label.setAttribute('for', safeId);
+          label.appendChild(document.createTextNode('Bootstrap for '));
+          var code = document.createElement('code');
+          code.textContent = e.id;
+          label.appendChild(code);
+          label.appendChild(document.createTextNode(' (' + (e.label || '') + ')'));
+          var inp = document.createElement('input');
+          inp.type = 'text';
+          inp.id = safeId;
+          inp.className = 'kafka-per-ns-bootstrap';
+          inp.setAttribute('data-env-id', e.id);
+          inp.placeholder = 'host:port (TLS)';
+          if (existing[e.id] != null && existing[e.id] !== '') inp.value = existing[e.id];
+          inp.addEventListener('input', function () {
+            syncKafkaBootstrapDefaultFromPerNs();
+            scheduleDraftSave();
+          });
+          div.appendChild(label);
+          div.appendChild(inp);
+          rowEl.appendChild(div);
+          wrap.appendChild(rowEl);
+        });
+        syncKafkaBootstrapDefaultFromPerNs();
+      }
+
+      function syncKafkaBootstrapDefaultFromPerNs() {
+        var main = document.getElementById('kafkaBootstrap');
+        if (!main) return;
+        var first = '';
+        document.querySelectorAll('#kafka-per-ns-rows input.kafka-per-ns-bootstrap').forEach(function (inp) {
+          var v = inp.value.trim();
+          if (v && !first) first = v;
+        });
+        if (first && !main.value.trim()) main.value = first;
+      }
+
+      function collectKafkaPerNsOverrides() {
+        var bootOv = {};
+        document.querySelectorAll('#kafka-per-ns-rows input.kafka-per-ns-bootstrap').forEach(function (inp) {
+          var eid = inp.getAttribute('data-env-id');
+          var v = inp.value.trim();
+          if (eid && v) bootOv[eid] = v;
+        });
+        return bootOv;
       }
 
       function wireEnvOcTargetRow(tr, onChange) {
@@ -798,6 +1104,14 @@
             r.checked = r.value === val;
           });
         });
+        clearOcpProjectRows();
+        if ((data.ocpProjectRows || []).length) {
+          (data.ocpProjectRows || []).forEach(function (r) {
+            addOcpProjectRow({ ns: r.ns != null ? r.ns : '', ctx: r.ctx != null ? r.ctx : '' });
+          });
+        } else {
+          addOcpProjectRow();
+        }
         clearEnvSimpleRows();
         (data.envSimpleRows || []).forEach(function (r) {
           var legacy = r && !r.targets && (r.ctx || r.ns);
@@ -807,17 +1121,14 @@
               : r,
           );
         });
-        if (!(data.envSimpleRows || []).length && document.getElementById('environmentsEnabled').checked) {
-          addEnvSimpleRow();
-          seedEnvRowFromOcSite();
-        }
         toggleEnvEditorPanels();
         onArchChange();
         syncSecretNameHint();
         syncCredModeUi();
         syncEnvKafkaBootstrapPanel();
+        syncKafkaPerNsRows();
         syncKafkaTruststoreModeUi();
-        showStep(Math.min(Math.max(parseInt(data.step, 10) || 1, 1), 5));
+        showStep(Math.min(Math.max(parseInt(data.step, 10) || 1, 1), 4));
       }
 
       function banner(className, html) {
@@ -829,7 +1140,20 @@
 
       function applyServerPrefill(w) {
         if (!w || typeof w !== 'object') return;
-        var ids = ['runtimeRoot', 'kafkaBootstrap', 'scriptName', 'k8sSecretName', 'ocPath', 'kubeconfig', 'portalPort', 'httpsKeyPath', 'httpsCertPath', 'credentialsFile', 'defaultEnvironmentId'];
+        var ids = [
+          'runtimeRoot',
+          'kafkaBootstrap',
+          'scriptName',
+          'k8sSecretName',
+          'ocPath',
+          'kubeconfig',
+          'portalPort',
+          'httpsKeyPath',
+          'httpsCertPath',
+          'credentialsFile',
+          'defaultEnvironmentId',
+          'ocpClusterApiUrl',
+        ];
         ids.forEach(function (id) {
           if (w[id] != null && String(w[id]) !== '' && document.getElementById(id)) {
             document.getElementById(id).value = String(w[id]);
@@ -870,29 +1194,60 @@
           document.getElementById('envEditorSimple').checked = true;
           toggleEnvEditorPanels();
           clearEnvSimpleRows();
-          w.environmentItems.forEach(function (env) {
-            var sites = Array.isArray(env.sites) ? env.sites : [];
-            var targets = sites.map(function (s) {
-              return {
-                siteName: (s && s.name) ? String(s.name) : '',
-                ctx: s && s.ocContext ? String(s.ocContext) : '',
-                ns: s && s.namespace ? String(s.namespace) : '',
-                api: s && s.apiServer ? String(s.apiServer) : '',
-              };
-            });
-            if (!targets.length) targets.push({ siteName: '', ctx: '', ns: '', api: '' });
-            addEnvSimpleRow({
-              id: env.id || '',
-              label: env.label || env.id || '',
-              targets: targets,
-            });
+          clearOcpProjectRows();
+          var multiSite = w.environmentItems.some(function (env) {
+            return Array.isArray(env.sites) && env.sites.length > 1;
           });
+          if (multiSite || w.ocTopology === 'dual') {
+            w.environmentItems.forEach(function (env) {
+              var sites = Array.isArray(env.sites) ? env.sites : [];
+              var targets = sites.map(function (s) {
+                return {
+                  siteName: (s && s.name) ? String(s.name) : '',
+                  ctx: s && s.ocContext ? String(s.ocContext) : '',
+                  ns: s && s.namespace ? String(s.namespace) : '',
+                  api: s && s.apiServer ? String(s.apiServer) : '',
+                };
+              });
+              if (!targets.length) targets.push({ siteName: '', ctx: '', ns: '', api: '' });
+              addEnvSimpleRow({
+                id: env.id || '',
+                label: env.label || env.id || '',
+                targets: targets,
+              });
+            });
+          } else {
+            w.environmentItems.forEach(function (env) {
+              var st = env.sites && env.sites[0];
+              if (st && (st.namespace || st.ocContext)) {
+                addOcpProjectRow({ ns: st.namespace ? String(st.namespace) : '', ctx: st.ocContext ? String(st.ocContext) : '' });
+              }
+            });
+            if (!document.querySelector('#ocp-project-rows .ocp-project-row')) {
+              addOcpProjectRow();
+            }
+          }
+          if (document.getElementById('ocpClusterApiUrl') && !String(document.getElementById('ocpClusterApiUrl').value || '').trim()) {
+            var apiHint = '';
+            if (w.ocSites && w.ocSites[0] && w.ocSites[0].apiServer) apiHint = String(w.ocSites[0].apiServer);
+            else if (w.environmentItems[0] && w.environmentItems[0].sites && w.environmentItems[0].sites[0]) {
+              apiHint = String(w.environmentItems[0].sites[0].apiServer || '');
+            }
+            if (apiHint) document.getElementById('ocpClusterApiUrl').value = apiHint;
+          }
           syncEnvKafkaBootstrapPanel();
+          syncKafkaPerNsRows();
           if (w.environmentBootstrapOverrides && typeof w.environmentBootstrapOverrides === 'object') {
             document.querySelectorAll('#env-kafka-bootstrap-rows input.env-kafka-bootstrap').forEach(function (inp) {
               var eid = inp.getAttribute('data-env-id');
               if (eid && w.environmentBootstrapOverrides[eid] != null) {
                 inp.value = String(w.environmentBootstrapOverrides[eid]);
+              }
+            });
+            document.querySelectorAll('#kafka-per-ns-rows input.kafka-per-ns-bootstrap').forEach(function (inp) {
+              var eid2 = inp.getAttribute('data-env-id');
+              if (eid2 && w.environmentBootstrapOverrides[eid2] != null) {
+                inp.value = String(w.environmentBootstrapOverrides[eid2]);
               }
             });
           }
@@ -992,14 +1347,14 @@
       document.getElementById('environmentsEnabled').addEventListener('change', function () {
         envFields.style.display = this.checked ? 'block' : 'none';
         if (this.checked) {
-          if (!document.querySelector('#env-simple-rows .env-simple-row')) {
-            addEnvSimpleRow();
-            seedEnvRowFromOcSite();
-          }
           toggleEnvEditorPanels();
         } else {
           syncEnvKafkaBootstrapPanel();
         }
+        scheduleDraftSave();
+      });
+      document.getElementById('btn-ocp-project-add').addEventListener('click', function () {
+        addOcpProjectRow();
         scheduleDraftSave();
       });
       document.getElementById('btn-env-add-row').addEventListener('click', function () {
@@ -1080,22 +1435,23 @@
       }
 
       function buildBody() {
-        var sites = collectOcSites();
-        var dual = topoDual();
-        var eff = dual ? sites : [sites[0]];
-        var firstOk = eff[0] && eff[0].ocContext && eff[0].namespace;
-        var ocSitesPayload = null;
-        if (dual) {
-          var secondOk = eff[1] && eff[1].ocContext && eff[1].namespace;
-          if (firstOk || secondOk) {
-            if (!firstOk || !secondOk) {
-              throw new Error('Dual OCP topology: fill context + namespace for both cluster rows (or clear both and use advanced JSON only).');
+        var envEnabled = document.getElementById('environmentsEnabled').checked;
+        var jsonMode = envEnabled && document.getElementById('envEditorJson').checked;
+        var legacySimple = envEnabled && !jsonMode && hasLegacyEnvSimpleRows();
+
+        var envBundle = null;
+        if (!legacySimple) {
+          if (jsonMode) {
+            try {
+              envBundle = buildEnvironmentAndOcSitesForBody();
+            } catch (e) {
+              envBundle = null;
             }
-            ocSitesPayload = eff;
+          } else {
+            envBundle = buildEnvironmentAndOcSitesForBody();
           }
-        } else if (firstOk) {
-          ocSitesPayload = eff;
         }
+
         var body = {
           runtimeRoot: document.getElementById('runtimeRoot').value.trim(),
           kafkaBootstrap: document.getElementById('kafkaBootstrap').value.trim(),
@@ -1107,9 +1463,40 @@
           httpsCertPath: document.getElementById('httpsCertPath').value.trim(),
           ocPath: document.getElementById('ocPath').value.trim(),
           kubeconfig: document.getElementById('kubeconfig').value.trim(),
-          ocTopology: dual ? 'dual' : 'single',
         };
-        if (ocSitesPayload) body.ocSites = ocSitesPayload;
+
+        if (legacySimple) {
+          var sites = collectOcSites();
+          var dual = topoDual();
+          var eff = dual ? sites : [sites[0]];
+          var ocSitesPayload = null;
+          if (dual) {
+            if (eff[0] && eff[0].ocContext && eff[0].namespace && eff[1] && eff[1].ocContext && eff[1].namespace) {
+              ocSitesPayload = eff;
+            }
+          } else if (eff[0] && eff[0].ocContext && eff[0].namespace) {
+            ocSitesPayload = eff;
+          }
+          if (!ocSitesPayload) {
+            throw new Error('OpenShift: add namespace + context rows on step 1, or fill Advanced cluster fields.');
+          }
+          body.ocTopology = dual ? 'dual' : 'single';
+          body.ocSites = ocSitesPayload;
+        } else if (jsonMode) {
+          var envObj = parseJsonOptional(document.getElementById('environmentsJson').value, 'Environments');
+          if (!envObj || typeof envObj !== 'object') {
+            throw new Error('Environments JSON is required when JSON mode is selected');
+          }
+          body.environments = envObj;
+          body.ocTopology = envBundle && envBundle.ocTopology ? envBundle.ocTopology : (topoDual() ? 'dual' : 'single');
+          if (envBundle && envBundle.ocSites && envBundle.ocSites.length) {
+            body.ocSites = envBundle.ocSites;
+          }
+        } else {
+          body.ocTopology = envBundle.ocTopology;
+          body.ocSites = envBundle.ocSites;
+        }
+
         if (document.getElementById('authEnabled').checked) {
           body.authEnabled = true;
           body.credentialsFile = document.getElementById('credentialsFile').value.trim();
@@ -1124,23 +1511,27 @@
             body.ocLoginPassword = document.getElementById('ocLoginPassword').value;
           }
         }
-        if (document.getElementById('environmentsEnabled').checked) {
-          if (document.getElementById('envEditorJson').checked) {
-            var envObj = parseJsonOptional(document.getElementById('environmentsJson').value, 'Environments');
-            if (!envObj || typeof envObj !== 'object') {
-              throw new Error('Environments JSON is required when JSON mode is selected');
-            }
-            body.environments = envObj;
-          } else {
+        if (envEnabled) {
+          if (jsonMode) {
+            /* body.environments set above */
+          } else if (legacySimple) {
             body.environmentsEnabled = true;
             body.defaultEnvironmentId = document.getElementById('defaultEnvironmentId').value.trim() || 'dev';
             body.environmentItems = collectSimpleEnvironmentItems();
-            var bootOv = {};
+            var bootOvLegacy = {};
             document.querySelectorAll('#env-kafka-bootstrap-rows input.env-kafka-bootstrap').forEach(function (inp) {
               var eid = inp.getAttribute('data-env-id');
               var v = inp.value.trim();
-              if (eid && v) bootOv[eid] = v;
+              if (eid && v) bootOvLegacy[eid] = v;
             });
+            var bootOvSimple = collectKafkaPerNsOverrides();
+            var mergedBoot = Object.assign({}, bootOvLegacy, bootOvSimple);
+            if (Object.keys(mergedBoot).length) body.environmentBootstrapOverrides = mergedBoot;
+          } else {
+            body.environmentsEnabled = envBundle.environmentsEnabled;
+            body.defaultEnvironmentId = envBundle.defaultEnvironmentId;
+            body.environmentItems = envBundle.environmentItems;
+            var bootOv = collectKafkaPerNsOverrides();
             if (Object.keys(bootOv).length) body.environmentBootstrapOverrides = bootOv;
           }
         }
@@ -1169,68 +1560,163 @@
         return body;
       }
 
-      /** Validate when leaving step N (before navigating to N+1). Step 1 = architecture only. */
+      /** Validate when leaving step N (before navigating to N+1). */
       function validateLeavingStep(leaving) {
-        if (leaving === 1) return;
-        if (leaving === 2) {
-          var sites = collectOcSites();
-          var dual = topoDual();
-          var eff = dual ? sites : [sites[0]];
-          if (dual) {
-            if (!eff[0].ocContext || !eff[0].namespace || !eff[1].ocContext || !eff[1].namespace) {
-              throw new Error('Dual region: enter oc context and namespace for both clusters.');
+        if (leaving === 1) {
+          var envEnabled = document.getElementById('environmentsEnabled').checked;
+          var jsonMode = envEnabled && document.getElementById('envEditorJson').checked;
+          var legacySimple = envEnabled && !jsonMode && hasLegacyEnvSimpleRows();
+          var clusterApi = document.getElementById('ocpClusterApiUrl').value.trim();
+
+          if (legacySimple) {
+            var sitesL = collectOcSites();
+            var dualL = topoDual();
+            var effL = dualL ? sitesL : [sitesL[0]];
+            if (dualL) {
+              if (!effL[0].ocContext || !effL[0].namespace || !effL[1].ocContext || !effL[1].namespace) {
+                throw new Error('Dual region: enter OC context and namespace for both clusters (Advanced).');
+              }
+            } else if (!effL[0].ocContext || !effL[0].namespace) {
+              throw new Error('OpenShift: fill Advanced cluster fields or clear legacy environment rows and use the simple project list.');
             }
-          } else if (!eff[0].ocContext || !eff[0].namespace) {
-            throw new Error('OpenShift: enter oc context and primary namespace for your cluster.');
-          }
-          for (var i = 0; i < eff.length; i++) {
-            var api = eff[i].apiServer;
-            if (api && !/^https?:\/\//i.test(api)) {
-              throw new Error('OpenShift API URL should start with https:// (cluster ' + (i + 1) + ').');
-            }
-          }
-          if (document.getElementById('ocAutoLogin').checked) {
-            for (var j = 0; j < eff.length; j++) {
-              if (!eff[j].apiServer || !eff[j].apiServer.trim()) {
-                throw new Error('OC auto-login: enter the OpenShift API URL for each cluster.');
+            for (var a = 0; a < effL.length; a++) {
+              var apL = effL[a].apiServer;
+              if (apL && !/^https?:\/\//i.test(apL)) {
+                throw new Error('OpenShift API URL should start with https:// (cluster ' + (a + 1) + ').');
               }
             }
-            if (document.getElementById('credPer').checked) {
-              for (var k = 0; k < eff.length; k++) {
-                if (!eff[k].loginUser || !eff[k].loginPassword) {
-                  throw new Error('OC auto-login (per cluster): enter user and password for each region.');
+            if (document.getElementById('ocAutoLogin').checked) {
+              for (var jL = 0; jL < effL.length; jL++) {
+                if (!effL[jL].apiServer || !effL[jL].apiServer.trim()) {
+                  throw new Error('OC auto-login: enter the OpenShift API URL for each cluster (Advanced).');
                 }
               }
-            } else {
+              if (document.getElementById('credPer').checked) {
+                for (var kL = 0; kL < effL.length; kL++) {
+                  if (!effL[kL].loginUser || !effL[kL].loginPassword) {
+                    throw new Error('OC auto-login (per cluster): enter user and password for each region.');
+                  }
+                }
+              } else {
+                if (!document.getElementById('ocLoginUser').value.trim() || !document.getElementById('ocLoginPassword').value) {
+                  throw new Error('OC auto-login: enter shared OC username and password.');
+                }
+              }
+            }
+            collectSimpleEnvironmentItems();
+            if (document.getElementById('ocAutoLogin').checked) {
+              document.querySelectorAll('#env-simple-rows .env-oc-target-row').forEach(function (tr) {
+                var ctx = (tr.querySelector('.env-oc-target-ctx') || {}).value.trim();
+                var api = (tr.querySelector('.env-oc-target-api') || {}).value.trim();
+                if (ctx && !api) {
+                  throw new Error(
+                    'OC auto-login: enter OpenShift API URL on each OCP target row, or use Advanced loginServers JSON.',
+                  );
+                }
+              });
+            }
+            return;
+          }
+
+          if (jsonMode) {
+            var envObj = parseJsonOptional(document.getElementById('environmentsJson').value, 'Environments');
+            if (!envObj || typeof envObj !== 'object') {
+              throw new Error('Environments JSON is required when JSON mode is selected.');
+            }
+            if (document.getElementById('ocAutoLogin').checked) {
               if (!document.getElementById('ocLoginUser').value.trim() || !document.getElementById('ocLoginPassword').value) {
                 throw new Error('OC auto-login: enter shared OC username and password.');
               }
+              try {
+                var bundleV = buildEnvironmentAndOcSitesForBody();
+                if (bundleV.ocSites && bundleV.ocSites.length) {
+                  for (var u = 0; u < bundleV.ocSites.length; u++) {
+                    var as = bundleV.ocSites[u].apiServer || '';
+                    if (!String(as).trim()) {
+                      throw new Error('OC auto-login: enter OpenShift API URL on step 1 or in Advanced cluster rows.');
+                    }
+                    if (!/^https?:\/\//i.test(String(as))) {
+                      throw new Error('OpenShift API URL should start with https://');
+                    }
+                  }
+                }
+              } catch (err) {
+                var em = err && err.message ? String(err.message) : '';
+                if (em.indexOf('Add at least one') === -1 && em.indexOf('namespace + context') === -1) {
+                  throw err;
+                }
+              }
             }
+            return;
           }
-          if (document.getElementById('environmentsEnabled').checked) {
-            if (document.getElementById('envEditorJson').checked) {
-              var envObj = parseJsonOptional(document.getElementById('environmentsJson').value, 'Environments');
-              if (!envObj || typeof envObj !== 'object') {
-                throw new Error('Environments JSON is required when JSON mode is selected.');
+
+          buildEnvironmentAndOcSitesForBody();
+
+          if (topoDual()) {
+            var effD = collectOcSites();
+            for (var iD = 0; iD < 2; iD++) {
+              var apiD = effD[iD].apiServer;
+              if (apiD && !/^https?:\/\//i.test(apiD)) {
+                throw new Error('OpenShift API URL should start with https:// (cluster ' + (iD + 1) + ').');
+              }
+            }
+            if (document.getElementById('ocAutoLogin').checked) {
+              for (var jD = 0; jD < 2; jD++) {
+                if (!effD[jD].apiServer || !effD[jD].apiServer.trim()) {
+                  throw new Error('OC auto-login: enter the OpenShift API URL for each region (Advanced).');
+                }
+              }
+              if (document.getElementById('credPer').checked) {
+                for (var kD = 0; kD < 2; kD++) {
+                  if (!effD[kD].loginUser || !effD[kD].loginPassword) {
+                    throw new Error('OC auto-login (per cluster): enter user and password for each region.');
+                  }
+                }
+              } else {
+                if (!document.getElementById('ocLoginUser').value.trim() || !document.getElementById('ocLoginPassword').value) {
+                  throw new Error('OC auto-login: enter shared OC username and password.');
+                }
+              }
+            }
+            return;
+          }
+
+          if (document.getElementById('ocAutoLogin').checked) {
+            var rowsOk = collectOcpProjectRowsFromDom().filter(function (r) {
+              return r.namespace && r.ocContext;
+            });
+            if (rowsOk.length) {
+              if (!clusterApi) {
+                throw new Error('OC auto-login: enter the OpenShift API URL (same for all rows on one cluster).');
+              }
+              if (!/^https?:\/\//i.test(clusterApi)) {
+                throw new Error('OpenShift API URL should start with https://');
               }
             } else {
-              collectSimpleEnvironmentItems();
-              if (document.getElementById('ocAutoLogin').checked) {
-                document.querySelectorAll('#env-simple-rows .env-oc-target-row').forEach(function (tr) {
-                  var ctx = (tr.querySelector('.env-oc-target-ctx') || {}).value.trim();
-                  var api = (tr.querySelector('.env-oc-target-api') || {}).value.trim();
-                  if (ctx && !api) {
-                    throw new Error(
-                      'OC auto-login: enter OpenShift API URL on each OCP target row (repeat the same URL if one cluster), or use Advanced loginServers JSON.',
-                    );
-                  }
-                });
+              var s0 = collectOcSites()[0];
+              var apiUrl = (s0.apiServer || '').trim() || clusterApi;
+              if (!apiUrl) {
+                throw new Error('OC auto-login: enter OpenShift API URL at the top or in Advanced.');
               }
+              if (!/^https?:\/\//i.test(apiUrl)) {
+                throw new Error('OpenShift API URL should start with https://');
+              }
+            }
+            if (!document.getElementById('ocLoginUser').value.trim() || !document.getElementById('ocLoginPassword').value) {
+              throw new Error('OC auto-login: enter shared OC username and password.');
             }
           }
           return;
         }
-        if (leaving === 3) {
+        if (leaving === 2) {
+          var mainBoot = document.getElementById('kafkaBootstrap').value.trim();
+          if (!mainBoot) {
+            document.querySelectorAll('#kafka-per-ns-rows input.kafka-per-ns-bootstrap').forEach(function (inp) {
+              var v = inp.value.trim();
+              if (v && !mainBoot) mainBoot = v;
+            });
+            if (mainBoot) document.getElementById('kafkaBootstrap').value = mainBoot;
+          }
           if (!document.getElementById('kafkaBootstrap').value.trim()) {
             throw new Error('Kafka: enter bootstrap servers (host:port, e.g. route:443).');
           }
@@ -1277,7 +1763,7 @@
           }
           return;
         }
-        if (leaving === 4) {
+        if (leaving === 3) {
           if (document.getElementById('authEnabled').checked) {
             if (!document.getElementById('adminUser').value.trim() || !document.getElementById('adminPassword').value) {
               throw new Error('Portal login enabled: enter admin username and password.');
@@ -1305,15 +1791,19 @@
           if (i === n) s.classList.add('active');
           else if (i < n) s.classList.add('done');
         });
-        if (n !== 5) {
+        if (n !== 4) {
           verifyOut.style.display = 'none';
           lastPreviewOk = false;
           confirmCheck.checked = false;
           btnSave.disabled = true;
         }
-        if (n === 3) {
+        if (n === 2) {
+          syncKafkaPerNsRows();
           syncEnvKafkaBootstrapPanel();
           syncKafkaTruststoreModeUi();
+        }
+        if (n === 3) {
+          syncEnvKafkaBootstrapPanel();
         }
       }
 
@@ -1462,6 +1952,7 @@
               banner('ok', 'Restored draft from this browser — use Next/Back freely; progress is saved locally until you save setup.');
             } else {
               showStep(1);
+              ensureAtLeastOneOcpRow();
             }
           } else if (st.reconfigureAllowed) {
             if (draft) {
@@ -1471,6 +1962,7 @@
               tryPrefillFromServer();
             }
             showStep(1);
+            ensureAtLeastOneOcpRow();
           }
         })
         .catch(function () {

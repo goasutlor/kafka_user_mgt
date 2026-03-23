@@ -141,9 +141,8 @@ function normalizeOcSitesFromBody(body) {
     if (sites.length < 2) {
       throw new Error('Dual-cluster (cross-region) topology requires at least two OCP sites');
     }
-  } else if (topo === 'single' && sites.length > 1) {
-    throw new Error('Single-cluster topology: provide only one site, or choose Dual for two OCP clusters');
   }
+  // Single topology may list multiple sites (same cluster: one API, many namespace+context pairs).
   const ctxs = sites.map((s) => s.ocContext);
   if (new Set(ctxs).size !== ctxs.length) {
     throw new Error('Each OCP site must use a distinct ocContext name');
@@ -398,6 +397,14 @@ function masterToSetupWizardBody(master) {
     }
   }
 
+  let ocpClusterApiUrl = '';
+  if (ocSites.length && ocSites[0].apiServer) {
+    ocpClusterApiUrl = String(ocSites[0].apiServer).trim();
+  } else if (oc.loginServers && typeof oc.loginServers === 'object') {
+    const vals = Object.values(oc.loginServers).filter((v) => v && String(v).trim());
+    if (vals.length) ocpClusterApiUrl = String(vals[0]).trim();
+  }
+
   return {
     runtimeRoot: String(master.runtimeRoot || '').trim(),
     kafkaBootstrap: String(kafka.bootstrapServers || '').trim(),
@@ -422,6 +429,7 @@ function masterToSetupWizardBody(master) {
     environmentItems: envItems,
     environmentBootstrapOverrides:
       Object.keys(environmentBootstrapOverrides).length ? environmentBootstrapOverrides : undefined,
+    ocpClusterApiUrl: ocpClusterApiUrl || undefined,
   };
 }
 
