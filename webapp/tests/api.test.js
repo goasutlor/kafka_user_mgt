@@ -294,6 +294,49 @@ describe('API', () => {
     const res = await request(app).get('/api/users/check?username=' + encodeURIComponent('bad name')).expect(400);
     assert.strictEqual(res.body.ok, false);
   });
+
+  it('POST /api/add-acl-existing-user validates legacy payload fields', async () => {
+    const res = await request(app).post('/api/add-acl-existing-user').send({}).expect(400);
+    assert.strictEqual(res.body.ok, false);
+    assert.ok(Array.isArray(res.body.errors));
+    assert.ok(res.body.errors.some((e) => /username/i.test(e)));
+  });
+
+  it('POST /api/add-acl-existing-user rejects invalid advanced aclConfig operation', async () => {
+    const res = await request(app)
+      .post('/api/add-acl-existing-user')
+      .send({
+        username: 'existing_user',
+        aclConfig: {
+          resources: [
+            { type: 'topic', name: 'topic-a', pattern: 'LITERAL', ops: ['READ', 'NOT_A_REAL_OP'] },
+          ],
+        },
+      })
+      .expect(400);
+    assert.strictEqual(res.body.ok, false);
+    assert.ok(Array.isArray(res.body.errors));
+    assert.ok(res.body.errors.some((e) => /invalid operation/i.test(e)));
+  });
+
+  it('POST /api/add-acl-existing-user accepts advanced aclConfig (resource-based)', async () => {
+    const res = await request(app)
+      .post('/api/add-acl-existing-user')
+      .send({
+        username: 'existing_user',
+        permissionType: 'ALLOW',
+        host: '*',
+        aclConfig: {
+          resources: [
+            { type: 'topic', name: 'input-topic', pattern: 'LITERAL', ops: ['READ', 'DESCRIBE'] },
+            { type: 'group', name: 'svc-cg', pattern: 'LITERAL', ops: ['READ', 'DESCRIBE'] },
+            { type: 'cluster', pattern: 'LITERAL', ops: ['DESCRIBE'] },
+          ],
+        },
+      });
+    assert.ok([200, 500].includes(res.status), `expected 200 or 500 got ${res.status}`);
+    assert.strictEqual(typeof res.body.ok, 'boolean');
+  });
 });
 
 // ---- Security / vulnerability tests ----

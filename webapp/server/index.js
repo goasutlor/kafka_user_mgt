@@ -1910,21 +1910,79 @@ app.post('/api/add-acl-existing-user', (req, res) => {
   } catch (e) {
     return res.status(500).json({ ok: false, error: e.message });
   }
-  const { username, topic, acl } = req.body || {};
+  const { username, topic, acl, aclConfig, permissionType, host } = req.body || {};
   const errors = [];
   const e1 = validateSafeName(username, 'username', MAX_USERNAME_LEN);
   if (e1) errors.push(e1);
-  const e2 = validateSafeName(topic, 'topic', MAX_TOPIC_LEN);
-  if (e2) errors.push(e2);
+  const hasAclConfig = aclConfig && typeof aclConfig === 'object' && Array.isArray(aclConfig.resources);
+  const safeAclResourceName = (name, label) => {
+    if (typeof name !== 'string') return `${label} must be a string`;
+    const s = name.trim();
+    if (!s) return `${label} is required`;
+    if (s.length > MAX_TOPIC_LEN) return `${label} must be at most ${MAX_TOPIC_LEN} characters`;
+    if (!/^[a-zA-Z0-9_.\-*]+$/.test(s)) return `${label} may only contain letters, numbers, underscore, hyphen, period, and *`;
+    return null;
+  };
+  const allowedOpsByType = {
+    topic: new Set(['READ', 'WRITE', 'DESCRIBE', 'DESCRIBE_CONFIGS', 'CREATE', 'DELETE', 'ALTER', 'ALTER_CONFIGS', 'ALL']),
+    group: new Set(['READ', 'DESCRIBE', 'DELETE', 'ALL']),
+    cluster: new Set(['DESCRIBE', 'IDEMPOTENT_WRITE', 'CREATE', 'ALTER', 'CLUSTER_ACTION', 'DESCRIBE_CONFIGS', 'ALL']),
+    'transactional-id': new Set(['WRITE', 'DESCRIBE', 'ALL']),
+  };
+  /** @type {{ type: string, name: string, pattern: 'LITERAL'|'PREFIXED', ops: string[] }[]} */
+  const normalizedResources = [];
+  let fallbackTopic = '';
+  if (hasAclConfig) {
+    if (aclConfig.resources.length === 0) errors.push('aclConfig.resources must not be empty');
+    if (aclConfig.resources.length > 100) errors.push('aclConfig.resources must be at most 100 entries');
+    for (let i = 0; i < (aclConfig.resources || []).length; i += 1) {
+      const r = aclConfig.resources[i] || {};
+      const rt = String(r.type || '').trim().toLowerCase();
+      if (!Object.prototype.hasOwnProperty.call(allowedOpsByType, rt)) {
+        errors.push(`aclConfig.resources[${i}].type is invalid`);
+        continue;
+      }
+      const pattern = String(r.pattern || 'LITERAL').trim().toUpperCase();
+      if (pattern !== 'LITERAL' && pattern !== 'PREFIXED') {
+        errors.push(`aclConfig.resources[${i}].pattern must be LITERAL or PREFIXED`);
+      }
+      const ops = Array.isArray(r.ops) ? r.ops.map((o) => String(o || '').trim().toUpperCase()).filter(Boolean) : [];
+      if (ops.length === 0) errors.push(`aclConfig.resources[${i}].ops must not be empty`);
+      const allowed = allowedOpsByType[rt];
+      for (const op of ops) {
+        if (!allowed.has(op)) errors.push(`aclConfig.resources[${i}].ops contains invalid operation: ${op}`);
+      }
+      let resourceName = '';
+      if (rt !== 'cluster') {
+        const en = safeAclResourceName(r.name, `aclConfig.resources[${i}].name`);
+        if (en) errors.push(en);
+        resourceName = String(r.name || '').trim();
+      }
+      if (!fallbackTopic && rt === 'topic' && resourceName && resourceName !== '*') fallbackTopic = resourceName;
+      normalizedResources.push({ type: rt, name: resourceName, pattern: (pattern === 'PREFIXED' ? 'PREFIXED' : 'LITERAL'), ops: [...new Set(ops)] });
+    }
+  } else {
+    const e2 = validateSafeName(topic, 'topic', MAX_TOPIC_LEN);
+    if (e2) errors.push(e2);
+  }
   if (errors.length) return res.status(400).json({ ok: false, errors });
-  const aclVal = (acl === 'read' || acl === '1') ? '1' : (acl === 'client' || acl === '2') ? '2' : '3';
   const env = {
     GEN_NONINTERACTIVE: '1',
     GEN_MODE: '5',
     GEN_KAFKA_USER: String(username).trim(),
-    GEN_TOPIC_NAME: String(topic).trim(),
-    GEN_ACL: aclVal,
   };
+  const safePermissionType = String(permissionType || 'ALLOW').trim().toUpperCase();
+  const safeHost = String(host || '*').trim() || '*';
+  if (hasAclConfig) {
+    env.GEN_ACL_CONFIG_JSON = JSON.stringify(normalizedResources);
+    env.GEN_ACL_PERMISSION_TYPE = safePermissionType === 'DENY' ? 'DENY' : 'ALLOW';
+    env.GEN_ACL_HOST = safeHost;
+    if (fallbackTopic) env.GEN_TOPIC_NAME = fallbackTopic;
+  } else {
+    const aclVal = (acl === 'read' || acl === '1') ? '1' : (acl === 'client' || acl === '2') ? '2' : '3';
+    env.GEN_TOPIC_NAME = String(topic).trim();
+    env.GEN_ACL = aclVal;
+  }
   runGen(env, req)
     .then(({ code, stdout, stderr }) => {
       if (code !== 0) {
@@ -1932,7 +1990,12 @@ app.post('/api/add-acl-existing-user', (req, res) => {
         const msg = stripAnsi(raw);
         return res.status(500).json({ ok: false, error: 'Add ACL failed', detail: msg, step: 'add-acl-existing', exitCode: code });
       }
-      appendAuditLog(req, 'add-acl-existing', { username: String(username).trim(), topic: String(topic).trim() });
+      appendAuditLog(req, 'add-acl-existing', {
+        username: String(username).trim(),
+        topic: hasAclConfig ? (fallbackTopic || '') : String(topic).trim(),
+        aclMode: hasAclConfig ? 'advanced' : 'preset',
+        aclResourceCount: hasAclConfig ? normalizedResources.length : 1,
+      });
       res.json({ ok: true, message: 'ACL added for existing user.' });
     })
     .catch((err) => {

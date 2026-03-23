@@ -172,6 +172,30 @@
       overflow-x: auto;
       margin: 12px 0;
     }
+    .main table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 12px 0 16px;
+      font-size: 13px;
+      background: #fff;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+    }
+    .main th, .main td {
+      border-bottom: 1px solid var(--border);
+      padding: 10px 12px;
+      vertical-align: top;
+      text-align: left;
+    }
+    .main th {
+      background: var(--code-bg);
+      font-weight: 600;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.02em;
+    }
+    .main tr:last-child td { border-bottom: none; }
   </style>
 </head>
 <body>
@@ -297,6 +321,109 @@
       <div class="step">
         <span class="step-num">5</span>
         กด <strong>Confirm</strong> เพื่อดำเนินการ — หลังสำเร็จการกระทำจะถูกบันทึกใน Audit Log เป็น "Add ACL (existing user)"
+      </div>
+      <h3>ACL Table (แนะนำการเลือกสิทธิ์)</h3>
+      <p>ใช้ตารางนี้เพื่อเลือก Role Template ให้เหมาะกับงาน และหลีกเลี่ยงการให้สิทธิ์เกินจำเป็น (least privilege)</p>
+
+      <table>
+        <thead>
+          <tr>
+            <th>Role Template</th>
+            <th>เหมาะกับงาน</th>
+            <th>Default ACL โดยสรุป</th>
+            <th>ข้อควรระวัง</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Producer</strong></td>
+            <td>Service ที่ส่งข้อมูลเข้า topic อย่างเดียว</td>
+            <td>TOPIC: WRITE, DESCRIBE</td>
+            <td>อย่าให้ READ/GROUP ถ้าไม่ต้อง consume</td>
+          </tr>
+          <tr>
+            <td><strong>Consumer</strong> (ใช้บ่อยที่สุด)</td>
+            <td>Service ที่อ่านข้อมูลผ่าน consumer group</td>
+            <td>TOPIC: READ, DESCRIBE<br/>GROUP: READ, DESCRIBE</td>
+            <td>ควรระบุชื่อ group จริง ไม่ใช้ <span class="term">*</span></td>
+          </tr>
+          <tr>
+            <td><strong>Prosumer</strong></td>
+            <td>อ่านจาก topic หนึ่งและเขียนไปอีก topic</td>
+            <td>TOPIC(input): READ, DESCRIBE<br/>TOPIC(output): WRITE, DESCRIBE<br/>GROUP: READ, DESCRIBE</td>
+            <td>แยก input/output ให้ชัด ลดสิทธิ์เกินจำเป็น</td>
+          </tr>
+          <tr>
+            <td><strong>Idempotent Producer</strong></td>
+            <td>Producer ที่ต้องการ exactly-once</td>
+            <td>TOPIC: WRITE, DESCRIBE<br/>CLUSTER: IDEMPOTENT_WRITE</td>
+            <td>ถ้าขาด IDEMPOTENT_WRITE แอปจะ error ตอน startup</td>
+          </tr>
+          <tr>
+            <td><strong>Monitor / Audit</strong></td>
+            <td>Kafka UI / monitoring / observability</td>
+            <td>TOPIC: DESCRIBE, DESCRIBE_CONFIGS<br/>GROUP: DESCRIBE<br/>CLUSTER: DESCRIBE, DESCRIBE_CONFIGS</td>
+            <td>เน้น read-meta เท่านั้น ไม่ควรมี WRITE</td>
+          </tr>
+          <tr>
+            <td><strong>Kafka Connect</strong></td>
+            <td>Source/Sink connector และ internal topic</td>
+            <td>TOPIC(data): READ, WRITE, DESCRIBE<br/>TOPIC(connect-*, PREFIXED): READ, WRITE, CREATE, DESCRIBE<br/>GROUP: READ, DESCRIBE<br/>CLUSTER: DESCRIBE, CREATE</td>
+            <td>ควรใช้ PREFIXED สำหรับ internal topic</td>
+          </tr>
+          <tr>
+            <td><strong>Kafka Streams App</strong></td>
+            <td>Streams app ที่มี changelog/repartition topic</td>
+            <td>TOPIC(input/output): READ/WRITE + DESCRIBE<br/>TOPIC(app-id-*, PREFIXED): READ, WRITE, CREATE, DELETE, DESCRIBE<br/>GROUP(app-id-*, PREFIXED): READ, DESCRIBE</td>
+            <td>ต้องใช้ PREFIXED ตาม app-id เพื่อรองรับ internal topics</td>
+          </tr>
+          <tr>
+            <td><strong>Topic Admin</strong></td>
+            <td>Platform/DevOps สำหรับงานดูแล topic</td>
+            <td>TOPIC: CREATE, DELETE, ALTER, ALTER_CONFIGS, DESCRIBE, DESCRIBE_CONFIGS<br/>GROUP: DELETE, DESCRIBE<br/>CLUSTER: DESCRIBE, DESCRIBE_CONFIGS</td>
+            <td>ให้เฉพาะทีม platform/devops เท่านั้น</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Operation Matrix ต่อ Resource</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Resource</th>
+            <th>Operations ที่ใช้ได้</th>
+            <th>หมายเหตุ</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>TOPIC</strong></td>
+            <td>READ, WRITE, DESCRIBE, DESCRIBE_CONFIGS, CREATE, DELETE, ALTER, ALTER_CONFIGS</td>
+            <td>งานแอปทั่วไปมักใช้ READ/WRITE/DESCRIBE เท่านั้น</td>
+          </tr>
+          <tr>
+            <td><strong>GROUP</strong></td>
+            <td>READ, DESCRIBE, DELETE</td>
+            <td>Consumer ต้องมี GROUP:READ ไม่เช่นนั้น commit offset ไม่ได้</td>
+          </tr>
+          <tr>
+            <td><strong>CLUSTER</strong></td>
+            <td>DESCRIBE, IDEMPOTENT_WRITE, CREATE, ALTER, CLUSTER_ACTION, DESCRIBE_CONFIGS</td>
+            <td>ใช้เฉพาะกรณีพิเศษ/งาน platform</td>
+          </tr>
+          <tr>
+            <td><strong>TRANSACTIONAL_ID</strong></td>
+            <td>WRITE, DESCRIBE</td>
+            <td>ใช้กับ transactional producer</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="warn">
+        <strong>หลักการ assign ACL ให้เหมาะสม:</strong>
+        เริ่มจาก role ที่แคบที่สุดก่อน, หลีกเลี่ยง <span class="term">All</span> และ wildcard โดยไม่จำเป็น,
+        ใช้ <span class="term">LITERAL</span> เป็นค่าเริ่มต้น, ใช้ <span class="term">PREFIXED</span> เฉพาะกรณี internal topics/group,
+        และทดสอบด้วยเมนู <strong>Test existing user</strong> หลังเพิ่ม ACL ทุกครั้ง
       </div>
 
       <h2 id="test-user">4. Test existing user (ทดสอบ user ที่มีอยู่)</h2>
