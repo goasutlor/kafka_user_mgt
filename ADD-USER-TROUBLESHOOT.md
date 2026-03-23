@@ -63,13 +63,12 @@ podman logs --tail 100 kafka-user-web
 
 ### อาการ: `gen.sh not found at /path/to/script`
 
-- **สาเหตุ:** path ใน config ไม่ตรงกับที่ container เห็น (ไฟล์ไม่มีหรืออยู่คนละ path)
-- **เช็คบน Helper Node:**
+- **สาเหตุ (Docker):** `master.config` / legacy config มักอ้าง `…/runtimeRoot/gen.sh` ใต้ `/opt/kafka-usermgmt` แต่ **โฟลเดอร์นั้นถูก bind-mount จาก host** — ไม่ควรมี `gen.sh` บน mount; สคริปต์จริงอยู่ใน image ที่ **`/app/bundled-gen/gen.sh`** และเซิร์ฟเวอร์จะใช้ path นี้โดยอัตโนมัติ (ยกเว้นตั้ง `GEN_USE_HOST_SCRIPT=1` แล้ววางสคริปต์เองตาม `scriptPath`)
+- **เช็คใน container:**
   ```bash
-  # path ต้องตรงกับที่เขียนใน web.config.json (scriptPath)
-  ls -la /opt/kafka-usermgmt/gen.sh
+  ls -la /app/bundled-gen/gen.sh
   ```
-- **แก้:** ใน `web.config.json` ตั้ง `scriptPath` ให้ชี้ไปที่ path จริงที่ **container เห็น** (เช่น `/opt/kafka-usermgmt/gen.sh` เมื่อ mount เป็น -v ROOT:ROOT) และให้แน่ใจว่า ROOT ถูก mount ตอนรัน container
+- **แก้:** ใช้ image เวอร์ชันล่าสุดที่มี `bundled-gen`; อย่าพึ่งพา `gen.sh` ใต้ runtime mount
 
 ### อาการ: `gen.sh exited 1` (หรือ exit code อื่นที่ไม่ใช่ 0)
 

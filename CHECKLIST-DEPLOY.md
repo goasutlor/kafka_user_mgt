@@ -14,7 +14,7 @@
 
 | ค่า | ตัวอย่าง (ROOT=/opt/kafka-usermgmt) |
 |-----|-------------------------------------|
-| scriptPath | /opt/kafka-usermgmt/gen.sh |
+| scriptPath | (legacy examples used `/opt/kafka-usermgmt/gen.sh`) **In the official Docker image, `gen.sh` ships only at `/app/bundled-gen/gen.sh`** — the Node server uses it automatically; runtime mount must not supply `gen.sh`. Optional: `GEN_USE_HOST_SCRIPT=1` if you intentionally mount a custom script at the configured path. |
 | baseDir | /opt/kafka-usermgmt |
 | downloadDir | /opt/kafka-usermgmt/user_output |
 | kafkaBin | /opt/kafka-usermgmt/kafka_2.13-3.6.1/bin |

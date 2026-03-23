@@ -58,15 +58,15 @@
 # =====================================================
 
 # 1. FIXED CONFIGURATION (overridable by env for Web/non-interactive: GEN_BASE_DIR, GEN_KAFKA_BIN, GEN_OC_PATH)
-# Output directory: all generated .enc and pack files go here (same path as this script, easy to find)
+# Output directory: under BASE_DIR (Web sets GEN_BASE_DIR to runtime mount). If script lives in /app/bundled-gen, still use BASE_DIR for packs.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" && pwd)"
-# Go-Live verify script: repo = scripts/verify-golive.sh; Docker image = /opt/kafka-usermgmt/verify-golive.sh
-GOLIVE_VERIFY_SCRIPT="${GOLIVE_VERIFY_SCRIPT:-$SCRIPT_DIR/scripts/verify-golive.sh}"
-[ ! -f "$GOLIVE_VERIFY_SCRIPT" ] && [ -f /opt/kafka-usermgmt/verify-golive.sh ] && GOLIVE_VERIFY_SCRIPT=/opt/kafka-usermgmt/verify-golive.sh
-USER_OUTPUT_DIR="${GEN_USER_OUTPUT_DIR:-$SCRIPT_DIR/user_output}"
-mkdir -p "$USER_OUTPUT_DIR"
-
 BASE_DIR="${GEN_BASE_DIR:-$SCRIPT_DIR}"
+USER_OUTPUT_DIR="${GEN_USER_OUTPUT_DIR:-$BASE_DIR/user_output}"
+mkdir -p "$USER_OUTPUT_DIR"
+# Go-Live verify script: repo = scripts/verify-golive.sh; Docker = /opt/kafka-usermgmt or /app/bundled-gen (runtime mount may hide /opt/...).
+GOLIVE_VERIFY_SCRIPT="${GOLIVE_VERIFY_SCRIPT:-$SCRIPT_DIR/scripts/verify-golive.sh}"
+[ ! -f "$GOLIVE_VERIFY_SCRIPT" ] && [ -f /app/bundled-gen/verify-golive.sh ] && GOLIVE_VERIFY_SCRIPT=/app/bundled-gen/verify-golive.sh
+[ ! -f "$GOLIVE_VERIFY_SCRIPT" ] && [ -f /opt/kafka-usermgmt/verify-golive.sh ] && GOLIVE_VERIFY_SCRIPT=/opt/kafka-usermgmt/verify-golive.sh
 # Default dir name matches Docker symlink; override with GEN_KAFKA_BIN or install newer tarball under BASE_DIR (see master.config kafka.clientInstallDir).
 KAFKA_BIN="${GEN_KAFKA_BIN:-$BASE_DIR/kafka_2.13-3.6.1/bin}"
 # Host bind-mount on /opt/kafka-usermgmt hides image Kafka — use bundled CLI (Dockerfile: /opt/apache-kafka, env KAFKA_TOOLS_BIN).
@@ -424,8 +424,9 @@ fi
 if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "8" ]; then
     _BOOT8="${GEN_KAFKA_BOOTSTRAP:-$BOOTSTRAP_CWDC}"
     _ENSURE="${SCRIPT_DIR}/scripts/ensure-kafka-client-props.sh"
+    [ ! -f "$_ENSURE" ] && [ -f /app/bundled-gen/ensure-kafka-client-props.sh ] && _ENSURE=/app/bundled-gen/ensure-kafka-client-props.sh
     [ ! -f "$_ENSURE" ] && [ -f /opt/kafka-usermgmt/ensure-kafka-client-props.sh ] && _ENSURE=/opt/kafka-usermgmt/ensure-kafka-client-props.sh
-    [ ! -f "$_ENSURE" ] && error_exit "ensure-kafka-client-props.sh not found (expected scripts/ or /opt/kafka-usermgmt/)"
+    [ ! -f "$_ENSURE" ] && error_exit "ensure-kafka-client-props.sh not found (expected scripts/ or /app/bundled-gen/ or /opt/kafka-usermgmt/)"
     bash "$_ENSURE" "$BASE_DIR" "$_BOOT8"
     exit 0
 fi
@@ -795,6 +796,7 @@ while true; do
     _boot8=$(trim_ws "${_boot8:-}")
     [ -z "$_boot8" ] && _boot8="$BOOTSTRAP_CWDC"
     _ENSURE="${SCRIPT_DIR}/scripts/ensure-kafka-client-props.sh"
+    [ ! -f "$_ENSURE" ] && [ -f /app/bundled-gen/ensure-kafka-client-props.sh ] && _ENSURE=/app/bundled-gen/ensure-kafka-client-props.sh
     [ ! -f "$_ENSURE" ] && [ -f /opt/kafka-usermgmt/ensure-kafka-client-props.sh ] && _ENSURE=/opt/kafka-usermgmt/ensure-kafka-client-props.sh
     if [ ! -f "$_ENSURE" ]; then
         echo -e "   ${RED}ensure-kafka-client-props.sh not found.${NC}"

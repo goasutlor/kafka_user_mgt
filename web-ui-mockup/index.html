@@ -70,23 +70,23 @@
       min-width: 0;
       flex-shrink: 0;
     }
-    /* Logo sits on same chroma as bar — tile uses header bg; image toned to blend baked-in PNG frame */
+    /* Logo flush with bar — same asset as login; no inner “tile” (Header PNG had a separate BG square) */
     .header-logo-wrap {
       flex-shrink: 0;
-      width: 44px;
-      height: 44px;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--header-bg);
-      border-radius: 10px;
+      background: transparent;
+      padding: 0;
+      margin: 0;
     }
     .header-logo {
-      width: 30px;
-      height: 30px;
+      width: 36px;
+      height: 36px;
       display: block;
       object-fit: contain;
-      filter: brightness(1.08) contrast(0.92) saturate(0.85);
+      border-radius: 0;
+      filter: brightness(1.06) contrast(1.02) saturate(1.05);
     }
     .header-title {
       font-weight: 600;
@@ -664,15 +664,36 @@
       text-align: center;
     }
     .login-card .login-version {
-      margin: 0 0 24px;
+      margin: 12px 0 20px;
       text-align: center;
       font-size: 12px;
       color: var(--text-muted);
       font-variant-numeric: tabular-nums;
       letter-spacing: 0.02em;
     }
+    .login-card .login-version a { color: var(--link); }
     .login-card .login-version.is-error { color: var(--danger); }
     .login-card .form-group { margin-bottom: 18px; }
+    .login-env-static {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+      padding: 12px 14px;
+      border-radius: 8px;
+      background: var(--code-bg, #f0f3f7);
+      border: 1px solid var(--border, #d8dee4);
+    }
+    .login-env-static .env-badge {
+      display: inline-block;
+      padding: 4px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: 0.02em;
+    }
+    .login-env-static .login-env-label { font-size: 14px; color: var(--text); }
     .login-card select#login-environment {
       width: 100%;
       padding: 10px 12px;
@@ -751,15 +772,19 @@
       <img src="Confluent-Emblem.png" alt="" class="login-logo" />
       <h1>Confluent Kafka User Management</h1>
       <p class="lead">Sign in to manage Kafka users and ACLs.</p>
-      <p class="login-version" id="login-app-version" aria-live="polite">Loading version…</p>
       <form id="login-form" method="post" action="#" onsubmit="return false;">
-        <div class="form-group" id="login-environment-group" style="display:none;">
-          <label for="login-environment">Environment</label>
+        <div class="form-group" id="login-environment-group" style="display:block;">
+          <label id="login-environment-label" for="login-environment">Environment</label>
+          <div id="login-environment-static" class="login-env-static" style="display:none;" aria-live="polite">
+            <span id="login-env-badge" class="env-badge" style="background:#6e7781;">—</span>
+            <span id="login-env-label" class="login-env-label"></span>
+          </div>
           <select id="login-environment" name="environmentId" aria-label="Target environment">
             <option value="">Loading…</option>
           </select>
-          <p class="hint" style="margin-top:8px;font-size:12px;color:var(--text-muted);">Choose Dev, SIT, or UAT before signing in. The bar at the top shows the active environment after login.</p>
+          <p id="login-environment-hint" class="hint" style="margin-top:8px;font-size:12px;color:var(--text-muted);">Loading environments…</p>
         </div>
+        <p class="login-version" id="login-app-version" aria-live="polite">Loading version…</p>
         <div class="form-group" id="login-security-code-group" style="display:none;">
           <label>Security code</label>
           <div id="login-security-code-box" class="security-code-box">—</div>
@@ -785,7 +810,7 @@
   <header class="header">
     <div class="header-brand">
       <div class="header-logo-wrap" aria-hidden="true">
-        <img src="Confluent-Emblem-Header.png" alt="" class="header-logo" />
+        <img src="Confluent-Emblem.png" alt="" class="header-logo" />
       </div>
       <span class="header-title">Confluent Kafka User Management</span>
       <div id="header-env-wrap" class="header-env-wrap" aria-live="polite">
@@ -1290,6 +1315,10 @@
       var loginEnvironmentsEnabled = false;
       var loginEnvironmentsList = [];
       var loginDefaultEnvironmentId = '';
+      var loginEnvSelectionRequired = false;
+      var loginEnvSingleDeployment = false;
+      var loginEnvUnconfigured = false;
+      var cachedSetupPageUrl = '/setup.html';
 
       function fetchAuth(url, options) {
         var o = Object.assign({ credentials: 'same-origin', cache: 'no-store' }, options || {});
@@ -1309,37 +1338,124 @@
       }
 
       function loadLoginEnvironments(cb) {
+        var grp = document.getElementById('login-environment-group');
+        var sel = document.getElementById('login-environment');
+        var stat = document.getElementById('login-environment-static');
+        var hint = document.getElementById('login-environment-hint');
+        var lab = document.getElementById('login-environment-label');
+        if (grp) grp.style.display = 'block';
+        if (hint) hint.textContent = 'Loading environments…';
+        if (sel) {
+          sel.style.display = 'block';
+          sel.disabled = true;
+          sel.required = false;
+          sel.innerHTML = '<option value="">Loading…</option>';
+        }
+        if (stat) stat.style.display = 'none';
+
         fetchAuth('/api/environments')
-          .then(function (r) { return r.json(); })
-          .then(function (j) {
-            loginEnvironmentsEnabled = j.enabled === true && Array.isArray(j.environments) && j.environments.length > 0;
+          .then(function (r) {
+            return r.json().then(function (j) { return { httpOk: r.ok, j: j }; });
+          })
+          .then(function (x) {
+            var j = x.j || {};
+            var bad = !x.httpOk || j.ok === false;
+            loginEnvUnconfigured = j.unconfigured === true;
+            loginEnvironmentsEnabled = !bad && j.enabled === true && Array.isArray(j.environments) && j.environments.length > 0;
             loginEnvironmentsList = loginEnvironmentsEnabled ? j.environments : [];
             loginDefaultEnvironmentId = j.defaultEnvironmentId || (loginEnvironmentsList[0] && loginEnvironmentsList[0].id) || '';
-            var grp = document.getElementById('login-environment-group');
-            var sel = document.getElementById('login-environment');
-            if (grp && sel) {
-              if (loginEnvironmentsEnabled) {
-                grp.style.display = 'block';
-                fillEnvironmentSelect(sel, loginEnvironmentsList, loginDefaultEnvironmentId);
-                sel.required = true;
-              } else {
-                grp.style.display = 'none';
+            loginEnvSelectionRequired = j.selectionRequired === true;
+            loginEnvSingleDeployment = j.singleDeployment === true;
+            var badge = document.getElementById('login-env-badge');
+            var lbl = document.getElementById('login-env-label');
+            if (sel) sel.disabled = false;
+            if (bad) {
+              loginEnvironmentsEnabled = false;
+              loginEnvSelectionRequired = false;
+              loginEnvSingleDeployment = false;
+              loginEnvUnconfigured = false;
+              if (stat) stat.style.display = 'none';
+              if (sel) {
+                sel.style.display = 'none';
                 sel.required = false;
                 sel.innerHTML = '<option value="">—</option>';
               }
+              if (lab) lab.removeAttribute('for');
+              if (hint) {
+                hint.textContent = (j && j.error) ? String(j.error) : 'Could not load environments (server error). You can still try to sign in.';
+              }
+              if (typeof cb === 'function') cb();
+              return;
+            }
+            if (grp && sel) {
+              if (loginEnvironmentsEnabled) {
+                if (loginEnvSingleDeployment && stat && badge && lbl) {
+                  stat.style.display = 'flex';
+                  sel.style.display = 'none';
+                  if (lab) lab.removeAttribute('for');
+                  var e0 = loginEnvironmentsList[0] || {};
+                  badge.textContent = e0.shortLabel || e0.label || e0.id || '—';
+                  if (e0.badgeColor) badge.style.background = e0.badgeColor;
+                  lbl.textContent = e0.label || e0.shortLabel || '';
+                  sel.required = false;
+                  sel.innerHTML = '<option value="">—</option>';
+                  if (hint) {
+                    if (loginEnvUnconfigured) {
+                      hint.innerHTML = '';
+                      hint.appendChild(document.createTextNode('ยังไม่ตั้ง OpenShift / Kafka targets — '));
+                      var a = document.createElement('a');
+                      a.href = cachedSetupPageUrl;
+                      a.textContent = 'เปิด Setup wizard';
+                      hint.appendChild(a);
+                      hint.appendChild(document.createTextNode(' แล้วล็อกอินใหม่'));
+                    } else {
+                      hint.textContent = 'Single target only. To switch Dev / SIT / UAT on login, add multiple environments in Setup (master.config). After login, use the header dropdown when multi-environment is enabled.';
+                    }
+                  }
+                } else {
+                  if (stat) stat.style.display = 'none';
+                  sel.style.display = 'block';
+                  if (lab) lab.setAttribute('for', 'login-environment');
+                  fillEnvironmentSelect(sel, loginEnvironmentsList, loginDefaultEnvironmentId);
+                  sel.required = loginEnvSelectionRequired;
+                  if (hint) {
+                    hint.textContent = 'Choose Dev, SIT, or UAT before signing in. The bar at the top shows the active environment after login.';
+                  }
+                }
+              } else {
+                if (stat) stat.style.display = 'none';
+                sel.style.display = 'none';
+                sel.required = false;
+                sel.innerHTML = '<option value="">—</option>';
+                if (lab) lab.removeAttribute('for');
+                if (hint) {
+                  hint.textContent = 'Environment list unavailable. You can still sign in if your administrator enabled access.';
+                }
+              }
             }
             var hsel = document.getElementById('header-environment');
-            if (hsel && loginEnvironmentsList.length) {
+            if (hsel && loginEnvironmentsList.length && !loginEnvSingleDeployment) {
               fillEnvironmentSelect(hsel, loginEnvironmentsList, loginDefaultEnvironmentId);
             }
             if (typeof cb === 'function') cb();
           })
           .catch(function () {
             loginEnvironmentsEnabled = false;
-            var grp = document.getElementById('login-environment-group');
-            var sel = document.getElementById('login-environment');
-            if (grp) grp.style.display = 'none';
-            if (sel) { sel.required = false; }
+            loginEnvSelectionRequired = false;
+            loginEnvSingleDeployment = false;
+            loginEnvUnconfigured = false;
+            if (grp) grp.style.display = 'block';
+            if (sel) {
+              sel.required = false;
+              sel.style.display = 'none';
+              sel.disabled = false;
+              sel.innerHTML = '<option value="">—</option>';
+            }
+            if (stat) stat.style.display = 'none';
+            if (lab) lab.removeAttribute('for');
+            if (hint) {
+              hint.textContent = 'Network error — could not load environments. Check connection and refresh.';
+            }
             if (typeof cb === 'function') cb();
           });
       }
@@ -1697,6 +1813,7 @@
           .then(function (r) { return r.json(); })
           .then(function (j) {
             var sl = document.getElementById('header-setup-link');
+            if (j && j.setupPageUrl) cachedSetupPageUrl = j.setupPageUrl;
             if (sl && j && j.setupPageUrl) sl.setAttribute('href', j.setupPageUrl);
             if (j && j.setupRequired) location.replace((j.setupPageUrl || '/setup.html'));
           })

@@ -10,7 +10,7 @@ RUN npm install --omit=dev --ignore-scripts
 
 FROM node:20-bookworm-slim
 # Semantic app version (shown in UI). Optional GIT_COMMIT for /api/version short hash.
-ARG VERSION=1.0.71
+ARG VERSION=1.0.72
 ARG GIT_COMMIT=
 ENV APP_VERSION=${VERSION}
 ENV GIT_COMMIT=${GIT_COMMIT}
@@ -20,7 +20,7 @@ LABEL org.opencontainers.image.version="${VERSION}"
 # Bump broker/client: docker build --build-arg KAFKA_VERSION=3.8.1 .
 ARG KAFKA_VERSION=3.6.1
 ARG KAFKA_SCALA=2.13
-# Stable path gen.sh / master config use (symlink → extracted kafka_${KAFKA_SCALA}-${KAFKA_VERSION})
+# Stable path for Kafka CLI symlink name (extracted kafka_${KAFKA_SCALA}-${KAFKA_VERSION})
 ARG KAFKA_LINK_NAME=kafka_2.13-3.6.1
 # Tarball lives OUTSIDE /opt/kafka-usermgmt so a host bind-mount on runtime does not hide CLI tools.
 ENV KAFKA_TOOLS_BIN=/opt/apache-kafka/kafka_2.13-3.6.1/bin
@@ -59,10 +59,14 @@ RUN mkdir -p /app/config-examples \
     && cp /app/config/master.config.example.json /app/config-examples/ \
     && cp /app/config/credentials.example.json /app/config-examples/
 # master.config.json is created at first run via /setup.html (mount ./deploy/config for persistence).
-COPY gen.sh /opt/kafka-usermgmt/gen.sh
-COPY scripts/verify-golive.sh /opt/kafka-usermgmt/verify-golive.sh
-COPY scripts/ensure-kafka-client-props.sh /opt/kafka-usermgmt/ensure-kafka-client-props.sh
-RUN chmod +x /opt/kafka-usermgmt/gen.sh /opt/kafka-usermgmt/verify-golive.sh /opt/kafka-usermgmt/ensure-kafka-client-props.sh
+# gen.sh / helper scripts live ONLY in the image (/app/bundled-gen), not on the host runtime mount.
+# Runtime mount → /opt/kafka-usermgmt holds configs, kubeconfig, user_output, etc. — do not rely on gen.sh there.
+RUN mkdir -p /app/bundled-gen
+COPY gen.sh /app/bundled-gen/gen.sh
+COPY scripts/verify-golive.sh /app/bundled-gen/verify-golive.sh
+COPY scripts/ensure-kafka-client-props.sh /app/bundled-gen/ensure-kafka-client-props.sh
+RUN chmod +x /app/bundled-gen/gen.sh /app/bundled-gen/verify-golive.sh /app/bundled-gen/ensure-kafka-client-props.sh
+ENV GEN_BUNDLED_SCRIPT_PATH=/app/bundled-gen/gen.sh
 
 EXPOSE 3443
 CMD ["node", "server/index.js"]

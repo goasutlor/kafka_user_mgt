@@ -235,6 +235,31 @@ function normalizeGenKubeconfigPath(cfg) {
   } catch (_) { /* ignore */ }
 }
 
+/** Container image ships gen.sh at /app/bundled-gen (not on host runtime mount). Override with GEN_USE_HOST_SCRIPT=1 to use config path if present. */
+const GEN_BUNDLED_SCRIPT_PATH = process.env.GEN_BUNDLED_SCRIPT_PATH || '/app/bundled-gen/gen.sh';
+
+function ensureGenScriptPath(cfg) {
+  try {
+    if (!cfg || !cfg.gen) return;
+    const bundled = GEN_BUNDLED_SCRIPT_PATH;
+    const hasBundled = bundled && fs.existsSync(bundled);
+    const sp = cfg.gen.scriptPath;
+    const hostOk = sp && fs.existsSync(sp);
+    const preferHost = process.env.GEN_USE_HOST_SCRIPT === '1';
+    if (hasBundled && !preferHost) {
+      if (!hostOk || sp !== bundled) {
+        cfg.gen.scriptPath = bundled;
+        if (!hostOk) {
+          console.warn('[config] gen.scriptPath not found at', sp, '— using image bundled', bundled);
+        }
+      }
+      return;
+    }
+    if (hostOk) return;
+    if (hasBundled) cfg.gen.scriptPath = bundled;
+  } catch (_) { /* ignore */ }
+}
+
 function loadConfig() {
   const p = getConfigAbsPath();
   if (!fs.existsSync(p)) {
@@ -250,6 +275,7 @@ function loadConfig() {
   normalizeGenKubeconfigPath(config);
   mergeAuthSecretsFromFile(config);
   syncEnvironmentsDerivedFile(config);
+  ensureGenScriptPath(config);
   return config;
 }
 
@@ -504,10 +530,12 @@ app.get('/api/preflight/golive', (req, res) => {
       error: 'Go-live verification runs on Linux (container or helper). Use WSL or execute scripts/verify-golive.sh on the deployment host.',
     });
   }
+  const bundledVg = '/app/bundled-gen/verify-golive.sh';
   const scriptPath = process.env.GOLIVE_SCRIPT_PATH
-    || (fs.existsSync('/opt/kafka-usermgmt/verify-golive.sh')
-      ? '/opt/kafka-usermgmt/verify-golive.sh'
-      : path.join(__dirname, '..', '..', 'scripts', 'verify-golive.sh'));
+    || (fs.existsSync(bundledVg) ? bundledVg
+      : (fs.existsSync('/opt/kafka-usermgmt/verify-golive.sh')
+        ? '/opt/kafka-usermgmt/verify-golive.sh'
+        : path.join(__dirname, '..', '..', 'scripts', 'verify-golive.sh')));
   if (!fs.existsSync(scriptPath)) {
     return res.status(500).json({ ok: false, error: `verify-golive.sh not found at ${scriptPath}` });
   }
@@ -694,16 +722,67 @@ app.get('/api/environments', (req, res) => {
     return res.status(500).json({ ok: false, error: e.message });
   }
   const st = getEnvironmentsState();
-  if (!st.active) {
-    return res.json({ ok: true, enabled: false, environments: [], defaultEnvironmentId: null });
+  if (st.active && st.list.length) {
+    const environments = (st.list || []).map((e) => ({
+      id: e.id,
+      label: e.label || e.id,
+      shortLabel: e.shortLabel || e.label || e.id,
+      badgeColor: e.badgeColor || null,
+    }));
+    return res.json({
+      ok: true,
+      enabled: true,
+      selectionRequired: st.list.length > 1,
+      singleDeployment: false,
+      environments,
+      defaultEnvironmentId: st.defaultId,
+    });
   }
-  const environments = (st.list || []).map((e) => ({
-    id: e.id,
-    label: e.label || e.id,
-    shortLabel: e.shortLabel || e.label || e.id,
-    badgeColor: e.badgeColor || null,
-  }));
-  res.json({ ok: true, enabled: true, environments, defaultEnvironmentId: st.defaultId });
+  try {
+    const sites = getSitesFromConfig();
+    if (sites && sites.length) {
+      const ns = sites.map((s) => s.namespace).filter(Boolean);
+      const primaryNs = ns[0] || '';
+      const shortLabel = (primaryNs ? primaryNs.slice(0, 10) : 'NS').toUpperCase();
+      return res.json({
+        ok: true,
+        enabled: true,
+        selectionRequired: false,
+        singleDeployment: true,
+        environments: [{
+          id: 'default',
+          label: primaryNs ? `Namespace: ${primaryNs}` : 'Deployment target',
+          shortLabel,
+          badgeColor: '#6e7781',
+        }],
+        defaultEnvironmentId: 'default',
+      });
+    }
+  } catch (_) { /* ignore */ }
+  if (config && config.gen) {
+    return res.json({
+      ok: true,
+      enabled: true,
+      selectionRequired: false,
+      singleDeployment: true,
+      unconfigured: true,
+      environments: [{
+        id: 'default',
+        label: 'Cluster targets not set — complete Setup',
+        shortLabel: 'SETUP',
+        badgeColor: '#64748b',
+      }],
+      defaultEnvironmentId: 'default',
+    });
+  }
+  res.json({
+    ok: true,
+    enabled: false,
+    selectionRequired: false,
+    singleDeployment: false,
+    environments: [],
+    defaultEnvironmentId: null,
+  });
 });
 
 app.post('/api/login', (req, res) => {
@@ -928,9 +1007,10 @@ function runGen(envOverrides, req) {
     return Promise.reject(new Error(`gen.sh not found at ${scriptPath}`));
   }
   const env = { ...getBaseEnv(req), ...envOverrides };
+  const genCwd = getGenCwd() || path.dirname(path.resolve(scriptPath));
   return new Promise((resolve, reject) => {
     const proc = spawn(SHELL_CMD, [scriptPath], {
-      cwd: path.dirname(scriptPath),
+      cwd: genCwd,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -951,9 +1031,10 @@ function runGenStream(envOverrides, onLine, req) {
     return Promise.reject(new Error(`gen.sh not found at ${scriptPath}`));
   }
   const env = { ...getBaseEnv(req), ...envOverrides };
+  const genCwd = getGenCwd() || path.dirname(path.resolve(scriptPath));
   return new Promise((resolve, reject) => {
     const proc = spawn(SHELL_CMD, [scriptPath], {
-      cwd: path.dirname(scriptPath),
+      cwd: genCwd,
       env,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -1792,12 +1873,19 @@ app.get('/api/users', (req, res) => {
     });
 });
 
-// Same cwd as runGenStream (so .enc file is looked up where gen.sh creates it)
+// Working directory for gen.sh: runtime baseDir (outputs, .enc) — not the script dir when gen.sh is bundled under /app/bundled-gen.
 function getGenCwd() {
-  if (!config || !config.gen?.scriptPath) return null;
-  const p = config.gen.scriptPath;
+  if (!config || !config.gen) return null;
+  const g = config.gen;
+  const base = g.baseDir ? path.resolve(g.baseDir) : null;
+  if (base) {
+    try {
+      if (fs.existsSync(base)) return base;
+    } catch (_) { /* ignore */ }
+  }
+  if (!g.scriptPath) return null;
+  const p = path.resolve(g.scriptPath);
   let dir = path.dirname(p);
-  if (!path.isAbsolute(dir)) dir = path.resolve(process.cwd(), dir);
   try {
     if (fs.existsSync(p)) return path.dirname(fs.realpathSync(p));
   } catch (_) {}
