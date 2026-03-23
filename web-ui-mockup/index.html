@@ -660,9 +660,18 @@
     .login-card .lead {
       color: var(--text-muted);
       font-size: 14px;
-      margin: 0 0 28px;
+      margin: 0 0 12px;
       text-align: center;
     }
+    .login-card .login-version {
+      margin: 0 0 24px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+      letter-spacing: 0.02em;
+    }
+    .login-card .login-version.is-error { color: var(--danger); }
     .login-card .form-group { margin-bottom: 18px; }
     .login-card select#login-environment {
       width: 100%;
@@ -742,6 +751,7 @@
       <img src="Confluent-Emblem.png" alt="" class="login-logo" />
       <h1>Confluent Kafka User Management</h1>
       <p class="lead">Sign in to manage Kafka users and ACLs.</p>
+      <p class="login-version" id="login-app-version" aria-live="polite">Loading version…</p>
       <form id="login-form" method="post" action="#" onsubmit="return false;">
         <div class="form-group" id="login-environment-group" style="display:none;">
           <label for="login-environment">Environment</label>
@@ -1701,12 +1711,21 @@
         return line;
       }
       (function () {
+        function setLoginVersion(text, isErr) {
+          var loginEl = document.getElementById('login-app-version');
+          if (!loginEl) return;
+          loginEl.textContent = text;
+          loginEl.classList.toggle('is-error', !!isErr);
+        }
         fetch('/api/version').then(function (r) { return r.json(); }).then(function (j) {
+          var line = formatAppVersionSidebar(j);
           var el = document.getElementById('app-version');
-          if (el) el.textContent = formatAppVersionSidebar(j);
+          if (el) el.textContent = line;
+          setLoginVersion(line, false);
         }).catch(function () {
           var el = document.getElementById('app-version');
           if (el) el.textContent = '—';
+          setLoginVersion('Version unavailable (network or server)', true);
         });
       })();
       (function () {
