@@ -2403,6 +2403,13 @@ app.post('/api/add-user', (req, res) => {
         if (res.writableEnded || !res.writable) return;
         const tasks = taskAcc.finalize(code, stderr);
         try { res.write(JSON.stringify({ type: 'tasklog', tasks }) + '\n'); } catch (_) {}
+        try {
+          res.write(JSON.stringify({
+            type: 'progress',
+            step: code === 0 ? 'สำเร็จ — กำลังส่งผลลัพธ์ / ดาวน์โหลด' : 'จบการรัน (มีข้อผิดพลาด)',
+            percent: 100,
+          }) + '\n');
+        } catch (_) {}
         if (code !== 0) {
           res.write(JSON.stringify({
             type: 'result',

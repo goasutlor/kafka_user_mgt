@@ -588,6 +588,13 @@
       display: none;
     }
     .progress-wrap.visible { display: block; }
+    /* After success: keep panel visible so OK steps do not “vanish” before user sees download */
+    .progress-wrap.progress-success {
+      border: 1px solid var(--success);
+      border-radius: 8px;
+      padding: 12px 14px;
+      background: rgba(35, 134, 54, 0.07);
+    }
     .progress-wrap .progress-steps-list { min-height: 2.5em; }
     .progress-bar-wrap {
       height: 8px;
@@ -2125,6 +2132,10 @@
         function resetWizardAfterSuccess() {
           try {
             localStorage.removeItem(WIZARD_STORAGE_KEY);
+            var pw = document.getElementById('progress-wrap');
+            if (pw) { pw.classList.remove('visible', 'progress-success'); }
+            var psteps = document.getElementById('progress-steps-list');
+            if (psteps) psteps.innerHTML = '';
             var sys = document.getElementById('system'); if (sys) sys.value = '';
             var top = document.getElementById('topic'); if (top) top.value = '';
             var user = document.getElementById('username'); if (user) user.value = '';
@@ -2683,6 +2694,7 @@
             resultEl.innerHTML = '<span style="color:var(--danger)">Username already exists. Pick a different one, or <a href="#add-acl-existing" style="color:var(--link);">add this topic to this user</a>.</span>';
             return;
           }
+          progressWrap.classList.remove('progress-success');
           progressWrap.classList.add('visible');
           progressBar.style.width = '0%';
           progressStepText.innerHTML = '<strong>กำลังสร้าง user และ pack...</strong>';
@@ -2723,17 +2735,34 @@
                       if (obj.step) progressStepText.innerHTML = '<strong>' + escapeHtmlCt(obj.step) + '</strong>';
                     } else if (obj.type === 'tasklog' && obj.tasks) {
                       applyTasklogStepsList(stepsListEl, obj.tasks, escapeHtmlCt);
-                    } else if (obj.type === 'result') j = obj;
+                    } else if (obj.type === 'result') {
+                      j = obj;
+                      if (j.tasks && j.tasks.length) applyTasklogStepsList(stepsListEl, j.tasks, escapeHtmlCt);
+                    }
                   } catch (_) {}
                 }
               }
-              if (buf.trim()) { try { var parsed = JSON.parse(buf.trim()); if (parsed.type === 'result') j = parsed; } catch (_) {} }
+              if (buf.trim()) {
+                try {
+                  var parsedCt = JSON.parse(buf.trim());
+                  if (parsedCt.type === 'result') {
+                    j = parsedCt;
+                    if (j.tasks && j.tasks.length) applyTasklogStepsList(stepsListEl, j.tasks, escapeHtmlCt);
+                  }
+                } catch (_) {}
+              }
             } else {
               j = await res.json();
             }
-            progressWrap.classList.remove('visible');
             progressBar.style.width = '100%';
             if (progressPercent) progressPercent.textContent = '100%';
+            if (j && j.ok) {
+              progressWrap.classList.add('progress-success');
+              progressStepText.innerHTML = '<strong>สำเร็จ</strong> — ดาวน์โหลดด้านล่าง';
+            } else {
+              progressWrap.classList.remove('progress-success');
+              progressWrap.classList.remove('visible');
+            }
             if (j && j.ok) {
               resultEl.innerHTML = '<span style="color:var(--success)">' + (j.message || 'Done.') + '</span>';
               if (j.downloadPath && j.decryptInstructions) {
@@ -2742,6 +2771,7 @@
                 html += '<p><button type="button" class="btn btn-secondary btn-ct-another">Create another (reset wizard)</button></p>';
                 downloadBlock.innerHTML = html;
                 downloadBlock.style.display = 'block';
+                try { downloadBlock.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_) {}
                 downloadBlock.querySelector('.btn-ct-dl').addEventListener('click', function () {
                   var path = this.getAttribute('data-path');
                   var filename = this.getAttribute('data-filename') || 'pack.enc';
@@ -2763,6 +2793,8 @@
                   showStepCT(1);
                   resultEl.style.display = 'none';
                   downloadBlock.style.display = 'none';
+                  progressWrap.classList.remove('visible', 'progress-success');
+                  stepsListEl.innerHTML = '';
                 });
               }
             } else {
@@ -2771,6 +2803,7 @@
               else resultEl.innerHTML = '<span style="color:var(--danger)">Failed</span>';
             }
           } catch (e) {
+            progressWrap.classList.remove('progress-success');
             progressWrap.classList.remove('visible');
             resultEl.innerHTML = '<span style="color:var(--danger)">' + (e.name === 'AbortError' ? 'Request timeout or cancelled.' : 'Request failed: ' + (e.message || e)) + '</span>';
           }
@@ -3023,6 +3056,7 @@
         resultEl.innerHTML = '';
         var progressHintAdd = document.getElementById('progress-hint-add');
         if (progressHintAdd) progressHintAdd.style.display = 'none';
+        progressWrap.classList.remove('progress-success');
         progressWrap.classList.add('visible');
         progressBar.style.width = '0%';
         progressStepText.innerHTML = '<strong>กำลังสร้าง user และ pack...</strong>';
@@ -3092,40 +3126,67 @@
               }
             }
             if (buf.trim()) {
-              try { var parsed = JSON.parse(buf.trim()); if (parsed.type === 'result') j = parsed; } catch (_) {}
+              try {
+                var parsed = JSON.parse(buf.trim());
+                if (parsed.type === 'result') {
+                  j = parsed;
+                  if (j.tasks && j.tasks.length) applyTasklogStepsList(stepsListEl, j.tasks);
+                }
+              } catch (_) {}
             }
-            progressWrap.classList.remove('visible');
             var phAdd = document.getElementById('progress-hint-add');
             if (phAdd) phAdd.style.display = 'none';
+            if (j && j.ok) {
+              progressWrap.classList.add('progress-success');
+              progressBar.style.width = '100%';
+              if (progressPercent) progressPercent.textContent = '100%';
+              progressStepText.innerHTML = '<strong>สำเร็จ</strong> — รายการขั้นตอนด้านบนยังแสดงอยู่ ดาวน์โหลด .enc อยู่ด้านล่าง';
+            } else {
+              progressWrap.classList.remove('progress-success');
+              progressWrap.classList.remove('visible');
+            }
             if (j) {
               if (j.ok) {
                 resultEl.innerHTML = '<span style="color:var(--success)">' + (j.message || 'Done.') + '</span>' +
                   (j.verificationMessage ? '<p style="margin-top:8px;font-size:14px;">' + (j.verificationPassed ? '<span style="color:var(--success)">✓ Verification: ' : '<span style="color:var(--warning, #b8860b)">') + escapeHtml(j.verificationMessage) + '</span></p>' : '');
-                if (j.downloadPath && j.decryptInstructions) { renderDownloadBlock(j); /* ไม่ reset ทันที — ให้ค้างหน้า Execute + บล็อกดาวน์โหลดไว้ก่อน ให้ user ดาวน์โหลดได้ แล้วค่อย Back หรือ Create another เอง */ }
+                if (j.downloadPath && j.decryptInstructions) {
+                  renderDownloadBlock(j);
+                  try { document.getElementById('api-download-block').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_) {}
+                }
                 else { document.getElementById('passphrase').value = ''; document.getElementById('passphrase-confirm').value = ''; }
               } else {
                 renderAddUserError(resultEl, formatApiError(j), getPlainErrorFromApi(j), j);
               }
             } else {
-              renderAddUserError(resultEl, 'ไม่ได้รับผลลัพธ์จาก server (connection อาจหลุด)', 'No result from server', null);
+              renderAddUserError(resultEl, 'ไม่ได้รับผลลัพธ์จาก server (connection หลุดได้ระหว่าง Consume test หรือ proxy timeout — ตรวจ Audit log ว่ามี add-user หรือไม่ แล้วลอง Test user)', 'No result from server', null);
             }
           } else {
             var j = await res.json();
-            progressWrap.classList.remove('visible');
             var phAdd2 = document.getElementById('progress-hint-add');
             if (phAdd2) phAdd2.style.display = 'none';
             progressBar.style.width = '100%';
             if (progressPercent) progressPercent.textContent = '100%';
             if (j.ok) {
+              progressWrap.classList.add('progress-success');
+              progressStepText.innerHTML = '<strong>สำเร็จ</strong> — ดาวน์โหลดด้านล่าง';
+            } else {
+              progressWrap.classList.remove('progress-success');
+              progressWrap.classList.remove('visible');
+            }
+            if (j.ok) {
               resultEl.innerHTML = '<span style="color:var(--success)">' + (j.message || 'Done.') + '</span>' +
                 (j.verificationMessage ? '<p style="margin-top:8px;font-size:14px;">' + (j.verificationPassed ? '<span style="color:var(--success)">✓ Verification: ' : '<span style="color:var(--warning, #b8860b)">') + escapeHtml(j.verificationMessage) + '</span></p>' : '');
-              if (j.downloadPath && j.decryptInstructions) { renderDownloadBlock(j); /* ไม่ reset ทันที — ให้ค้างหน้า Execute + บล็อกดาวน์โหลดไว้ก่อน ให้ user ดาวน์โหลดได้ แล้วค่อย Back หรือ Create another เอง */ }
+              if (j.downloadPath && j.decryptInstructions) {
+                renderDownloadBlock(j);
+                try { document.getElementById('api-download-block').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_) {}
+              }
               else { document.getElementById('passphrase').value = ''; document.getElementById('passphrase-confirm').value = ''; }
             } else {
               renderAddUserError(resultEl, formatApiError(j), getPlainErrorFromApi(j), j);
             }
           }
         } catch (e) {
+          progressWrap.classList.remove('progress-success');
           progressWrap.classList.remove('visible');
           var phAddErr = document.getElementById('progress-hint-add');
           if (phAddErr) phAddErr.style.display = 'none';
