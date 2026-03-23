@@ -1589,7 +1589,7 @@ function ensureOcContext(kubeconfigPath, contextName, envOverrides) {
   if (!fs.existsSync(absPath)) {
     return Promise.reject(new Error(
       `ไฟล์ kubeconfig ไม่พบใน container ที่ path: ${kubeconfigPath}. ` +
-      'ตรวจสอบ: (1) web.config.json มี gen.kubeconfigPath ตรงกับ path ที่ mount (เช่น /opt/kafka-usermgmt/.kube/config-both) (2) ถ้า .kube อยู่ภายนอก ROOT ให้ mount เป็น -v KUBE_DIR:ROOT/.kube-external:z แล้ว restart container'
+      'ตรวจสอบ: (1) master.config / web.config มี gen.kubeconfigPath ตรงกับ path ที่ mount (เช่น /opt/kafka-usermgmt/.kube/config) (2) ถ้า .kube อยู่ภายนอก ROOT ให้ mount เป็น -v KUBE_DIR:ROOT/.kube-external:z แล้ว restart container'
     ));
   }
   return runShell(`oc config get-contexts --no-headers 2>&1`, envOverrides).then(({ code, stdout, stderr }) => {
@@ -1630,7 +1630,7 @@ app.get('/api/users', (req, res) => {
     return res.status(500).json({
       ok: false,
       error: 'ไม่ได้ตั้ง gen.kubeconfigPath ใน web.config.json',
-      detail: 'ให้ตั้ง kubeconfigPath ให้ชี้ไปที่ไฟล์ kubeconfig ใน container (เช่น /opt/kafka-usermgmt/.kube/config-both) — ทุกอย่างอยู่ใต้ ROOT เดียว (single source of truth); ถ้า .kube อยู่ภายนอก ROOT ให้ mount เป็น ROOT/.kube-external แล้ว restart container'
+      detail: 'ให้ตั้ง kubeconfigPath ให้ชี้ไปที่ไฟล์ kubeconfig ใน container (ปกติ /opt/kafka-usermgmt/.kube/config หลัง oc login) — ทุกอย่างอยู่ใต้ ROOT เดียว; ถ้า .kube อยู่ภายนอก ROOT ให้ mount เป็น ROOT/.kube-external แล้ว restart container'
     });
   }
   const envOverrides = { KUBECONFIG: kubeconfig };

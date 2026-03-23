@@ -62,6 +62,6 @@ chmod +x "$NEW_ROOT/confluent-usermanagement.sh" 2>/dev/null || true
 echo ""
 echo "Done. Next:"
 echo "  1. Edit $NEW_ROOT/Docker/web.config.json — set gen.rootDir to \"$NEW_ROOT\" and remove (or leave) scriptPath, baseDir, ... so server derives from rootDir."
-echo "  2. Set gen.kubeconfigPath to \"$NEW_ROOT/.kube/config-both\" if you copied .kube into ROOT."
+echo "  2. Set gen.kubeconfigPath to \"$NEW_ROOT/.kube/config\" if you copied .kube into ROOT (use config-both only for a merged multi-cluster file)."
 echo "  3. Set server.https.keyPath to \"$NEW_ROOT/Docker/ssl/server.key\" and certPath to \"$NEW_ROOT/Docker/ssl/server.crt\"."
 echo "  4. Run container with: ROOT=$NEW_ROOT and mount -v \$ROOT:\$ROOT (see MOVE-EVERYTHING-TO-ROOT.md)."

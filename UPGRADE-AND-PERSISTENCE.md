@@ -84,6 +84,29 @@
 
 ---
 
+## รีเซ็ตเริ่มใหม่ทั้งหมด (ไม่ให้ชี้ `config-both` / config เก่าอีก)
+
+**ลบแล้วตั้งค่าใหม่ได้** — สิ่งที่ทำให้ยังไปอ้าง `config-both` คือไฟล์บน **host** (`master.config.json` ใน `deploy/config`) ที่บันทึก path เก่าไว้ ไม่ใช่ใน Docker image
+
+ขั้นตอนแนะนำ (Compose / layout มาตรฐาน: `deploy/config` + `runtime`):
+
+1. **หยุด container** (`docker compose down` หรือสคริปต์ที่ใช้)
+2. **สำรอง** (ถ้าต้องการ): คัดลอก `deploy/config/` และ `runtime/` ไปที่อื่น
+3. **ลบหรือย้ายออก** ไฟล์ที่บังคับใช้ config เก่า:
+   - `deploy/config/master.config.json`, `credentials.json` (และ audit/download history ถ้าต้องการเริ่มว่าง)
+   - ใต้ **`runtime/.kube`**: ลบ **`config-both`** ถ้าไม่ได้ใช้ merged multi-cluster; ให้เหลือ **`config`** จาก `oc login` บน host (หรือลบทั้งโฟลเดอร์ `.kube` แล้ว login ใหม่)
+4. ถ้าใน `.env` เคยล็อก setup ให้ตั้ง **`ALLOW_SETUP_RECONFIGURE=1`** ชั่วคราว
+5. **รัน container ใหม่** → เปิด **`/setup.html`** — ค่าเริ่มต้น kubeconfig template คือ `{runtimeRoot}/.kube/config` (อย่าเปลี่ยนเป็น `config-both` เว้นแต่รวมหลาย cluster จริง)
+6. บันทึก setup ใหม่ → ไฟล์ master ใหม่จะไม่ชี้ `config-both` โดยอัตโนมัติ
+
+**หมายเหตุ:** แอปไม่สร้างไฟล์ kubeconfig ให้ — คุณควรมี `config` บน host ก่อน หรือเปิด OC auto-login ใน wizard ให้แอปรัน `oc login` เขียนลง path ที่ตั้งไว้
+
+### English: full reset
+
+You **can** wipe and start over. Old `config-both` references come from **persisted** `master.config.json` (and optional legacy `web.config.json`), not from the image. Stop the container, remove or replace `deploy/config/master.config.json` and `credentials.json`, delete `runtime/.kube/config-both` if you do not use a merged kubeconfig, ensure `runtime/.kube/config` exists (via `oc login` on the host), set `ALLOW_SETUP_RECONFIGURE=1` if needed, recreate the container, open `/setup.html`, and save again with the default kubeconfig path `{runtimeRoot}/.kube/config`.
+
+---
+
 ## English summary
 
 Upgrading the **container image** replaces application binaries and bundled files **inside** the image. Your **bind-mounted** directories on the host (`deploy/config`, `runtime`, optional `.kube` and SSL paths) are **not part of the image**; they persist on disk as long as you keep the same host paths and mount flags. Nothing in this design intentionally wipes those mounts when you pull a newer `ghcr.io/.../kafka_user_mgt` image and recreate the container.

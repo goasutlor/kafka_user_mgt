@@ -21,7 +21,7 @@
 | clientConfig | /opt/kafka-usermgmt/configs/kafka-client.properties |
 | adminConfig | /opt/kafka-usermgmt/configs/kafka-client-master.properties |
 | logFile | /opt/kafka-usermgmt/provisioning.log |
-| kubeconfigPath | /opt/kafka-usermgmt/.kube/config-both |
+| kubeconfigPath | /opt/kafka-usermgmt/.kube/config (หรือ `config-both` เฉพาะเมื่อรวมหลาย cluster ในไฟล์เดียว) |
 | bootstrapServers | ใส่ host:port จริงของ Kafka (ไม่ใช้ host1/host2) |
 
 - **ถ้ายังไม่ย้าย:** แก้มือหรือ copy จาก repo ไปวางแล้วแก้ path ตามตาราง  

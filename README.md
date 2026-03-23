@@ -12,7 +12,7 @@ docker pull ghcr.io/goasutlor/kafka_user_mgt:latest
 
 Run with Compose (mount `runtime` + `deploy/config`). First start: open `http://<host>:3443/setup.html` to write config into the mounted volume.
 
-**Upgrades:** Pulling a newer image replaces the app inside the container only. Configuration on bind-mounted host directories is not overwritten by the image upgrade — see [UPGRADE-AND-PERSISTENCE.md](UPGRADE-AND-PERSISTENCE.md) (Thai + English).
+**Upgrades / full reset:** Pulling a newer image does not wipe bind-mounted host config. For a clean reinstall (drop old `master.config` / kubeconfig paths), see [UPGRADE-AND-PERSISTENCE.md](UPGRADE-AND-PERSISTENCE.md) — section *รีเซ็ตเริ่มใหม่ทั้งหมด* (Thai + English).
 
 **Topology:** Dual DC / dual OpenShift with **one** Confluent Kafka cluster — production fit and “universal portal” limits — see [PRODUCTION-TOPOLOGY-2DC-1-KAFKA.md](PRODUCTION-TOPOLOGY-2DC-1-KAFKA.md).
 

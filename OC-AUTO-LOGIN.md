@@ -11,7 +11,7 @@
 ```json
 "gen": {
   ...
-  "kubeconfigPath": "/opt/kafka-usermgmt/.kube/config-both",
+  "kubeconfigPath": "/opt/kafka-usermgmt/.kube/config",
   "ocAutoLogin": true,
   "ocLoginServers": {
     "cwdc": "https://api.cwdc.your-domain.com:6443",
@@ -113,7 +113,7 @@ podman run -d ... -e OC_LOGIN_TOKEN_CWDC -e OC_LOGIN_TOKEN_TLS2 ...
 
 Auto login จะ **เขียน** token ลงไฟล์ kubeconfig ดังนั้น volume ที่ mount ต้อง **ไม่ใช่ read-only**:
 
-- เมื่อ .kube อยู่ภายนอก ROOT ใช้ `-v "$KUBE_DIR:$ROOT/.kube-external:z"` แล้วตั้ง kubeconfigPath เป็น `$ROOT/.kube-external/config-both` (ไม่มี `ro` ถ้าใช้ ocAutoLogin)
+- เมื่อ .kube อยู่ภายนอก ROOT ใช้ `-v "$KUBE_DIR:$ROOT/.kube-external:z"` แล้วตั้ง kubeconfigPath เป็น `$ROOT/.kube-external/config` (หรือไฟล์ merged ที่คุณใช้จริง; ไม่มี `ro` ถ้าใช้ ocAutoLogin)
 - ถ้าใช้ `:ro,z` อยู่ ให้เอา `ro` ออกเป็น `:z` หรือ `:rw,z`
 
 ---
