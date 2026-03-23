@@ -8,69 +8,93 @@
   <!-- Font: use system stack to avoid ERR_NAME_NOT_RESOLVED on networks without internet -->
   <style>
     :root {
-      /* Confluent-style palette */
-      --header-bg: #0d1117;
-      --header-text: #ffffff;
-      --header-accent: #24b4e8;
-      --body-bg: #f6f8fa;
+      /* Enterprise modern — single cohesive shell */
+      --header-bg: #0f172a;
+      --header-bg-elevated: #111c33;
+      --header-text: #f8fafc;
+      --header-muted: rgba(248, 250, 252, 0.72);
+      --header-accent: #38bdf8;
+      --header-accent-solid: #0ea5e9;
+      --app-header-h: 56px;
+      --body-bg: #f1f5f9;
       --sidebar-bg: #ffffff;
       --content-bg: #ffffff;
-      --border: #e1e4e8;
-      --text: #24292f;
-      --text-muted: #57606a;
-      --link: #0969da;
-      --link-hover: #0550ae;
-      --active-bg: #e8f4fc;
-      --active-border: #24b4e8;
-      --code-bg: #f0f4f8;
-      --code-border: #d8dee4;
-      --btn-primary: #24b4e8;
-      --btn-primary-hover: #1a9bc9;
-      --term-highlight: #fff8e6;
-      --success: #1a7f37;
-      --danger: #cf222e;
+      --border: #e2e8f0;
+      --text: #0f172a;
+      --text-muted: #64748b;
+      --link: #0369a1;
+      --link-hover: #0c4a6e;
+      --active-bg: #f0f9ff;
+      --active-border: #0ea5e9;
+      --code-bg: #f8fafc;
+      --code-border: #e2e8f0;
+      --btn-primary: #0ea5e9;
+      --btn-primary-hover: #0284c7;
+      --term-highlight: #fffbeb;
+      --success: #15803d;
+      --danger: #dc2626;
     }
     * { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
       margin: 0;
       min-height: 100vh;
       background: var(--body-bg);
       color: var(--text);
       font-size: 14px;
-      line-height: 1.5;
+      line-height: 1.55;
+      font-feature-settings: 'kern' 1, 'liga' 1;
     }
 
-    /* Header — Confluent-style dark bar */
+    /* Header — one flat bar (logo tile matches bar; no “second strip” from loud CTAs) */
     .header {
       background: var(--header-bg);
       color: var(--header-text);
-      padding: 0 24px;
-      height: 56px;
+      padding: 0 20px 0 16px;
+      min-height: var(--app-header-h);
+      height: var(--app-header-h);
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 16px;
       position: sticky;
       top: 0;
       z-index: 100;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      box-shadow: 0 1px 0 rgba(0, 0, 0, 0.12);
     }
     .header-brand {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 14px;
+      min-width: 0;
+      flex-shrink: 0;
+    }
+    /* Logo sits on same chroma as bar — tile uses header bg; image toned to blend baked-in PNG frame */
+    .header-logo-wrap {
+      flex-shrink: 0;
+      width: 44px;
+      height: 44px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--header-bg);
+      border-radius: 10px;
     }
     .header-logo {
-      width: 56px;
-      height: 56px;
-      border-radius: 6px;
+      width: 30px;
+      height: 30px;
       display: block;
       object-fit: contain;
+      filter: brightness(1.08) contrast(0.92) saturate(0.85);
     }
     .header-title {
       font-weight: 600;
       font-size: 15px;
-      letter-spacing: 0.02em;
+      letter-spacing: -0.01em;
+      line-height: 1.25;
+      color: var(--header-text);
+      white-space: nowrap;
     }
     .header-env-wrap {
       display: none;
@@ -95,9 +119,9 @@
     .header-env-select {
       font-size: 13px;
       padding: 6px 10px;
-      border-radius: 6px;
-      border: 1px solid rgba(255,255,255,0.35);
-      background: rgba(255,255,255,0.12);
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.14);
+      background: rgba(255, 255, 255, 0.08);
       color: #fff;
       max-width: 220px;
     }
@@ -115,8 +139,21 @@
     .header-nav {
       display: flex;
       align-items: center;
-      gap: 8px;
-      flex-wrap: wrap;
+      gap: 4px;
+      flex-wrap: nowrap;
+      overflow-x: auto;
+      overflow-y: hidden;
+      -webkit-overflow-scrolling: touch;
+      scrollbar-width: thin;
+      scrollbar-color: rgba(255, 255, 255, 0.25) transparent;
+      max-width: min(58vw, 920px);
+      padding: 4px 0;
+      mask-image: linear-gradient(to right, #000 92%, transparent 100%);
+    }
+    .header-nav::-webkit-scrollbar { height: 4px; }
+    .header-nav::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 4px;
     }
     .header-nav .nav-logout-wrap {
       margin-left: auto;
@@ -124,26 +161,56 @@
       align-items: center;
     }
     .header-nav a {
-      color: rgba(255,255,255,0.85);
+      color: var(--header-muted);
       text-decoration: none;
-      padding: 6px 12px;
-      border-radius: 6px;
-      font-size: 13px;
+      padding: 7px 11px;
+      border-radius: 8px;
+      font-size: 12px;
       font-weight: 500;
+      white-space: nowrap;
+      flex-shrink: 0;
     }
-    .header-nav a:hover { color: #fff; background: rgba(255,255,255,0.08); }
+    .header-nav a:hover {
+      color: #fff;
+      background: rgba(255, 255, 255, 0.08);
+    }
+    /* Ghost actions — same bar, no bright “second row” */
     .header-cta {
-      background: var(--header-accent);
-      color: #0d1117 !important;
+      background: rgba(255, 255, 255, 0.1);
+      color: var(--header-text) !important;
       font-weight: 600;
+      border: 1px solid rgba(255, 255, 255, 0.16);
     }
-    .header-cta:hover { background: #3bc0f0; color: #0d1117 !important; }
+    .header-cta:hover {
+      background: rgba(255, 255, 255, 0.16);
+      color: #fff !important;
+      border-color: rgba(255, 255, 255, 0.24);
+    }
+    .header-cta.header-cta--primary {
+      background: var(--header-accent-solid);
+      border-color: transparent;
+      color: #fff !important;
+    }
+    .header-cta.header-cta--primary:hover {
+      background: #38bdf8;
+      color: #0f172a !important;
+    }
+    .header-cta.header-cta--danger {
+      border-color: rgba(248, 113, 113, 0.45);
+      background: rgba(248, 113, 113, 0.12);
+      color: #fecaca !important;
+    }
+    .header-cta.header-cta--danger:hover {
+      background: rgba(248, 113, 113, 0.22);
+      color: #fff !important;
+    }
 
     /* Breadcrumbs */
     .breadcrumb-wrap {
       background: var(--sidebar-bg);
       border-bottom: 1px solid var(--border);
-      padding: 10px 24px;
+      padding: 12px 24px;
+      box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
     }
     .breadcrumb {
       color: var(--text-muted);
@@ -169,7 +236,7 @@
       width: 100%;
       max-width: 1600px;
       margin: 0 auto;
-      min-height: calc(100vh - 57px);
+      min-height: calc(100vh - var(--app-header-h) - 1px);
     }
     .sidebar-left {
       width: 260px;
@@ -178,9 +245,9 @@
       border-right: 1px solid var(--border);
       padding: 20px 0;
       position: sticky;
-      top: 57px;
+      top: calc(var(--app-header-h) + 1px);
       align-self: flex-start;
-      max-height: calc(100vh - 57px);
+      max-height: calc(100vh - var(--app-header-h) - 2px);
       overflow-y: auto;
       display: flex;
       flex-direction: column;
@@ -205,18 +272,19 @@
     .sidebar-left .nav-section:first-child { margin-top: 0; }
     .sidebar-left a {
       display: block;
-      padding: 8px 12px;
+      padding: 9px 12px;
       color: var(--text);
       text-decoration: none;
-      border-radius: 6px;
+      border-radius: 8px;
       font-size: 13px;
       margin-bottom: 2px;
+      transition: background 0.15s ease, color 0.15s ease;
     }
     .sidebar-left a:hover { background: var(--body-bg); color: var(--link); }
     .sidebar-left a.active {
       background: var(--active-bg);
       color: var(--link);
-      font-weight: 500;
+      font-weight: 600;
       border-left: 3px solid var(--active-border);
       margin-left: -3px;
       padding-left: 15px;
@@ -282,11 +350,13 @@
     .section-card {
       background: var(--content-bg);
       border: 1px solid var(--border);
-      border-radius: 12px;
+      border-radius: 14px;
       padding: 28px 36px 32px;
       margin-bottom: 32px;
       max-width: 100%;
-      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+      box-shadow:
+        0 1px 2px rgba(15, 23, 42, 0.04),
+        0 8px 24px rgba(15, 23, 42, 0.06);
     }
     .section-card:last-child { margin-bottom: 0; }
     .section-card h1:first-child { margin-top: 0; }
@@ -332,7 +402,7 @@
     input:focus, select:focus {
       outline: none;
       border-color: var(--btn-primary);
-      box-shadow: 0 0 0 3px rgba(36, 180, 232, 0.15);
+      box-shadow: 0 0 0 3px rgba(14, 165, 233, 0.2);
     }
     .form-row { display: flex; gap: 24px; flex-wrap: wrap; }
     .form-row .form-group { flex: 1; min-width: 200px; }
@@ -390,9 +460,9 @@
       border-left: 1px solid var(--border);
       padding: 24px 20px;
       position: sticky;
-      top: 57px;
+      top: calc(var(--app-header-h) + 1px);
       align-self: flex-start;
-      max-height: calc(100vh - 57px);
+      max-height: calc(100vh - var(--app-header-h) - 2px);
       overflow-y: auto;
     }
     .sidebar-right .title {
@@ -449,7 +519,7 @@
       cursor: default;
     }
     .wizard-step.done { color: var(--success); }
-    .wizard-step.active { color: var(--link); border-bottom-color: var(--btn-primary); }
+    .wizard-step.active { color: var(--link); border-bottom-color: var(--active-border); font-weight: 600; }
     .wizard-panel { display: none; min-height: 200px; }
     .wizard-panel.active { display: block; }
     .wizard-panel h3 {
@@ -561,7 +631,7 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(145deg, #0d1117 0%, #161b22 50%, #21262d 100%);
+      background: linear-gradient(145deg, #0f172a 0%, #1e293b 45%, #334155 100%);
       padding: 24px;
     }
     .login-card {
@@ -704,7 +774,9 @@
   <div id="logout-banner" role="status" aria-live="polite">You have been logged out.</div>
   <header class="header">
     <div class="header-brand">
-      <img src="Confluent-Emblem-Header.png" alt="" class="header-logo" />
+      <div class="header-logo-wrap" aria-hidden="true">
+        <img src="Confluent-Emblem-Header.png" alt="" class="header-logo" />
+      </div>
       <span class="header-title">Confluent Kafka User Management</span>
       <div id="header-env-wrap" class="header-env-wrap" aria-live="polite">
         <span id="header-env-badge" class="env-badge" style="background:#238636;" title="Active environment"></span>
@@ -722,8 +794,8 @@
       <a href="#cleanup">Cleanup ACLs</a>
       <a href="#audit-log">Audit Log</a>
       <a href="#download-history">Download History</a>
-      <a href="setup.html" class="header-cta" id="header-setup-link" title="First-time setup or reconfigure (when ALLOW_SETUP_RECONFIGURE=1)">Setup</a>
-      <a href="reset-config.html" class="header-cta" id="header-reset-link" title="Wipe saved portal configuration (Portal username/password required) — image upgrades do not do this">Reset config</a>
+      <a href="setup.html" class="header-cta header-cta--primary" id="header-setup-link" title="First-time setup or reconfigure (when ALLOW_SETUP_RECONFIGURE=1)">Setup</a>
+      <a href="reset-config.html" class="header-cta header-cta--danger" id="header-reset-link" title="Wipe saved portal configuration (Portal username/password required) — image upgrades do not do this">Reset config</a>
       <a href="docs.html" class="header-cta" target="_blank" rel="noopener noreferrer">Documentation</a>
     </nav>
   </header>
