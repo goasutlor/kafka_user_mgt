@@ -10,7 +10,7 @@ After CI runs on `main`, pull:
 docker pull ghcr.io/goasutlor/kafka_user_mgt:latest
 ```
 
-Run with Compose (mount `runtime` + `deploy/config`). First start: open `http://<host>:3443/setup.html` to write config into the mounted volume.
+Run with Compose (mount `runtime` + `deploy/config`). First start: open `http://<host>:3443/setup.html` to write config into the mounted volume. **Upgrading the image keeps that config** (no re-setup). To wipe and run setup again: **`/reset-config.html`** (Portal user/password + confirmation phrase), or see [UPGRADE-AND-PERSISTENCE.md](UPGRADE-AND-PERSISTENCE.md).
 
 **Upgrades / full reset:** Pulling a newer image does not wipe bind-mounted host config. For a clean reinstall (drop old `master.config` / kubeconfig paths), see [UPGRADE-AND-PERSISTENCE.md](UPGRADE-AND-PERSISTENCE.md) — section *รีเซ็ตเริ่มใหม่ทั้งหมด* (Thai + English).
 

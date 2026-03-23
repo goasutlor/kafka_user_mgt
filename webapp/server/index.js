@@ -22,6 +22,12 @@ const {
 } = require('./lib/setup-writer');
 const { runSetupPreview } = require('./lib/setup-validate');
 const { validateKafkaConnectionCompleteness } = require('./lib/setup-kafka-files');
+const {
+  RESET_CONFIRM_PHRASE,
+  collectWipePaths,
+  verifyPortalCredentialsForWipe,
+  performWipe,
+} = require('./lib/setup-reset');
 
 const CONFIG_PATH = process.env.CONFIG_PATH || path.join(__dirname, '..', 'config', 'web.config.json');
 const AUTH_USERS_FILE = process.env.AUTH_USERS_FILE || path.join(path.dirname(CONFIG_PATH), 'auth-users.json');
@@ -391,6 +397,7 @@ app.use((req, res, next) => {
     || p === '/api/login'
     || p === '/api/logout'
     || p === '/api/session/environment'
+    || p === '/api/setup/reset'
   ) {
     res.set('Cache-Control', 'no-store, private, no-cache');
     res.set('Pragma', 'no-cache');
@@ -423,6 +430,24 @@ app.get('/api/setup/status', (req, res) => {
   const present = fs.existsSync(configAbs);
   const dirOk = configDirectoryWritable(configAbs);
   const base = clientFacingBaseUrl(req);
+  const resetPageUrl = `${base}/reset-config.html`;
+  const resetConfig = { available: false, resetPageUrl, confirmPhrase: RESET_CONFIRM_PHRASE, reason: null };
+  if (present) {
+    try {
+      const raw = JSON.parse(fs.readFileSync(configAbs, 'utf8'));
+      if (!isMasterConfig(raw)) {
+        resetConfig.reason = 'Not master.config.json — remove files on the host or migrate to master format for password-gated reset.';
+      } else if (!(raw.portal && raw.portal.auth && raw.portal.auth.enabled === true)) {
+        resetConfig.reason = 'Portal authentication is not enabled in master.config — enable it first, or delete deploy/config on the host.';
+      } else {
+        resetConfig.available = true;
+      }
+    } catch (_) {
+      resetConfig.reason = 'Could not read configuration file.';
+    }
+  } else {
+    resetConfig.reason = 'No configuration file yet.';
+  }
   res.json({
     ok: true,
     setupRequired: SETUP_MODE || !present,
@@ -433,6 +458,7 @@ app.get('/api/setup/status', (req, res) => {
     configDirWritable: dirOk.ok,
     configDirError: dirOk.ok ? null : dirOk.error,
     setupTokenRequired: !!process.env.SETUP_TOKEN,
+    resetConfig,
   });
 });
 
@@ -566,6 +592,66 @@ app.post('/api/setup/apply', (req, res) => {
     ok: true,
     message: 'Configuration saved. You can sign in now. If you changed the port in the form, restart the container so the listener matches.',
   });
+});
+
+/**
+ * Wipe saved portal configuration (master + credentials + audit/history + derived environments.json).
+ * Requires Portal auth enabled + master.config; re-authenticates with username/password + confirm phrase.
+ * Upgrading the container image does not call this — bind-mounted config persists until you reset or delete files.
+ */
+app.post('/api/setup/reset', (req, res) => {
+  const tokenExpected = process.env.SETUP_TOKEN;
+  if (tokenExpected && String(req.headers['x-setup-token'] || '') !== tokenExpected) {
+    return res.status(403).json({ ok: false, error: 'Invalid or missing X-Setup-Token header' });
+  }
+  const configAbs = getConfigAbsPath();
+  if (!fs.existsSync(configAbs)) {
+    return res.status(400).json({ ok: false, error: 'No configuration file to reset' });
+  }
+  const body = req.body && typeof req.body === 'object' ? req.body : {};
+  const phrase = String(body.confirmPhrase || '').trim();
+  if (phrase !== RESET_CONFIRM_PHRASE) {
+    return res.status(400).json({
+      ok: false,
+      error: `Confirmation phrase must be exactly: ${RESET_CONFIRM_PHRASE}`,
+      confirmPhrase: RESET_CONFIRM_PHRASE,
+    });
+  }
+  try {
+    verifyPortalCredentialsForWipe(configAbs, body.username, body.password);
+  } catch (e) {
+    const msg = e.message || String(e);
+    const code = /Invalid username or password/.test(msg) ? 401 : 400;
+    return res.status(code).json({ ok: false, error: msg });
+  }
+  const dirOk = configDirectoryWritable(configAbs);
+  if (!dirOk.ok) {
+    return res.status(500).json({ ok: false, error: 'Config directory not writable', detail: dirOk.error });
+  }
+  let wipe;
+  try {
+    wipe = collectWipePaths(configAbs);
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message || String(e) });
+  }
+  const result = performWipe(wipe.paths);
+  clearOcSessionRefreshInterval();
+  config = null;
+  SETUP_MODE = true;
+  const payload = {
+    ok: true,
+    message: 'Configuration removed. Open /setup.html to run first-time setup again.',
+    setupPageUrl: `${clientFacingBaseUrl(req)}/setup.html`,
+    removed: result.removed,
+    errors: result.errors.length ? result.errors : undefined,
+    warningCredentialOutsideConfigDir: wipe.skippedCredentialOutsideConfigDir
+      ? 'credentials.json path is outside the config directory — that file was not deleted; remove it on the host if needed.'
+      : undefined,
+  };
+  if (req.session) {
+    return req.session.destroy(() => res.json(payload));
+  }
+  return res.json(payload);
 });
 
 // Protect /api/* except login, me, version
@@ -1574,6 +1660,13 @@ function startOcSessionRefreshInterval() {
     ensureOcSessions().catch((err) => console.error('[oc-session-check]', err.message));
   }, intervalMs);
   console.log('[oc-session-check] เปิด periodic check ทุก', Math.round(intervalMs / 60000), 'นาที');
+}
+
+function clearOcSessionRefreshInterval() {
+  if (ocSessionRefreshTimer) {
+    clearInterval(ocSessionRefreshTimer);
+    ocSessionRefreshTimer = null;
+  }
 }
 
 function parseUsersFromJson(raw) {

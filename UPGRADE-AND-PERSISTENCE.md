@@ -2,6 +2,8 @@
 
 เอกสารนี้อธิบายว่าเมื่อ **อัปเกรด Docker / Podman image** (เช่น `podman pull` + รัน container ใหม่) สิ่งใดเปลี่ยน และสิ่งใด **ไม่ถูกแตะ** โดยออกแบบมาตรฐานของโปรเจกต์นี้ (แยก **image** กับ **ข้อมูลบน host ที่ mount เข้าไป**)
 
+**หลักการสำคัญ:** การอัปเกรดแค่ **engine / image** ไม่จำเป็นต้องทำ Setup ใหม่ — พารามิเตอร์, credentials, bootstrap, API URL ที่บันทึกไว้ใน volume (`deploy/config`, `runtime` ฯลฯ) **ยังใช้ต่อได้** จนกว่าคุณจะลบเองหรือใช้ **Reset config** (`/reset-config.html`) ซึ่งจะล้างเฉพาะเมื่อยืนยันด้วย user/password ของ Portal
+
 ---
 
 ## สรุปสั้น
@@ -104,6 +106,8 @@
 ### English: full reset
 
 You **can** wipe and start over. Old `config-both` references come from **persisted** `master.config.json` (and optional legacy `web.config.json`), not from the image. Stop the container, remove or replace `deploy/config/master.config.json` and `credentials.json`, delete `runtime/.kube/config-both` if you do not use a merged kubeconfig, ensure `runtime/.kube/config` exists (via `oc login` on the host), set `ALLOW_SETUP_RECONFIGURE=1` if needed, recreate the container, open `/setup.html`, and save again with the default kubeconfig path `{runtimeRoot}/.kube/config`.
+
+**Password-gated reset (recommended):** With **Portal authentication enabled** in `master.config.json`, open **`/reset-config.html`**, enter admin username/password and the confirmation phrase. This calls `POST /api/setup/reset` (same rules as `GEN_NONINTERACTIVE=1 GEN_MODE=9` + `reset-config-cli.js`). It does **not** run on image upgrade.
 
 ---
 

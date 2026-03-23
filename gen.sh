@@ -36,6 +36,7 @@
 # 2026-03-22  Per-environment Kafka bootstrap: with GEN_ACTIVE_ENV_ID + environments.json, if the active env object has bootstrapServers, override BOOTSTRAP_CWDC/BOTH (parity with Web portal env switch).
 # 2026-03-22  Init Kafka client .properties templates: menu [8] and GEN_MODE=8 — scripts/ensure-kafka-client-props.sh (parity with web setup save; GEN_KAFKA_BOOTSTRAP optional). Full PEM/JKS + SASL materialization (no CHANGE_ME) is via the web setup wizard only — use mount configs/ to adjust later.
 # 2026-03-21  Go-Live verify: menu [7] and GEN_NONINTERACTIVE=1 GEN_MODE=7 — scripts/verify-golive.sh (all namespaces from master/environments, Kafka, optional Portal). Env: GOLIVE_PORTAL_URL, GOLIVE_JSON=1.
+# 2026-03-23  Portal config wipe: GEN_NONINTERACTIVE=1 GEN_MODE=9 + CONFIG_PATH — node webapp/scripts/reset-config-cli.js (parity with Web /reset-config.html + POST /api/setup/reset; Portal auth must be enabled in master.config).
 # 2026-03-21  Preflight / Kafka admin list: menu [6] and GEN_NONINTERACTIVE=1 GEN_MODE=6 — kafka-topics.sh --list (parity with web setup Verify deep check). Web setup: deep verify runs same + oc whoami.
 # 2026-03-18  Add ACL for existing user: GEN_MODE=5 (CLI menu [5] + non-interactive). No new credential; add topic ACL + consumer group for user already in secret. Web: Add ACL to existing user (summary + confirm). Audit: create-topic label + add-acl-existing.
 # 2026-03-15  Create topic: use broker default for partitions and replication factor (rack-aware placement). No GEN_PARTITIONS/GEN_REPLICATION_FACTOR; kafka-topics.sh --create without --partitions/--replication-factor so broker default.num.partitions and default.replication.factor apply. CLI and Web parity.
@@ -429,6 +430,19 @@ if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "8" ]; then
     exit 0
 fi
 
+# Non-interactive Mode 9: wipe portal master + credentials (parity with Web /reset-config.html — no Kafka/OCP pre-check)
+if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "9" ]; then
+    command -v node >/dev/null 2>&1 || error_exit "node is required for GEN_MODE=9"
+    _CFG="${CONFIG_PATH:-}"
+    [ -z "$_CFG" ] && _CFG="${GEN_MASTER_CONFIG:-}"
+    [ -z "$_CFG" ] && _CFG="/app/config/master.config.json"
+    _RESET_JS="$SCRIPT_DIR/webapp/scripts/reset-config-cli.js"
+    [ ! -f "$_RESET_JS" ] && _RESET_JS="$SCRIPT_DIR/scripts/reset-config-cli.js"
+    [ ! -f "$_RESET_JS" ] && [ -f /app/scripts/reset-config-cli.js ] && _RESET_JS=/app/scripts/reset-config-cli.js
+    [ ! -f "$_RESET_JS" ] && error_exit "reset-config-cli.js not found (expected webapp/scripts or /app/scripts)"
+    CONFIG_PATH="$_CFG" exec node "$_RESET_JS"
+fi
+
 # PRE-CHECK
 [ ! -f "$CLIENT_CONFIG" ] && error_exit "Config file not found at $CLIENT_CONFIG"
 [ ! -f "$ADMIN_CONFIG" ] && error_exit "Admin config not found at $ADMIN_CONFIG (needed for kafka-acls)"
@@ -643,9 +657,20 @@ while true; do
         echo "   [6] Preflight — list Kafka topics (admin config; same check as web setup Verify)"
         echo "   [7] Go-Live verify — full check (OC+Kafka+all namespaces+optional Portal URL)"
         echo "   [8] Create Kafka client .properties templates (configs/; same as web setup save)"
+        echo "   [9] Reset portal config (info) — use Web /reset-config.html or GEN_NONINTERACTIVE=1 GEN_MODE=9"
         echo "   [Q] Quit"
-        read -p "   Select mode [1-8/Q]: " SCRIPT_MODE
+        read -p "   Select mode [1-9/Q]: " SCRIPT_MODE
         [[ "$SCRIPT_MODE" =~ ^[Qq]$ ]] && { echo -e "   ${CYAN}Exiting...${NC}"; exit 0; }
+        if [ "$SCRIPT_MODE" = "9" ]; then
+            echo -e "\n   ${CYAN}Portal configuration reset${NC} (parity with Web):"
+            echo "   • Browser: open /reset-config.html on the portal (Portal auth must be enabled)."
+            echo "   • CLI:  CONFIG_PATH=/path/to/master.config.json GEN_NONINTERACTIVE=1 GEN_MODE=9 $0"
+            echo "   Upgrading the Docker image does not wipe config — only this action or deleting deploy/config on the host does."
+            echo -e "\n   ${CYAN}[M] Main menu  [Q] Quit${NC}"
+            read -p "   Your choice [M/Q]: " _r9
+            [[ "$_r9" =~ ^[Qq]$ ]] && { echo -e "   ${CYAN}Exiting...${NC}"; exit 0; }
+            continue
+        fi
         [[ "$SCRIPT_MODE" != "2" && "$SCRIPT_MODE" != "3" && "$SCRIPT_MODE" != "4" && "$SCRIPT_MODE" != "5" && "$SCRIPT_MODE" != "6" && "$SCRIPT_MODE" != "7" && "$SCRIPT_MODE" != "8" ]] && SCRIPT_MODE="1"
     fi
 

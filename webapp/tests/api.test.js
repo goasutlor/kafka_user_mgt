@@ -49,6 +49,22 @@ describe('API', () => {
     assert.ok(typeof res.body.setupPageUrl === 'string' && res.body.setupPageUrl.includes('/setup.html'));
     assert.ok(typeof res.body.appUrl === 'string');
     assert.strictEqual(typeof res.body.reconfigureAllowed, 'boolean');
+    assert.ok(res.body.resetConfig && typeof res.body.resetConfig === 'object');
+    assert.strictEqual(res.body.resetConfig.available, false);
+    assert.ok(String(res.body.resetConfig.resetPageUrl || '').includes('/reset-config.html'));
+  });
+
+  it('POST /api/setup/reset rejects legacy web.config (not master)', async () => {
+    const res = await request(app)
+      .post('/api/setup/reset')
+      .send({
+        username: 'u',
+        password: 'p',
+        confirmPhrase: 'RESET_PORTAL_CONFIG',
+      })
+      .expect(400);
+    assert.strictEqual(res.body.ok, false);
+    assert.ok(String(res.body.error || '').includes('master'));
   });
 
   it('GET /api/setup/prefill returns 400 for legacy web.config (not master format)', async () => {
