@@ -526,6 +526,8 @@
 
     /* Wizard: step-by-step Add User */
     .wizard-wrap { max-width: 560px; }
+    /* ACL step needs horizontal room for role grid + resource detail */
+    .wizard-wrap.wizard-wrap-acl-wide { max-width: min(1180px, 100%); }
     .wizard-steps {
       display: flex;
       gap: 0;
@@ -585,6 +587,32 @@
     .error-topic-hint { margin-top: 12px; padding: 12px 14px; background: #fff8e6; border: 1px solid #d4a574; border-radius: 8px; font-size: 13px; line-height: 1.55; color: var(--text); }
 
     /* ── ACL Designer — full-width card layout ── */
+    .acl-designer-split {
+      display: grid;
+      grid-template-columns: minmax(260px, 1fr) minmax(320px, 1.2fr);
+      gap: 24px 28px;
+      align-items: start;
+      width: 100%;
+    }
+    @media (max-width: 900px) {
+      .acl-designer-split { grid-template-columns: 1fr; }
+    }
+    .acl-designer-section-label {
+      display: block;
+      font-weight: 600;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    .acl-designer-col-detail .acl-resources-list-slot {
+      min-height: 120px;
+    }
+    .acl-designer-col-detail .acl-add-resource-btn { margin-top: 10px; }
+    .acl-designer-col-detail .acl-resource-name-input {
+      max-width: 100%;
+      flex: 1;
+      min-width: 100px;
+    }
+    .acl-designer-form-group { width: 100%; max-width: 100%; }
     .acl-role-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -1126,7 +1154,7 @@
         Step-by-step: validate each input before continuing. Same result as the <span class="term">shell script</span> (path in config) — user added to plain-users.json (CWDC + TLS2), ACL applied, pack for download.
       </p>
 
-      <div class="wizard-wrap">
+      <div class="wizard-wrap wizard-wrap-acl-wide">
         <div class="wizard-steps" role="tablist">
           <div class="wizard-step active" data-step="1" id="wizard-tab-1">1. Identification</div>
           <div class="wizard-step" data-step="2" id="wizard-tab-2">2. Username</div>
@@ -1177,23 +1205,22 @@
 
         <div class="wizard-panel" id="wizard-panel-3" data-step="3">
           <h3>Permission (ACL)</h3>
-          <p class="step-desc">Role template + Resource + Operation — <strong>ชุดเดียวกับ</strong> Add ACL to existing user. Topic จากขั้นก่อนจะถูก sync เข้า topic ตัวแรกเมื่อเข้าขั้นนี้ (แก้ไขได้).</p>
-          <div class="form-group">
-            <label>เลือก Role Template (Production-grade)</label>
-            <div id="acl-role-grid-add" class="acl-role-grid"></div>
-          </div>
-          <div class="form-group">
-            <label>Identity fields</label>
-            <div style="display:grid; grid-template-columns:repeat(2,minmax(220px,1fr)); gap:8px;">
-              <input type="text" id="acl-bootstrap-add" placeholder="Bootstrap Server" value="localhost:9092" />
-              <input type="text" id="acl-host-add" placeholder="Host" value="*" />
-              <select id="acl-permission-type-add"><option value="ALLOW" selected>ALLOW</option><option value="DENY">DENY</option></select>
+          <p class="step-desc">Role template + Resource + Operation — <strong>ชุดเดียวกับ</strong> Add ACL to existing user. Topic จากขั้นก่อนจะถูก sync เข้า topic ตัวแรกเมื่อเข้าขั้นนี้ (แก้ไขได้). การรัน ACL จริงใช้ bootstrap และ client properties จาก server ตาม environment ที่เลือก — ไม่ต้องกรอกซ้ำที่นี่.</p>
+          <div class="form-group acl-designer-form-group">
+            <div class="acl-designer-split">
+              <div class="acl-designer-col acl-designer-col-roles">
+                <label class="acl-designer-section-label">เลือก Role Template (Production-grade)</label>
+                <div id="acl-role-grid-add" class="acl-role-grid"></div>
+              </div>
+              <div class="acl-designer-col acl-designer-col-detail">
+                <label class="acl-designer-section-label">ACL Detail</label>
+                <div id="acl-resources-list-add" class="acl-resources-list-slot"></div>
+                <button type="button" id="btn-acl-add-resource-add" class="btn btn-secondary acl-add-resource-btn">+ Add resource</button>
+              </div>
             </div>
-          </div>
-          <div class="form-group">
-            <label>ACL Detail</label>
-            <div id="acl-resources-list-add"></div>
-            <button type="button" id="btn-acl-add-resource-add" class="btn btn-secondary" style="margin-top:8px;">+ Add resource</button>
+            <input type="hidden" id="acl-bootstrap-add" value="" />
+            <input type="hidden" id="acl-host-add" value="*" />
+            <input type="hidden" id="acl-permission-type-add" value="ALLOW" />
           </div>
           <div class="form-group" id="acl-warning-box-add" style="display:none;"></div>
           <div class="form-group">
@@ -1299,7 +1326,7 @@
       <p class="lead">
         End-to-end flow: create a new Kafka topic first, then onboard a user for that topic. Step 1 creates the topic; steps 2–6 are the same as Add user (system, username, ACL, passphrase, execute).
       </p>
-      <div class="wizard-wrap" id="wizard-wrap-ct">
+      <div class="wizard-wrap wizard-wrap-acl-wide" id="wizard-wrap-ct">
         <div class="wizard-steps" role="tablist" id="wizard-steps-ct">
           <div class="wizard-step active" data-step="1" id="ct-wizard-tab-1">1. Create Topic</div>
           <div class="wizard-step" data-step="2" id="ct-wizard-tab-2">2. Identification</div>
@@ -1358,23 +1385,22 @@
         </div>
         <div class="wizard-panel" id="ct-wizard-panel-4" data-step="4">
           <h3>Permission (ACL)</h3>
-          <p class="step-desc">Role template + Resource + Operation — <strong>ชุดเดียวกับ</strong> Add new user / Add ACL to existing user. Topic จากขั้นก่อนจะ sync เข้า topic ตัวแรก.</p>
-          <div class="form-group">
-            <label>เลือก Role Template (Production-grade)</label>
-            <div id="acl-role-grid-ct" class="acl-role-grid"></div>
-          </div>
-          <div class="form-group">
-            <label>Identity fields</label>
-            <div style="display:grid; grid-template-columns:repeat(2,minmax(220px,1fr)); gap:8px;">
-              <input type="text" id="acl-bootstrap-ct" placeholder="Bootstrap Server" value="localhost:9092" />
-              <input type="text" id="acl-host-ct" placeholder="Host" value="*" />
-              <select id="acl-permission-type-ct"><option value="ALLOW" selected>ALLOW</option><option value="DENY">DENY</option></select>
+          <p class="step-desc">Role template + Resource + Operation — <strong>ชุดเดียวกับ</strong> Add new user / Add ACL to existing user. Topic จากขั้นก่อนจะ sync เข้า topic ตัวแรก. การรัน ACL จริงใช้ config จาก server ตาม environment — ไม่ต้องกรอก bootstrap/host ที่นี่.</p>
+          <div class="form-group acl-designer-form-group">
+            <div class="acl-designer-split">
+              <div class="acl-designer-col acl-designer-col-roles">
+                <label class="acl-designer-section-label">เลือก Role Template (Production-grade)</label>
+                <div id="acl-role-grid-ct" class="acl-role-grid"></div>
+              </div>
+              <div class="acl-designer-col acl-designer-col-detail">
+                <label class="acl-designer-section-label">ACL Detail</label>
+                <div id="acl-resources-list-ct" class="acl-resources-list-slot"></div>
+                <button type="button" id="btn-acl-add-resource-ct" class="btn btn-secondary acl-add-resource-btn">+ Add resource</button>
+              </div>
             </div>
-          </div>
-          <div class="form-group">
-            <label>ACL Detail</label>
-            <div id="acl-resources-list-ct"></div>
-            <button type="button" id="btn-acl-add-resource-ct" class="btn btn-secondary" style="margin-top:8px;">+ Add resource</button>
+            <input type="hidden" id="acl-bootstrap-ct" value="" />
+            <input type="hidden" id="acl-host-ct" value="*" />
+            <input type="hidden" id="acl-permission-type-ct" value="ALLOW" />
           </div>
           <div class="form-group" id="acl-warning-box-ct" style="display:none;"></div>
           <div class="form-group">
@@ -1461,22 +1487,22 @@
         <input type="text" id="filter-topics-acl-existing" placeholder="Filter topics…" class="filter-input" style="margin-top:6px; width:100%; max-width:320px; padding:6px 10px; border:1px solid var(--border); border-radius:6px;" />
         <div id="topics-list-box-acl-existing" class="topics-list" style="display:block; margin-top:6px;"></div>
       </div>
-      <div class="form-group">
-        <label>เลือก Role Template (Production-grade)</label>
-        <div id="acl-role-grid-exist" class="acl-role-grid"></div>
-      </div>
-      <div class="form-group">
-        <label>Identity fields</label>
-        <div style="display:grid; grid-template-columns:repeat(2,minmax(220px,1fr)); gap:8px;">
-          <input type="text" id="acl-bootstrap-exist" placeholder="Bootstrap Server" value="localhost:9092" />
-          <input type="text" id="acl-host-exist" placeholder="Host" value="*" />
-          <select id="acl-permission-type-exist"><option value="ALLOW" selected>ALLOW</option><option value="DENY">DENY</option></select>
+      <div class="form-group acl-designer-form-group">
+        <p class="hint" style="margin:0 0 12px; font-size:13px;">เลือก template ซ้าย · แก้ resource/operation ขวา — การรัน ACL จริงใช้ bootstrap จาก server ตาม environment (host เริ่มต้น <code>*</code>, ALLOW).</p>
+        <div class="acl-designer-split">
+          <div class="acl-designer-col acl-designer-col-roles">
+            <label class="acl-designer-section-label">เลือก Role Template (Production-grade)</label>
+            <div id="acl-role-grid-exist" class="acl-role-grid"></div>
+          </div>
+          <div class="acl-designer-col acl-designer-col-detail">
+            <label class="acl-designer-section-label">ACL Detail</label>
+            <div id="acl-resources-list-exist" class="acl-resources-list-slot"></div>
+            <button type="button" id="btn-acl-add-resource-exist" class="btn btn-secondary acl-add-resource-btn">+ Add resource</button>
+          </div>
         </div>
-      </div>
-      <div class="form-group">
-        <label>ACL Detail</label>
-        <div id="acl-resources-list-exist"></div>
-        <button type="button" id="btn-acl-add-resource-exist" class="btn btn-secondary" style="margin-top:8px;">+ Add resource</button>
+        <input type="hidden" id="acl-bootstrap-exist" value="" />
+        <input type="hidden" id="acl-host-exist" value="*" />
+        <input type="hidden" id="acl-permission-type-exist" value="ALLOW" />
       </div>
       <div class="form-group" id="acl-warning-box-exist" style="display:none;"></div>
       <div class="form-group">
@@ -3234,9 +3260,13 @@
         function buildAclCommandsPreview(suffix) {
           var meta = ACL_PAGE_META[suffix] || {};
           var principal = meta.usernameId ? ((document.getElementById(meta.usernameId) || {}).value || '').trim() : '';
-          var bootstrap = (document.getElementById('acl-bootstrap-' + suffix).value || 'localhost:9092').trim() || 'localhost:9092';
-          var permissionType = ((document.getElementById('acl-permission-type-' + suffix).value || 'ALLOW') + '').toUpperCase() === 'DENY' ? 'DENY' : 'ALLOW';
-          var host = (document.getElementById('acl-host-' + suffix).value || '*').trim() || '*';
+          var bootstrapRaw = (document.getElementById('acl-bootstrap-' + suffix) || {}).value;
+          var bootstrap = String(bootstrapRaw || '').trim();
+          if (!bootstrap) bootstrap = '<bootstrap-server>';
+          var permEl = document.getElementById('acl-permission-type-' + suffix);
+          var hostEl = document.getElementById('acl-host-' + suffix);
+          var permissionType = ((permEl && permEl.value) || 'ALLOW').toUpperCase() === 'DENY' ? 'DENY' : 'ALLOW';
+          var host = ((hostEl && hostEl.value) || '*').trim() || '*';
           var pflag = permissionType === 'DENY' ? '--deny-principal' : '--allow-principal';
           var hflag = permissionType === 'DENY' ? '--deny-host' : '--allow-host';
           var cmds = [];
@@ -3407,8 +3437,6 @@
           var st = aclDesignerStates[suffix];
           var card = ACL_ROLE_CARDS.filter(function (c) { return c.key === st.selectedRole; })[0];
           var title = card ? card.title : st.selectedRole;
-          var perm = (document.getElementById('acl-permission-type-' + suffix) || {}).value || 'ALLOW';
-          var host = (document.getElementById('acl-host-' + suffix) || {}).value || '*';
           var lines = st.resources.map(function (r, i) {
             var ops = (r.ops || []).map(normalizeAclOperation).join(', ');
             var nm = r.type === 'cluster' ? '(cluster)' : (r.name || '');
@@ -3417,7 +3445,7 @@
           return '<div class="wizard-summary-block" style="margin-bottom:12px;"><strong style="color:var(--text-muted); font-size:12px; text-transform:uppercase;">ACL (production designer)</strong>'
             + '<p class="hint" style="margin:4px 0 8px;">Role template: <strong>' + escapeHtml(title) + '</strong></p>'
             + '<ul style="margin:0; padding-left:18px; font-size:13px; line-height:1.5;">' + lines.join('') + '</ul>'
-            + '<p class="hint" style="margin:8px 0 0; font-size:12px;">' + escapeHtml(perm) + ' · host <code>' + escapeHtml(host) + '</code></p></div>';
+            + '<p class="hint" style="margin:8px 0 0; font-size:12px;">การใช้งานจริง: portal รัน gen.sh ด้วย bootstrap/client ตาม environment — สิทธิ์เป็น ALLOW และ host <code>*</code> (ค่าเริ่มต้น)</p></div>';
         };
         function renderUsersFilteredAclExisting() {
           var box = document.getElementById('users-list-box-acl-existing');
