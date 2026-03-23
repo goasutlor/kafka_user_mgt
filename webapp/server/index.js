@@ -1027,14 +1027,15 @@ function getBaseEnv(req) {
   const g = config.gen || {};
   const baseDir = g.baseDir || process.env.BASE_HOST || '/opt/kafka-usermgmt';
   const ocPath = (g.ocPath && String(g.ocPath).trim()) || defaultOcPathForContainer();
+  const kPaths = resolveKafkaCommandConfigPaths(req);
   const env = {
     ...process.env,
     // Put container PATH first so grep/dirname use container; append ocPath so oc from host is still found (avoids libpcre)
     PATH: (process.env.PATH || '/usr/bin:/bin') + (ocPath ? `:${ocPath}` : ''),
     GEN_BASE_DIR: baseDir,
     GEN_KAFKA_BIN: g.kafkaBin || path.join(baseDir, 'kafka_2.13-3.6.1/bin'),
-    GEN_CLIENT_CONFIG: g.clientConfig || path.join(baseDir, 'configs/kafka-client.properties'),
-    GEN_ADMIN_CONFIG: g.adminConfig || path.join(baseDir, 'configs/kafka-client-master.properties'),
+    GEN_CLIENT_CONFIG: kPaths.clientConfig,
+    GEN_ADMIN_CONFIG: kPaths.adminConfig,
     GEN_LOG_FILE: g.logFile || path.join(baseDir, 'provisioning.log'),
     GEN_K8S_SECRET_NAME: g.k8sSecretName || 'kafka-server-side-credentials',
   };
@@ -1051,6 +1052,11 @@ function getBaseEnv(req) {
       const id = req.session.activeEnvironmentId || st.defaultId;
       if (id) env.GEN_ACTIVE_ENV_ID = String(id);
     }
+  }
+  // Same bootstrap string as /api/create-topic and /api/topics (getKafkaTopicsEnv); avoids gen.sh hardcoded CWDC/TLS2 when environments.json has no bootstrapServers
+  const portalBootstrap = getBootstrapServersForRequest(req);
+  if (portalBootstrap && String(portalBootstrap).trim()) {
+    env.GEN_KAFKA_BOOTSTRAP = String(portalBootstrap).trim();
   }
   return env;
 }
@@ -1401,7 +1407,81 @@ function getOcLoginSitesUnion() {
   return arr.length ? arr : getSitesFromConfig();
 }
 
+/** Active portal environment row (session + environments enabled), or null. */
+function getActiveEnvironmentEntry(req) {
+  const st = getEnvironmentsState();
+  if (!st.active) return null;
+  if (!req || !req.session) return null;
+  const id = req.session.activeEnvironmentId || st.defaultId;
+  return st.list.find((e) => e.id === id) || st.list.find((e) => e.id === st.defaultId) || st.list[0] || null;
+}
+
+/**
+ * Kafka command-config paths for this request.
+ * - Environments off (or no session env): master kafka.* default files (e.g. kafka-client-master.properties).
+ * - Environments on + active env: always kafka-client-master-{envId}.properties and kafka-client-{envId}.properties
+ *   under baseDir/configs/ — no fallback to unsuffixed names. Optional per-entry adminPropertiesFile / clientConfig etc. overrides.
+ */
+function resolveKafkaCommandConfigPaths(req) {
+  if (!config) loadConfig();
+  const g = config.gen || {};
+  const baseDir = path.resolve(g.baseDir || process.env.GEN_BASE_DIR || '/opt/kafka-usermgmt');
+  const defaultAdmin = g.adminConfig
+    ? (path.isAbsolute(g.adminConfig) ? g.adminConfig : path.join(baseDir, g.adminConfig))
+    : path.join(baseDir, 'configs', 'kafka-client-master.properties');
+  const defaultClient = g.clientConfig
+    ? (path.isAbsolute(g.clientConfig) ? g.clientConfig : path.join(baseDir, g.clientConfig))
+    : path.join(baseDir, 'configs', 'kafka-client.properties');
+
+  const st = getEnvironmentsState();
+  const entry = getActiveEnvironmentEntry(req);
+  if (!st.active || !entry) {
+    return { adminConfig: defaultAdmin, clientConfig: defaultClient };
+  }
+
+  const configsDir = path.join(baseDir, 'configs');
+  const safeEnvId = String(entry.id || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
+  if (!safeEnvId) {
+    console.warn('[kafka-config] environment id missing or invalid; using default kafka property files');
+    return { adminConfig: defaultAdmin, clientConfig: defaultClient };
+  }
+
+  const conventionAdmin = path.join(configsDir, `kafka-client-master-${safeEnvId}.properties`);
+  const conventionClient = path.join(configsDir, `kafka-client-${safeEnvId}.properties`);
+
+  let admin = conventionAdmin;
+  if (typeof entry.adminPropertiesFile === 'string' && entry.adminPropertiesFile.trim()) {
+    const base = path.basename(entry.adminPropertiesFile.trim());
+    if (base && base !== '.' && base !== '..') admin = path.join(configsDir, base);
+  } else if (typeof entry.adminConfig === 'string' && entry.adminConfig.trim()) {
+    const rel = entry.adminConfig.trim();
+    const candidate = path.isAbsolute(rel) ? rel : path.join(baseDir, rel.replace(/^[\\/]+/, ''));
+    const resolved = path.resolve(candidate);
+    const baseResolved = path.resolve(baseDir);
+    if (resolved === baseResolved || resolved.startsWith(`${baseResolved}${path.sep}`)) {
+      admin = resolved;
+    }
+  }
+
+  let client = conventionClient;
+  if (typeof entry.clientPropertiesFile === 'string' && entry.clientPropertiesFile.trim()) {
+    const base = path.basename(entry.clientPropertiesFile.trim());
+    if (base && base !== '.' && base !== '..') client = path.join(configsDir, base);
+  } else if (typeof entry.clientConfig === 'string' && entry.clientConfig.trim()) {
+    const rel = entry.clientConfig.trim();
+    const candidate = path.isAbsolute(rel) ? rel : path.join(baseDir, rel.replace(/^[\\/]+/, ''));
+    const resolved = path.resolve(candidate);
+    const baseResolved = path.resolve(baseDir);
+    if (resolved === baseResolved || resolved.startsWith(`${baseResolved}${path.sep}`)) {
+      client = resolved;
+    }
+  }
+
+  return { adminConfig: admin, clientConfig: client };
+}
+
 function getBootstrapServersForRequest(req) {
+  if (!config) loadConfig();
   const st = getEnvironmentsState();
   if (st.active && req && req.session) {
     const id = req.session.activeEnvironmentId || st.defaultId;
@@ -1410,7 +1490,15 @@ function getBootstrapServersForRequest(req) {
       return entry.bootstrapServers.trim();
     }
   }
-  return getBootstrapServers();
+  const g = config.gen || {};
+  if (g.bootstrapServers) return g.bootstrapServers;
+  const { adminConfig } = resolveKafkaCommandConfigPaths(req);
+  try {
+    const content = fs.readFileSync(adminConfig, 'utf8');
+    const m = content.match(/bootstrap\.servers\s*=\s*(.+)/);
+    if (m) return m[1].trim();
+  } catch (_) { /* missing file */ }
+  return process.env.GEN_BOOTSTRAP || 'localhost:9092';
 }
 
 // Avoid 404 in console: no favicon
@@ -1597,7 +1685,7 @@ function getKafkaTopicsEnv(req) {
   const g = config.gen || {};
   const baseDir = path.resolve(g.baseDir || g.rootDir || process.env.BASE_HOST || process.cwd());
   const kafkaBin = g.kafkaBin ? (path.isAbsolute(g.kafkaBin) ? g.kafkaBin : path.join(baseDir, g.kafkaBin)) : path.join(baseDir, 'kafka_2.13-3.6.1', 'bin');
-  const adminConfig = g.adminConfig ? (path.isAbsolute(g.adminConfig) ? g.adminConfig : path.join(baseDir, g.adminConfig)) : path.join(baseDir, 'configs', 'kafka-client-master.properties');
+  const { adminConfig } = resolveKafkaCommandConfigPaths(req);
   const bootstrap = getBootstrapServersForRequest(req);
   const scriptPath = path.join(kafkaBin, 'kafka-topics.sh');
   const kafkaAclsPath = path.join(kafkaBin, 'kafka-acls.sh');

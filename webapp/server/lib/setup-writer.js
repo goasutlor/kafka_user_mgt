@@ -5,6 +5,7 @@ const path = require('path');
 const {
   hasFullKafkaConnection,
   materializeKafkaConnectionFiles,
+  sanitizeKafkaEnvIdForFile,
 } = require('./setup-kafka-files');
 
 /** Fixed names in master.config and on disk under {runtimeRoot}/configs/ */
@@ -70,6 +71,80 @@ function ensureKafkaClientPropertyTemplates(runtimeRoot, bootstrapServers) {
     fs.writeFileSync(tmp, lines(role), 'utf8');
     fs.renameSync(tmp, dest);
     created.push(fname);
+  }
+  return { created, skipped };
+}
+
+/**
+ * When environments.enabled: create kafka-client-{id}.properties + kafka-client-master-{id}.properties
+ * (templates with CHANGE_ME) if missing — same as default templates but per-env bootstrap.
+ * @returns {{ created: string[], skipped: string[] }}
+ */
+function ensureKafkaEnvPropertyTemplatesFromMaster(master) {
+  const envBlock = master && master.environments;
+  if (!envBlock || envBlock.enabled !== true || !Array.isArray(envBlock.environments)) {
+    return { created: [], skipped: [] };
+  }
+  const defaultBs = master.kafka && master.kafka.bootstrapServers ? String(master.kafka.bootstrapServers).trim() : '';
+  const rt = master.runtimeRoot;
+  if (!String(rt || '').trim() || !defaultBs) {
+    return { created: [], skipped: [] };
+  }
+
+  const root = path.isAbsolute(rt) ? path.normalize(rt) : path.resolve(rt);
+  const configsDir = path.join(root, 'configs');
+  if (!fs.existsSync(configsDir)) {
+    fs.mkdirSync(configsDir, { recursive: true });
+  }
+
+  const truststoreInContainer = path.posix.join(
+    root.replace(/\\/g, '/'),
+    'configs',
+    'client.truststore.jks',
+  );
+
+  const lines = (roleLine, boot) =>
+    [
+      `# ${roleLine}`,
+      '# Created by portal setup — per-environment template; existing files are never overwritten.',
+      '# EDIT: ssl.truststore.password and sasl.jaas.config (username/password).',
+      '# Truststore: copy client.truststore.jks into configs/ (path below).',
+      '',
+      `bootstrap.servers=${boot}`,
+      'security.protocol=SASL_SSL',
+      'sasl.mechanism=PLAIN',
+      'client.dns.lookup=use_all_dns_ips',
+      `ssl.truststore.location=${truststoreInContainer}`,
+      'ssl.truststore.password=CHANGE_ME',
+      'ssl.truststore.type=JKS',
+      'sasl.jaas.config=org.apache.kafka.common.security.plain.PlainLoginModule required username="CHANGE_ME" password="CHANGE_ME";',
+      'acks=all',
+      '',
+    ].join('\n');
+
+  const created = [];
+  const skipped = [];
+  for (const e of envBlock.environments) {
+    const sid = sanitizeKafkaEnvIdForFile(e && e.id);
+    if (!sid) continue;
+    const boot = (e && typeof e.bootstrapServers === 'string' && e.bootstrapServers.trim())
+      ? e.bootstrapServers.trim()
+      : defaultBs;
+    const pairs = [
+      [`kafka-client-${sid}.properties`, `Kafka client (${sid})`],
+      [`kafka-client-master-${sid}.properties`, `Kafka admin client (${sid})`],
+    ];
+    for (const [fname, role] of pairs) {
+      const dest = path.join(configsDir, fname);
+      if (fs.existsSync(dest)) {
+        skipped.push(fname);
+        continue;
+      }
+      const tmp = dest + '.tmp';
+      fs.writeFileSync(tmp, lines(role, boot), 'utf8');
+      fs.renameSync(tmp, dest);
+      created.push(fname);
+    }
   }
   return { created, skipped };
 }
@@ -343,6 +418,7 @@ function writeSetupFiles(configAbsPath, master, credentials, credentialsPath, se
       materializeKafkaConnectionFiles(body, master);
     } else {
       ensureKafkaClientPropertyTemplates(rt, bs);
+      ensureKafkaEnvPropertyTemplatesFromMaster(master);
     }
   }
 }
@@ -441,6 +517,7 @@ module.exports = {
   normalizeOcSitesFromBody,
   masterToSetupWizardBody,
   ensureKafkaClientPropertyTemplates,
+  ensureKafkaEnvPropertyTemplatesFromMaster,
   DEFAULT_CLIENT_PROPS_FILE,
   DEFAULT_ADMIN_PROPS_FILE,
 };

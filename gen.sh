@@ -33,6 +33,9 @@
 # CHANGELOG
 # ---------
 # 2026-03-22  Setup wizard: truststore can stay on runtime mount only — Web verifies path + keytool -list; GEN_MODE unchanged.
+# 2026-03-23  With GEN_ACTIVE_ENV_ID + environments.json: if admin/client not set in JSON and GEN_ADMIN_CONFIG unset, use kafka-client-master-{id}.properties and kafka-client-{id}.properties (no unsuffixed fallback).
+# 2026-03-23  Per-environment adminPropertiesFile / clientPropertiesFile (or adminConfig / clientConfig) in environments.json — Web sets GEN_ADMIN_CONFIG from session env; CLI can omit GEN_* to resolve from JSON (same truststore/SASL as that cluster).
+# 2026-03-21  Web getBaseEnv sets GEN_KAFKA_BOOTSTRAP (same as /api/create-topic); gen.sh applies after env json so add-user topic validation matches portal when environments.json omits bootstrapServers.
 # 2026-03-22  Per-environment Kafka bootstrap: with GEN_ACTIVE_ENV_ID + environments.json, if the active env object has bootstrapServers, override BOOTSTRAP_CWDC/BOTH (parity with Web portal env switch).
 # 2026-03-22  Init Kafka client .properties templates: menu [8] and GEN_MODE=8 — scripts/ensure-kafka-client-props.sh (parity with web setup save; GEN_KAFKA_BOOTSTRAP optional). Full PEM/JKS + SASL materialization (no CHANGE_ME) is via the web setup wizard only — use mount configs/ to adjust later.
 # 2026-03-21  Go-Live verify: menu [7] and GEN_NONINTERACTIVE=1 GEN_MODE=7 — scripts/verify-golive.sh (all namespaces from master/environments, Kafka, optional Portal). Env: GOLIVE_PORTAL_URL, GOLIVE_JSON=1.
@@ -159,6 +162,65 @@ if [ -n "${GEN_ACTIVE_ENV_ID:-}" ] && [ -f "$ENV_JSON" ] && command -v jq >/dev/
         BOOTSTRAP_CWDC="$_eboot"
         BOOTSTRAP_TLS2="$_eboot"
         BOOTSTRAP_BOTH="$_eboot"
+    fi
+fi
+# Web portal sets GEN_KAFKA_BOOTSTRAP to the same value as /api/create-topic (gen.bootstrapServers, admin properties, or env bootstrapServers).
+# When environments.json has no bootstrapServers, gen.sh would otherwise keep script defaults (CWDC+TLS2) and topic create vs add-user validation could hit different clusters.
+if [ -n "${GEN_KAFKA_BOOTSTRAP:-}" ]; then
+    _gkb=$(echo "$GEN_KAFKA_BOOTSTRAP" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    if [ -n "$_gkb" ]; then
+        BOOTSTRAP_CWDC="$_gkb"
+        BOOTSTRAP_TLS2="$_gkb"
+        BOOTSTRAP_BOTH="$_gkb"
+    fi
+fi
+# Per-environment Kafka admin/client: optional JSON adminPropertiesFile / adminConfig / client*; else convention
+# kafka-client-master-{GEN_ACTIVE_ENV_ID}.properties and kafka-client-{GEN_ACTIVE_ENV_ID}.properties (no unsuffixed fallback when this block runs).
+if [ -n "${GEN_ACTIVE_ENV_ID:-}" ] && [ -f "$ENV_JSON" ] && command -v jq >/dev/null 2>&1; then
+    _safe_env_id=$(echo "$GEN_ACTIVE_ENV_ID" | tr -cd 'a-zA-Z0-9_-')
+    if [ -z "${GEN_ADMIN_CONFIG:-}" ]; then
+        _apf=$(jq -r --arg id "$GEN_ACTIVE_ENV_ID" '
+          ([.environments[]? | select(.enabled != false) | select(.id == $id)] | first) as $e
+          | if $e == null then "" else ($e.adminPropertiesFile // "") end
+        ' "$ENV_JSON" 2>/dev/null || true)
+        _apf=$(echo "$_apf" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        _acrel=$(jq -r --arg id "$GEN_ACTIVE_ENV_ID" '
+          ([.environments[]? | select(.enabled != false) | select(.id == $id)] | first) as $e
+          | if $e == null then "" else ($e.adminConfig // "") end
+        ' "$ENV_JSON" 2>/dev/null || true)
+        _acrel=$(echo "$_acrel" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if [ -n "$_apf" ]; then
+            ADMIN_CONFIG="$BASE_DIR/configs/$(basename "$_apf")"
+        elif [ -n "$_acrel" ]; then
+            case "$_acrel" in
+                /*) ADMIN_CONFIG="$_acrel" ;;
+                *) ADMIN_CONFIG="$BASE_DIR/$_acrel" ;;
+            esac
+        elif [ -n "$_safe_env_id" ]; then
+            ADMIN_CONFIG="$BASE_DIR/configs/kafka-client-master-${_safe_env_id}.properties"
+        fi
+    fi
+    if [ -z "${GEN_CLIENT_CONFIG:-}" ]; then
+        _cpf=$(jq -r --arg id "$GEN_ACTIVE_ENV_ID" '
+          ([.environments[]? | select(.enabled != false) | select(.id == $id)] | first) as $e
+          | if $e == null then "" else ($e.clientPropertiesFile // "") end
+        ' "$ENV_JSON" 2>/dev/null || true)
+        _cpf=$(echo "$_cpf" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        _ccl=$(jq -r --arg id "$GEN_ACTIVE_ENV_ID" '
+          ([.environments[]? | select(.enabled != false) | select(.id == $id)] | first) as $e
+          | if $e == null then "" else ($e.clientConfig // "") end
+        ' "$ENV_JSON" 2>/dev/null || true)
+        _ccl=$(echo "$_ccl" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if [ -n "$_cpf" ]; then
+            CLIENT_CONFIG="$BASE_DIR/configs/$(basename "$_cpf")"
+        elif [ -n "$_ccl" ]; then
+            case "$_ccl" in
+                /*) CLIENT_CONFIG="$_ccl" ;;
+                *) CLIENT_CONFIG="$BASE_DIR/$_ccl" ;;
+            esac
+        elif [ -n "$_safe_env_id" ]; then
+            CLIENT_CONFIG="$BASE_DIR/configs/kafka-client-${_safe_env_id}.properties"
+        fi
     fi
 fi
 

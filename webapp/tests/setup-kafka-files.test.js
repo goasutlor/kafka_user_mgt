@@ -127,4 +127,36 @@ describe('setup-kafka-files', () => {
     const posixJks = getTruststoreAbsolutePathForWizard(body, tmp).replace(/\\/g, '/');
     assert.ok(client.includes(`ssl.truststore.location=${posixJks}`));
   });
+
+  it('materializeKafkaConnectionFiles writes per-environment props when master.environments enabled', () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ku-kfk-env-'));
+    const jks = Buffer.alloc(100, 7).toString('base64');
+    const master = {
+      runtimeRoot: tmp,
+      kafka: { bootstrapServers: 'kafka-dev.example.com:443' },
+      environments: {
+        enabled: true,
+        defaultEnvironmentId: 'dev',
+        environments: [
+          { id: 'dev', sites: [{ ocContext: 'c1', namespace: 'n1' }] },
+          { id: 'uat', bootstrapServers: 'kafka-uat.example.com:443', sites: [{ ocContext: 'c2', namespace: 'n2' }] },
+        ],
+      },
+    };
+    const body = {
+      kafkaTruststorePassword: 'ts-pass',
+      kafkaTruststoreJksBase64: jks,
+      kafkaSaslUsername: 'u',
+      kafkaSaslPassword: 'p',
+    };
+    const r = materializeKafkaConnectionFiles(body, master);
+    assert.strictEqual(r.mode, 'full');
+    assert.ok((r.files || []).includes('kafka-client-dev.properties'));
+    assert.ok((r.files || []).includes('kafka-client-master-uat.properties'));
+    const devClient = fs.readFileSync(path.join(tmp, 'configs', 'kafka-client-dev.properties'), 'utf8');
+    assert.ok(devClient.includes('bootstrap.servers=kafka-dev.example.com:443'));
+    const uatAdmin = fs.readFileSync(path.join(tmp, 'configs', 'kafka-client-master-uat.properties'), 'utf8');
+    assert.ok(uatAdmin.includes('bootstrap.servers=kafka-uat.example.com:443'));
+    assert.ok(uatAdmin.includes('username="u"'));
+  });
 });

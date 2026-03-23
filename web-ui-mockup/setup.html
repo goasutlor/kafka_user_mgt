@@ -353,6 +353,7 @@
             กรอก <strong>bootstrap</strong> เป็น <code>host:port</code> ของ Kafka TLS route สำหรับ project นั้น.
             Truststore + SASL ด้านล่างใช้ <strong>ร่วมกันทุก environment</strong> (credentials เดียวกันหลาย namespace).
             แถวแรกที่กรอก bootstrap จะเติมช่อง <strong>Default bootstrap</strong> ด้านล่างให้อัตโนมัติ (แก้ได้).
+            เมื่อบันทึก Setup: ระบบจะสร้างไฟล์ <code>kafka-client-&lt;id&gt;.properties</code> และ <code>kafka-client-master-&lt;id&gt;.properties</code> ใต้ runtime <code>configs/</code> ให้ตรงกับแต่ละ environment (bootstrap ต่อแถว) — ไม่ต้องคัดลอกมือถ้าใช้ wizard ครบ
           </p>
 
           <div id="kafka-per-ns-panel" style="margin-top:12px; padding:12px; border:1px solid #d0d7de; border-radius:8px; background:#f8fafc;">
@@ -370,7 +371,7 @@
           </div>
 
           <p class="hint" style="margin-top:12px;">
-            <strong>Templates vs full config:</strong> (1) Leave the SSL/SASL section below empty — we only create property <em>templates</em> (with <code>CHANGE_ME</code>) if missing. (2) Fill it — we write <code>kafka-client.properties</code> and <code>kafka-client-master.properties</code>. <strong>Recommended:</strong> copy your <code>.jks</code> onto the <strong>runtime</strong> volume (e.g. <code>configs/client.truststore.jks</code>), choose <strong>File on server</strong>, enter truststore password + SASL — Setup <strong>checks the file is present</strong> and runs <code>keytool -list</code> on Verify/Save. Use <strong>Paste</strong> only if you cannot place a file on the mount yet.
+            <strong>Templates vs full config:</strong> (1) Leave the SSL/SASL section below empty — we create <em>templates</em> (with <code>CHANGE_ME</code>) if missing: default pair plus per-env <code>kafka-client-&lt;id&gt;.properties</code> when multi-environment is on. (2) Fill it — we write full <code>kafka-client.properties</code>, <code>kafka-client-master.properties</code>, <strong>and</strong> the same for each environment id (shared truststore/SASL, different <code>bootstrap.servers</code> per row). <strong>Recommended:</strong> copy your <code>.jks</code> onto the <strong>runtime</strong> volume (e.g. <code>configs/client.truststore.jks</code>), choose <strong>File on server</strong>, enter truststore password + SASL — Setup <strong>checks the file is present</strong> and runs <code>keytool -list</code> on Verify/Save. Use <strong>Paste</strong> only if you cannot place a file on the mount yet.
           </p>
           <details class="advanced-box" open style="margin-top:12px;">
             <summary>Kafka SSL truststore + SASL (optional — all fields or none)</summary>

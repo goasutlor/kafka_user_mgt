@@ -12,6 +12,12 @@ function escapeForJaasValue(s) {
   return String(s).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
 }
 
+/** Safe segment for kafka-client(-master)-{id}.properties filenames. */
+function sanitizeKafkaEnvIdForFile(id) {
+  const s = String(id || '').trim().replace(/[^a-zA-Z0-9_-]/g, '');
+  return s || null;
+}
+
 function truststoreLocationPosix(runtimeRootNorm) {
   const r = String(runtimeRootNorm).replace(/\\/g, '/');
   return path.posix.join(r, 'configs', TRUSTSTORE_FILENAME);
@@ -270,6 +276,40 @@ function materializeKafkaConnectionFiles(body, master) {
     buildPropertiesContent(bs, posixTrust, storePass, adminUser, adminPass, 'Kafka admin client (operator)'),
   );
 
+  const files = truststoreSource === 'written'
+    ? [TRUSTSTORE_FILENAME, DEFAULT_CLIENT_PROPS, DEFAULT_ADMIN_PROPS]
+    : [DEFAULT_CLIENT_PROPS, DEFAULT_ADMIN_PROPS];
+
+  const envBlock = master && master.environments;
+  const defaultBs = String(bs || '').trim();
+  if (envBlock && envBlock.enabled === true && Array.isArray(envBlock.environments) && defaultBs) {
+    for (const e of envBlock.environments) {
+      const sid = sanitizeKafkaEnvIdForFile(e && e.id);
+      if (!sid) continue;
+      const envBs = (e && typeof e.bootstrapServers === 'string' && e.bootstrapServers.trim())
+        ? e.bootstrapServers.trim()
+        : defaultBs;
+      if (!envBs) continue;
+      const cname = `kafka-client-${sid}.properties`;
+      const aname = `kafka-client-master-${sid}.properties`;
+      atomicWriteText(
+        path.join(configsDir, cname),
+        buildPropertiesContent(envBs, posixTrust, storePass, clientUser, clientPass, `Kafka client (${sid})`),
+      );
+      atomicWriteText(
+        path.join(configsDir, aname),
+        buildPropertiesContent(envBs, posixTrust, storePass, adminUser, adminPass, `Kafka admin client (${sid})`),
+      );
+      files.push(cname, aname);
+      if (process.platform !== 'win32') {
+        try {
+          fs.chmodSync(path.join(configsDir, cname), 0o600);
+          fs.chmodSync(path.join(configsDir, aname), 0o600);
+        } catch (_) { /* ignore */ }
+      }
+    }
+  }
+
   if (process.platform !== 'win32') {
     try {
       fs.chmodSync(path.join(configsDir, DEFAULT_CLIENT_PROPS), 0o600);
@@ -279,10 +319,6 @@ function materializeKafkaConnectionFiles(body, master) {
       }
     } catch (_) { /* ignore */ }
   }
-
-  const files = truststoreSource === 'written'
-    ? [TRUSTSTORE_FILENAME, DEFAULT_CLIENT_PROPS, DEFAULT_ADMIN_PROPS]
-    : [DEFAULT_CLIENT_PROPS, DEFAULT_ADMIN_PROPS];
 
   return {
     mode: 'full',
@@ -296,6 +332,7 @@ module.exports = {
   TRUSTSTORE_FILENAME,
   DEFAULT_CLIENT_PROPS,
   DEFAULT_ADMIN_PROPS,
+  sanitizeKafkaEnvIdForFile,
   hasFullKafkaConnection,
   anyKafkaConnectionFieldTouched,
   validateKafkaConnectionCompleteness,

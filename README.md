@@ -38,3 +38,51 @@ docker build -t kafka-user-mgt:local .
 ```
 
 See `docker-compose.yml` and `Dockerfile` for details.
+
+---
+
+## Deployment & migration checklist
+
+Use this when **moving the portal to a new host**, changing bind-mount paths, or adding environments that use **different Kafka clusters**.
+
+### Two mount roles (typical)
+
+| Role | Example in container | Host directory (you choose) |
+|------|----------------------|-----------------------------|
+| **Portal config** | Often `/app/config` (`CONFIG_PATH` → `master.config.json`) | e.g. `kafka-usermgmt-config/` |
+| **Runtime (`runtimeRoot`)** | `/opt/kafka-usermgmt` | e.g. `kafka-usermgmt-runtime/` |
+
+`master.config.json` sets `runtimeRoot` (e.g. `/opt/kafka-usermgmt`). Kafka CLI configs, kubeconfig, `user_output`, and synced `environments.json` live **under that runtime root**, not necessarily next to `master.config.json`.
+
+### Copy or recreate (minimum)
+
+1. **`master.config.json`** — adjust if paths, ports, or topology change on the new host.
+2. **`credentials.json`** (next to master) — portal auth; optional OC secrets if you use `server.auth.secretsFile` merge.
+3. **Kafka properties under `{runtimeRoot}/configs/`**  
+   - Single-env / `environments.enabled: false`: default names from master `kafka.clientPropertiesFile` / `kafka.adminPropertiesFile` (e.g. `kafka-client.properties`, `kafka-client-master.properties`).  
+   - **Multi-env / `environments.enabled: true`**: runtime uses **`kafka-client-{envId}.properties`** and **`kafka-client-master-{envId}.properties`** where **`envId` matches** the environment `id` in master. **Web Setup** (Save / Verify with Kafka filled in) **writes these files automatically** — shared truststore + SASL, per-row `bootstrap.servers`. Templates-only save creates per-env `CHANGE_ME` templates too. The app does **not** scan the disk for suffixes; it maps **`id` ↔ filename**.
+4. **Truststore / TLS material** — e.g. `client.truststore.jks` or paths referenced inside the `.properties` files; copy or update `ssl.truststore.location` if the new layout differs.
+5. **Kubeconfig** — file at expanded `oc.kubeconfig` (e.g. `{runtimeRoot}/.kube/config` or `config-both`). Context **names** must match `ocContext` values in `fallbackSites` or `environments[].sites[]`.
+6. **`oc.loginServers`** in master — API URLs per context if clusters or API endpoints change.
+7. **`environments` block** — `enabled`, `defaultEnvironmentId`, each entry: `id`, `sites`, optional `bootstrapServers`, optional overrides (`adminPropertiesFile`, etc.).
+8. **HTTPS** (if enabled) — `portal.https.keyPath` / `certPath` and mounted cert files inside the container.
+9. **Container run** — volumes, published port, image tag after code changes (see below).
+
+After changing **application code** (Node server or bundled `gen.sh`), **rebuild the image** (or bind-mount updated sources and restart) so behavior such as per-env property paths and `GEN_KAFKA_BOOTSTRAP` parity is present in the running container.
+
+---
+
+## When manual work is still required (important)
+
+The **Setup wizard** can finish **multi-environment Kafka file layout** when you use **one shared truststore + SASL** and **different bootstrap per environment** (it writes `kafka-client-{id}.properties` / `kafka-client-master-{id}.properties` on Save). These cases still need **manual or ops-owned** work:
+
+| Situation | Why manual |
+|-----------|------------|
+| **Different SASL users or truststores per environment** | Setup writes the **same** credentials into every env file. If **admin or client password differs per cluster**, edit the generated files (or use `adminPropertiesFile` / `clientPropertiesFile` overrides in master). |
+| **Corporate truststore / CA** | You must supply JKS/PEM (or place `.jks` on the mount); Setup does not obtain your CA from the network. |
+| **Kubeconfig and OpenShift contexts** | The portal does not create contexts; merge or copy kubeconfig and ensure **context names** match configuration. |
+| **Topics exist only on some clusters** | Operations: create the topic on each cluster where you need it; CLI `kafka-topics --describe` per bootstrap is the sanity check. |
+| **Moving servers / new paths** | Reconcile **all** paths in master + properties + volumes; see checklist above. |
+| **Skipping Setup entirely** | Hand-edit master + `configs/*.properties` yourself. |
+
+**Summary:** For the common case (**shared Kafka TLS/SASL, different bootstrap per env**), **Web Setup is enough** for property files. Divergent credentials per cluster still need **manual edits** after save or separate tooling.

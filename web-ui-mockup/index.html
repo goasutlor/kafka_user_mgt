@@ -580,6 +580,9 @@
       line-height: 1.6;
     }
     .wizard-summary strong { color: var(--text); }
+    .acl-matrix-table { box-shadow: 0 1px 2px rgba(15, 23, 42, 0.06); border-radius: 8px; overflow: hidden; }
+    .acl-matrix-table tbody tr:hover { background: var(--active-bg); }
+    .error-topic-hint { margin-top: 12px; padding: 12px 14px; background: #fff8e6; border: 1px solid #d4a574; border-radius: 8px; font-size: 13px; line-height: 1.55; color: var(--text); }
     .progress-wrap {
       margin-top: 1rem;
       display: none;
@@ -1121,6 +1124,7 @@
           <div class="form-group">
             <label for="ct-topic">Topic name</label>
             <input type="text" id="ct-topic" readonly placeholder="(created in step 1)" />
+            <span class="hint">ต้องสร้าง topic ในขั้น 1 ให้สำเร็จก่อน — ถ้าข้ามหรือสร้างไม่ผ่าน ขั้น onboard จะ error ตอน validate topic</span>
           </div>
           <div class="wizard-actions">
             <button type="button" id="ct-wizard-back-2" class="btn btn-secondary">Back</button>
@@ -1791,6 +1795,22 @@
           msg += '<br><details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;">Details (stdout)</summary><pre style="margin-top:4px;font-size:11px;white-space:pre-wrap;max-height:200px;overflow:auto;background:var(--code-bg);padding:8px;">' + escapeHtml(stripAnsiDisplay(j.stdout.trim().slice(-1500))) + '</pre></details>';
         if (j.tasks && j.tasks.length)
           msg += '<div style="margin-top:10px;font-size:12px;"><strong>Task status</strong>' + renderGenTasksBlockHtml(j.tasks) + '</div>';
+        msg = appendTopicValidationHintHtml(msg, j);
+        return msg;
+      }
+      /** Extra help when gen.sh fails at topic describe (not a portal bug — topic missing or admin cannot describe). */
+      function appendTopicValidationHintHtml(msg, j) {
+        var blob = ((j && j.stdout) ? j.stdout : '') + '\n' + ((j && j.stderr) ? j.stderr : '') + '\n' + ((j && j.error) ? j.error : '');
+        blob = stripAnsiDisplay(blob);
+        if (!/not found|no permission/i.test(blob) || !/topic|Topic|Validating/i.test(blob)) return msg;
+        msg += '<div class="error-topic-hint" role="note">';
+        msg += '<strong>ทำไม error นี้ “แก้ในโค้ด” ไม่หาย:</strong> ขั้น <code>Validating Topic</code> ใช้ <strong>kafka-topics + admin config</strong> ไปดูว่ามี topic ใน cluster จริงหรือไม่ — ถ้าไม่มีหรือบัญชี admin describe ไม่ได้ จะหยุดก่อนสร้าง user (ปลอดภัยกว่าเดิม)<br/><br/>';
+        msg += '<strong>เช็กลิสต์:</strong><br/>';
+        msg += '• <strong>Create Topic &amp; Onboard:</strong> ให้ <strong>ขั้น 1 สร้าง topic สำเร็จ</strong> (ข้อความเขียว) แล้วค่อยไปขั้นถัดไป — ชื่อในขั้น 2 ต้องตรงที่สร้าง<br/>';
+        msg += '• <strong>Add user:</strong> topic ต้องมีอยู่แล้วใน cluster — โหลดรายการ topic หรือสร้างด้วยขั้นตอนอื่นก่อน<br/>';
+        msg += '• <strong>Environment:</strong> Dev / SIT / UAT ต้องตรง cluster ที่มี topic (หลัง login เปลี่ยนได้แค่หลัง logout)<br/>';
+        msg += '• ถ้า topic มีแน่นอน: ตรวจ <code>kafka-client-master.properties</code> (bootstrap + สิทธิ์) ว่าชี้ cluster เดียวกัน';
+        msg += '</div>';
         return msg;
       }
       function genTaskRowHtml(t, escFn) {
@@ -2192,41 +2212,58 @@
           var el = document.getElementById(id);
           if (el) el.addEventListener('change', function () { saveWizardState(); if (currentStep === 5) renderSummary(); });
         });
+        (function () {
+          var aclSel = document.getElementById('acl');
+          if (aclSel) aclSel.addEventListener('change', function () { saveWizardState(); if (currentStep === 5) renderSummary(); });
+        })();
+
+        function buildAclCapabilityMatrixHtml(acl, groupDescribe, groupDelete) {
+          var tick = '<span style="color:var(--success);font-weight:700;" title="Yes">✓</span>';
+          var no = '<span style="color:var(--text-muted);font-weight:600;" title="No">—</span>';
+          var consume, produce, tDesc, tDescCfg, tAdmin;
+          if (acl === 'read') {
+            consume = tick; produce = no; tDesc = tick; tDescCfg = tick; tAdmin = no;
+          } else if (acl === 'client') {
+            consume = tick; produce = tick; tDesc = tick; tDescCfg = tick; tAdmin = no;
+          } else {
+            consume = tick; produce = tick; tDesc = tick; tDescCfg = tick; tAdmin = tick;
+          }
+          var cgRead = tick;
+          var cgDesc = groupDescribe ? tick : no;
+          var cgDel = groupDelete ? tick : no;
+          var presetLabel = acl === 'read' ? 'Read (consume only)' : (acl === 'client' ? 'Client (produce + consume + describe)' : 'All (full / admin-level)');
+          var rows = [
+            ['รับข้อความจาก topic <span style="color:var(--text-muted);font-size:11px;">Consume · Topic Read</span>', consume],
+            ['ส่งข้อความเข้า topic <span style="color:var(--text-muted);font-size:11px;">Produce · Topic Write</span>', produce],
+            ['ดู metadata ของ topic <span style="color:var(--text-muted);font-size:11px;">Describe</span>', tDesc],
+            ['ดู config ของ topic <span style="color:var(--text-muted);font-size:11px;">DescribeConfigs</span>', tDescCfg],
+            ['สร้าง / แก้ / ลบ topic <span style="color:var(--text-muted);font-size:11px;">admin</span>', tAdmin],
+            ['เข้าร่วม consumer group <span style="color:var(--text-muted);font-size:11px;">Group Read · *</span>', cgRead],
+            ['ดูข้อมูล consumer group <span style="color:var(--text-muted);font-size:11px;">optional</span>', cgDesc],
+            ['ลบ consumer group <span style="color:var(--text-muted);font-size:11px;">optional</span>', cgDel]
+          ];
+          var html = '<p class="hint" style="margin:0 0 8px; font-size:12px;"><strong>Preset:</strong> ' + escapeHtml(presetLabel) + '</p>';
+          html += '<table class="acl-matrix-table" style="width:100%;max-width:640px;border-collapse:collapse;font-size:13px;border:1px solid var(--border);">';
+          html += '<thead><tr style="border-bottom:2px solid var(--border);background:var(--code-bg);"><th style="text-align:left;padding:10px 12px;">สิทธิ์ที่จะได้รับ</th><th style="text-align:center;padding:10px 12px;width:72px;">ให้</th></tr></thead><tbody>';
+          rows.forEach(function (r) {
+            html += '<tr style="border-bottom:1px solid var(--border);"><td style="padding:10px 12px;vertical-align:middle;line-height:1.45;">' + r[0] + '</td><td style="text-align:center;padding:10px 12px;font-size:16px;">' + r[1] + '</td></tr>';
+          });
+          html += '</tbody></table>';
+          return html;
+        }
 
         function renderSummary() {
           var system = document.getElementById('system').value.trim();
           var topic = document.getElementById('topic').value.trim();
           var username = document.getElementById('username').value.trim();
           var acl = document.getElementById('acl').value;
-          var hasReadWrite = (acl === 'client' || acl === 'all');
-          var hasDescribe = true;
-          var hasAlterDelete = (acl === 'all');
-          var tick = '<span style="color:#1a7f37; font-weight:bold;">✓</span>';
-          var cross = '<span style="color:#cf222e; font-weight:bold;">✗</span>';
-          var rwCell = hasReadWrite ? tick : cross;
-          var descCell = hasDescribe ? tick : cross;
-          var alterCell = hasAlterDelete ? tick : cross;
-          var groupExtra = [];
-          if (document.getElementById('acl-group-describe') && document.getElementById('acl-group-describe').checked) groupExtra.push('Describe');
-          if (document.getElementById('acl-group-delete') && document.getElementById('acl-group-delete').checked) groupExtra.push('Delete');
-          var groupText = 'Read (default)'; if (groupExtra.length) groupText += ', ' + groupExtra.join(', ');
-          var html = '<div class="wizard-summary-block" style="margin-bottom:12px;"><strong style="color:var(--text-muted); font-size:12px; text-transform:uppercase;">Identification</strong><br>';
+          var gDesc = document.getElementById('acl-group-describe') && document.getElementById('acl-group-describe').checked;
+          var gDel = document.getElementById('acl-group-delete') && document.getElementById('acl-group-delete').checked;
+          var html = '<div class="wizard-summary-block" style="margin-bottom:14px;"><strong style="color:var(--text-muted); font-size:12px; text-transform:uppercase;">Identification</strong><br>';
           html += '<strong>Client System:</strong> ' + escapeHtml(system) + ' &nbsp;|&nbsp; <strong>Topic:</strong> ' + escapeHtml(topic) + ' &nbsp;|&nbsp; <strong>Username:</strong> ' + escapeHtml(username) + '</div>';
-          html += '<div class="wizard-summary-block" style="margin-bottom:12px;"><strong style="color:var(--text-muted); font-size:12px;">สรุปภาพรวมในรูปแบบตาราง</strong><br>';
-          html += '<table class="acl-summary-table" style="margin-top:8px; width:100%; max-width:560px; border-collapse:collapse; font-size:13px;">';
-          html += '<thead><tr style="border-bottom:2px solid var(--border); background:var(--code-bg);">';
-          html += '<th style="text-align:left; padding:8px 10px;">User</th>';
-          html += '<th style="text-align:center; padding:8px 10px;">Read/Write (รับ-ส่ง)</th>';
-          html += '<th style="text-align:center; padding:8px 10px;">Describe (ดูโครงสร้าง)</th>';
-          html += '<th style="text-align:center; padding:8px 10px;">Alter/Delete (แก้ไข/ลบ)</th></tr></thead>';
-          html += '<tbody><tr style="border-bottom:1px solid var(--border);">';
-          html += '<td style="padding:8px 10px;">' + escapeHtml(username || '—') + '</td>';
-          html += '<td style="text-align:center; padding:8px 10px;">' + rwCell + '</td>';
-          html += '<td style="text-align:center; padding:8px 10px;">' + descCell + '</td>';
-          html += '<td style="text-align:center; padding:8px 10px;">' + alterCell + '</td></tr></tbody></table>';
-          html += '<p class="hint" style="margin-top:6px; font-size:12px;"><strong>Consumer group:</strong> ' + escapeHtml(groupText) + '</p>';
-          html += '<p class="hint" style="margin:8px 0 0; font-size:12px;">Click "Create user + ACL and download pack" to apply.</p>';
-          html += '</div>';
+          html += '<div class="wizard-summary-block" style="margin-bottom:12px;"><strong style="color:var(--text-muted); font-size:12px; text-transform:uppercase;">ACL ที่จะถูก assign</strong> <span style="color:var(--text-muted);font-size:12px;">(✓ = ได้รับสิทธิ์ · — = ไม่ได้รับ)</span>';
+          html += buildAclCapabilityMatrixHtml(acl, gDesc, gDel);
+          html += '<p class="hint" style="margin:12px 0 0; font-size:12px;">กด <strong>Create user + ACL and download pack</strong> เพื่อรัน gen.sh ตามสรุปนี้</p></div>';
           document.getElementById('wizard-summary').innerHTML = html;
         }
         function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -2576,8 +2613,20 @@
           var topic = (document.getElementById('ct-topic').value || '').trim();
           var username = (document.getElementById('ct-username').value || '').trim();
           var acl = (document.getElementById('ct-acl').value || 'client');
-          var html = '<div class="wizard-summary-block"><strong>Client System:</strong> ' + escapeHtmlCt(system) + ' &nbsp;|&nbsp; <strong>Topic:</strong> ' + escapeHtmlCt(topic) + ' &nbsp;|&nbsp; <strong>Username:</strong> ' + escapeHtmlCt(username) + '</div>';
-          html += '<p class="hint" style="margin-top:8px;">Topic ACL: ' + acl + '. Click "Create user + ACL and download pack" to apply.</p>';
+          var gDesc = document.getElementById('ct-acl-group-describe') && document.getElementById('ct-acl-group-describe').checked;
+          var gDel = document.getElementById('ct-acl-group-delete') && document.getElementById('ct-acl-group-delete').checked;
+          var topicCreated = (document.getElementById('ct-topic-name').value || '').trim();
+          var html = '<div class="wizard-summary-block" style="margin-bottom:14px;"><strong style="color:var(--text-muted); font-size:12px; text-transform:uppercase;">สรุปก่อนสร้าง</strong><br>';
+          html += '<strong>Client System:</strong> ' + escapeHtmlCt(system) + ' &nbsp;|&nbsp; <strong>Topic:</strong> ' + escapeHtmlCt(topic) + ' &nbsp;|&nbsp; <strong>Username:</strong> ' + escapeHtmlCt(username) + '</div>';
+          if (topicCreated && topic && topic !== topicCreated) {
+            html += '<p class="hint" style="color:var(--danger); margin-bottom:10px;">⚠ ชื่อ topic ในขั้น 2 (<strong>' + escapeHtmlCt(topic) + '</strong>) ไม่ตรงกับช่องสร้างในขั้น 1 (<strong>' + escapeHtmlCt(topicCreated) + '</strong>) — อาจทำให้ validate ไม่ผ่าน</p>';
+          }
+          if (!topic) {
+            html += '<p class="hint" style="color:var(--danger); margin-bottom:10px;">⚠ ยังไม่มี topic — กลับไปขั้น 1 ให้สร้าง topic สำเร็จก่อน</p>';
+          }
+          html += '<div class="wizard-summary-block"><strong style="color:var(--text-muted); font-size:12px; text-transform:uppercase;">ACL ที่จะถูก assign</strong> <span style="color:var(--text-muted);font-size:12px;">(✓ = ได้รับ · — = ไม่ได้รับ)</span>';
+          html += buildAclCapabilityMatrixHtml(acl, gDesc, gDel);
+          html += '<p class="hint" style="margin:12px 0 0; font-size:12px;">กด <strong>Create user + ACL and download pack</strong> เพื่อรัน gen.sh (หลังสร้าง topic แล้ว)</p></div>';
           document.getElementById('ct-wizard-summary').innerHTML = html;
         }
         async function loadCTUsers() {

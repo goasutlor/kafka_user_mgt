@@ -29,6 +29,7 @@
   ],
   "_comment_fallbackSites": "Prod-style two clusters. For dev/sit/uat on one cluster use environments.*.sites ocContext cwdc-dev | cwdc-sit | cwdc-uat (names must match oc config get-contexts).",
   "_comment_environments_sites": "Each environment may have sites: [ { name, ocContext, namespace, apiServer? }, ... ]. One row per kube context+namespace (multi-region = multiple objects). Optional apiServer is copied into oc.loginServers[ocContext] on save (repeat same URL for one cluster).",
+  "_comment_environments_kafka": "With environments.enabled true: each env id (e.g. dev, sit, uat) uses {runtimeRoot}/configs/kafka-client-master-{id}.properties and kafka-client-{id}.properties — no unsuffixed default while that env is selected. Optional bootstrapServers; optional adminPropertiesFile / clientPropertiesFile to override filenames; adminConfig / clientConfig = path under runtimeRoot or absolute.",
   "environments": {
     "enabled": true,
     "defaultEnvironmentId": "dev",
@@ -53,6 +54,7 @@
         "label": "User Acceptance Test",
         "shortLabel": "UAT",
         "badgeColor": "#8250df",
+        "bootstrapServers": "kafka-uat.apps.example:443",
         "sites": [{ "name": "cwdc-uat", "ocContext": "cwdc-uat", "namespace": "esb-uat-cwdc" }]
       }
     ]
