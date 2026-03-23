@@ -1,11 +1,11 @@
 #!/bin/bash
-# Smoke test — เรียก API จาก command line (ใช้เทสใน Lab ว่า server ขึ้นและรับ request ได้)
-# ใช้: ./scripts/smoke-test.sh [BASE_URL]
-# ตัวอย่าง: ./scripts/smoke-test.sh https://10.235.160.31
+# Smoke test — call API from CLI (lab check that server is up and accepts requests)
+# Usage: ./scripts/smoke-test.sh [BASE_URL]
+# Example: ./scripts/smoke-test.sh https://10.235.160.31
 #          ./scripts/smoke-test.sh http://localhost:3000
 
 BASE_URL="${1:-http://localhost:3000}"
-# self-signed cert ใช้ -k
+# Use -k for self-signed certs
 CURL_OPTS="-s -m 10"
 [[ "$BASE_URL" == https://* ]] && CURL_OPTS="$CURL_OPTS -k"
 

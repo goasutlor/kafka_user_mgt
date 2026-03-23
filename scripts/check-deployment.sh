@@ -1,12 +1,12 @@
 #!/bin/bash
-# เทสทุก API ก่อน deploy — ใช้ curl (ไม่ต้องมี Node)
-# แนะนำรันก่อน: ./scripts/verify-golive.sh --config /path/to/master.config.json [--portal-url https://host:3443]
-# แล้วค่อยใช้สคริปต์นี้ทดสอบ HTTP + gen.sh จาก backend
-# ใช้: ./scripts/check-deployment.sh [BASE_URL]
-# ตัวอย่าง (ตอนนี้ On ด้วย HTTPS): ./scripts/check-deployment.sh https://10.235.160.31
-#           ./scripts/check-deployment.sh https://10.235.160.31:443
-# ถ้า HTTP:  ./scripts/check-deployment.sh http://localhost:3000
-# ถ้า URL ขึ้นต้นด้วย https จะใช้ -k (รองรับ self-signed cert) อัตโนมัติ
+# Exercise all APIs before deploy — uses curl (Node not required)
+# Recommended first: ./scripts/verify-golive.sh --config /path/to/master.config.json [--portal-url https://host:3443]
+# Then use this script to test HTTP + gen.sh from the backend
+# Usage: ./scripts/check-deployment.sh [BASE_URL]
+# Examples (HTTPS): ./scripts/check-deployment.sh https://10.235.160.31
+#                    ./scripts/check-deployment.sh https://10.235.160.31:443
+# For HTTP: ./scripts/check-deployment.sh http://localhost:3000
+# URLs starting with https use -k automatically (self-signed certs)
 
 BASE_URL="${1:-http://localhost:3000}"
 CURL_OPTS="-s -m 15"
@@ -45,14 +45,14 @@ echo ""
 check "GET /api/version" 200 GET "" "$BASE_URL/api/version"
 check "GET /api/config" 200 GET "" "$BASE_URL/api/config"
 
-# GET /api/topics — ต้องได้ 200 และ body เป็น JSON มี ok และ topics (array)
+# GET /api/topics — expect 200 and JSON body with ok and topics (array)
 code=$(curl $CURL_OPTS -w "%{http_code}" -o "$BODY_FILE" "$BASE_URL/api/topics")
 if [[ "$code" != "200" ]]; then
   echo "[FAIL] GET /api/topics — expected 200, got $code"
   [[ -s "$BODY_FILE" ]] && echo "   $(head -c 300 "$BODY_FILE" | tr '\n' ' ')"
   FAIL=$((FAIL + 1))
 elif ! grep -q '"ok"[[:space:]]*:[[:space:]]*true' "$BODY_FILE" || ! grep -q '"topics"' "$BODY_FILE"; then
-  echo "[FAIL] GET /api/topics — response ไม่ใช่ JSON ที่ถูกต้อง (ต้องมี ok:true และ topics)"
+  echo "[FAIL] GET /api/topics — response is not valid JSON (need ok:true and topics)"
   echo "   $(head -c 200 "$BODY_FILE" | tr '\n' ' ')"
   FAIL=$((FAIL + 1))
 else
@@ -60,21 +60,21 @@ else
   PASS=$((PASS + 1))
 fi
 
-# GET /api/users — ต้องได้ 200 และ body เป็น JSON มี ok และ users (array)
+# GET /api/users — expect 200 and JSON body with ok and users (array)
 code=$(curl $CURL_OPTS -w "%{http_code}" -o "$BODY_FILE" "$BASE_URL/api/users")
 if [[ "$code" != "200" ]]; then
   echo "[FAIL] GET /api/users — expected 200, got $code"
   [[ -s "$BODY_FILE" ]] && echo "   $(head -c 300 "$BODY_FILE" | tr '\n' ' ')"
   FAIL=$((FAIL + 1))
 elif ! grep -q '"ok"[[:space:]]*:[[:space:]]*true' "$BODY_FILE" || ! grep -q '"users"' "$BODY_FILE"; then
-  echo "[FAIL] GET /api/users — response ไม่ใช่ JSON ที่ถูกต้อง (ต้องมี ok:true และ users) — แก้ oc/secret หรือ config"
+  echo "[FAIL] GET /api/users — response is not valid JSON (need ok:true and users) — fix oc/secret or config"
   echo "   $(head -c 200 "$BODY_FILE" | tr '\n' ' ')"
   FAIL=$((FAIL + 1))
 else
   echo "[PASS] GET /api/users"
   PASS=$((PASS + 1))
 fi
-# Path traversal: 400 (explicit reject) or 404 (normalized path → no route) = ไม่ส่งไฟล์ = ผ่าน
+# Path traversal: 400 (explicit reject) or 404 (normalized path → no route) = no file leak = pass
 code=$(curl $CURL_OPTS -w "%{http_code}" -o /dev/null "$BASE_URL/api/download/../x")
 if [[ "$code" == "400" || "$code" == "404" ]]; then
   echo "[PASS] GET /api/download (path traversal) (status=$code)"
@@ -98,39 +98,39 @@ else
   FAIL=$((FAIL + 1))
 fi
 
-# 11. gen.sh reachable — ต้องเรียก gen.sh ได้ (ไม่ใช่ spawn ENOENT / gen.sh not found at ...)
+# gen.sh reachable — backend must invoke gen.sh (not spawn ENOENT / gen.sh not found at ...)
 echo ""
-echo "--- gen.sh reachable (backend เรียก script ได้) ---"
+echo "--- gen.sh reachable (backend can invoke script) ---"
 code=$(curl $CURL_OPTS -w "%{http_code}" -o "$BODY_FILE" -X POST "$BASE_URL/api/cleanup-acl" -H "Content-Type: application/json" -d '{}')
 body=""
 [[ -s "$BODY_FILE" ]] && body=$(cat "$BODY_FILE")
 err_line=""
 echo "$body" | grep -oE '"error":"[^"]*"' | head -1 | grep -q . && err_line=$(echo "$body" | grep -oE '"error":"[^"]*"' | head -1)
 if [[ "$code" == "200" ]]; then
-  echo "[PASS] gen.sh reachable (cleanup-acl สำเร็จ)"
+  echo "[PASS] gen.sh reachable (cleanup-acl succeeded)"
   PASS=$((PASS + 1))
 elif [[ "$code" == "500" ]]; then
   if echo "$body" | grep -qE "ENOENT|spawn bash"; then
-    echo "[FAIL] gen.sh not reachable — image ไม่มี bash (spawn ENOENT). ต้องใช้ image ใหม่ที่ build จาก Dockerfile ปัจจุบัน"
+    echo "[FAIL] gen.sh not reachable — image has no bash (spawn ENOENT). Rebuild image from current Dockerfile"
     echo "   $err_line"
     FAIL=$((FAIL + 1))
   elif echo "$err_line" | grep -qE "not found at|gen\.sh not found"; then
-    echo "[FAIL] gen.sh not reachable — scriptPath ใน config ผิดหรือ path ใน container ไม่ตรง"
+    echo "[FAIL] gen.sh not reachable — scriptPath in config wrong or container path mismatch"
     echo "   $err_line"
     FAIL=$((FAIL + 1))
   else
-    echo "[PASS] gen.sh reachable (script รันแล้ว — error: $err_line แก้ที่ env/oc/Kafka ได้)"
+    echo "[PASS] gen.sh reachable (script ran — error: $err_line; fix env/oc/Kafka as needed)"
     PASS=$((PASS + 1))
   fi
 else
-  echo "[FAIL] gen.sh reachable — cleanup-acl ได้ HTTP $code (คาด 200 หรือ 500)"
+  echo "[FAIL] gen.sh reachable — cleanup-acl returned HTTP $code (expected 200 or 500)"
   FAIL=$((FAIL + 1))
 fi
 
-# --- ทุก Function/Menu: ตรวจว่าแต่ละ API เรียก gen.sh ได้จริง (ไม่ใช่แค่ validation) ---
+# --- Every function/menu: each API must actually invoke gen.sh (not only validation) ---
 echo ""
-echo "--- ทุก Function/Menu (Add/Test/Remove/Change/Cleanup) เรียก gen.sh ได้จริง ---"
-# Helper: POST แล้วถือว่า "ฟังก์ชันเรียก gen.sh ได้" ถ้า 200 หรือ 500 ที่ error เป็น "gen.sh exited N" (ไม่ใช่ ENOENT/not found)
+echo "--- All functions/menus (Add/Test/Remove/Change/Cleanup) invoke gen.sh ---"
+# Helper: treat as "gen.sh invoked" on 200 or 500 with error "gen.sh exited N" (not ENOENT/not found)
 check_gen_function() {
   local name="$1"
   local json_body="$2"
@@ -142,45 +142,45 @@ check_gen_function() {
   err_line=""
   echo "$body" | grep -oE '"error":"[^"]*"' | head -1 | grep -q . && err_line=$(echo "$body" | grep -oE '"error":"[^"]*"' | head -1)
   if [[ "$code" == "200" ]]; then
-    echo "[PASS] $name (สำเร็จ)"
+    echo "[PASS] $name (success)"
     PASS=$((PASS + 1))
     return 0
   fi
   if [[ "$code" == "500" ]]; then
     if echo "$body" | grep -qE "ENOENT|spawn bash"; then
-      echo "[FAIL] $name — backend ไม่เรียก gen.sh ได้ (ไม่มี bash)"
+      echo "[FAIL] $name — backend cannot invoke gen.sh (no bash)"
       echo "   $err_line"
       FAIL=$((FAIL + 1))
       return 1
     fi
     if echo "$err_line" | grep -qE "not found at|gen\.sh not found"; then
-      echo "[FAIL] $name — scriptPath ผิดหรือ path ใน container ไม่ตรง"
+      echo "[FAIL] $name — scriptPath wrong or container path mismatch"
       echo "   $err_line"
       FAIL=$((FAIL + 1))
       return 1
     fi
     if echo "$body" | grep -q "gen.sh exited"; then
-      echo "[PASS] $name (gen.sh รันแล้ว — exit ไม่ใช่ 0)"
+      echo "[PASS] $name (gen.sh ran — non-zero exit)"
       PASS=$((PASS + 1))
       return 0
     fi
-    # 500 อื่น (เช่น config/Kafka error ก่อนถึง gen.sh) — ถือว่า endpoint ทำงาน, gen อาจยังไม่ถูกเรียก
-    echo "[PASS] $name (ได้ 500 — backend รับ request ได้)"
+    # Other 500 (e.g. config/Kafka before gen.sh) — endpoint accepted request; gen may not have run
+    echo "[PASS] $name (HTTP 500 — backend accepted request)"
     PASS=$((PASS + 1))
     return 0
   fi
   if [[ "$code" == "400" ]]; then
-    echo "[FAIL] $name — ได้ 400 (ส่ง body ไม่ครบหรือ format ผิด)"
+    echo "[FAIL] $name — got 400 (incomplete body or wrong format)"
     echo "   $err_line"
     FAIL=$((FAIL + 1))
     return 1
   fi
-  echo "[FAIL] $name — ได้ HTTP $code"
+  echo "[FAIL] $name — got HTTP $code"
   FAIL=$((FAIL + 1))
   return 1
 }
 
-# Minimal valid payloads (ไม่ต้องมี user/topic จริง — แค่ให้ gen.sh ถูกเรียก; อาจ exit 1 จาก logic ใน script)
+# Minimal valid payloads (no real user/topic needed — only to trigger gen.sh; may exit 1 from script logic)
 check_gen_function "Add user (add-user)" \
   '{"systemName":"DeployCheck","topic":"__deploy_check_topic__","username":"__deploy_check_user__","acl":"read","passphrase":"x","confirmPassphrase":"x"}' \
   "add-user"
@@ -203,10 +203,10 @@ echo ""
 echo "--- Result: $PASS/$TOTAL passed ---"
 echo ""
 if [[ $FAIL -gt 0 ]]; then
-  echo "ถ้า FAIL: แก้ตามข้อความด้านบน (image, config path, หรือ env) แล้วรันสคริปต์ใหม่จนครบก่อน deploy จริง"
+  echo "On FAIL: fix per messages above (image, config path, or env) and re-run until clean before production deploy"
   echo ""
   exit 1
 fi
-echo "ทุก Function ทุกเมนู (Add/Test/Remove/Change/Cleanup) ผ่าน — ใช้งานได้เทียบเท่า gen.sh ใน Docker image พร้อม deploy จริงได้"
+echo "All functions/menus (Add/Test/Remove/Change/Cleanup) passed — parity with gen.sh in Docker image; ready for production deploy"
 echo ""
 exit 0

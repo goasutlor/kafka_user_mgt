@@ -12,6 +12,7 @@ const {
   isMasterConfig,
   expandMasterToLegacy,
   syncEnvironmentsDerivedFile,
+  resolveRuntimeKubeconfigPath,
 } = require('./lib/master-config');
 const {
   configDirectoryWritable,
@@ -204,7 +205,28 @@ function resolveGenPaths(cfg) {
   Object.keys(defaults).forEach(function (k) {
     if (cfg.gen[k] == null || cfg.gen[k] === '') cfg.gen[k] = defaults[k];
   });
-  // kubeconfigPath: leave as-is (set explicitly in config). Often outside root (e.g. ~/.kube). If .kube lives under root, set gen.kubeconfigPath to root/.kube/config-both.
+  // kubeconfigPath: normalized after load (see normalizeGenKubeconfigPath) to pick config vs config-both when one is missing.
+}
+
+/** Host oc is mounted at /host/usr/bin in Docker/Podman (see docker-compose / container-run-config). */
+function defaultOcPathForContainer() {
+  try {
+    if (fs.existsSync('/host/usr/bin/oc')) return '/host/usr/bin';
+  } catch (_) { /* ignore */ }
+  return '/usr/bin';
+}
+
+function normalizeGenKubeconfigPath(cfg) {
+  try {
+    const g = cfg.gen || {};
+    if (!g.kubeconfigPath || typeof g.kubeconfigPath !== 'string' || !String(g.kubeconfigPath).trim()) return;
+    const rt = path.resolve(g.baseDir || '/opt/kafka-usermgmt');
+    const cfgDir = path.dirname(getConfigAbsPath());
+    const pth = path.isAbsolute(g.kubeconfigPath)
+      ? g.kubeconfigPath
+      : path.resolve(cfgDir, g.kubeconfigPath);
+    cfg.gen.kubeconfigPath = resolveRuntimeKubeconfigPath(pth, rt);
+  } catch (_) { /* ignore */ }
 }
 
 function loadConfig() {
@@ -219,6 +241,7 @@ function loadConfig() {
     config = raw;
   }
   resolveGenPaths(config);
+  normalizeGenKubeconfigPath(config);
   mergeAuthSecretsFromFile(config);
   syncEnvironmentsDerivedFile(config);
   return config;
@@ -739,7 +762,7 @@ function getBaseEnv(req) {
   if (!config) loadConfig();
   const g = config.gen || {};
   const baseDir = g.baseDir || process.env.BASE_HOST || '/opt/kafka-usermgmt';
-  const ocPath = g.ocPath || '/usr/bin';
+  const ocPath = (g.ocPath && String(g.ocPath).trim()) || defaultOcPathForContainer();
   const env = {
     ...process.env,
     // Put container PATH first so grep/dirname use container; append ocPath so oc from host is still found (avoids libpcre)

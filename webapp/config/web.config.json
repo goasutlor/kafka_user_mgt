@@ -11,7 +11,7 @@
     "adminConfig": "/opt/kafka-usermgmt/configs/kafka-client-master.properties",
     "logFile": "/opt/kafka-usermgmt/provisioning.log",
     "k8sSecretName": "kafka-server-side-credentials",
-    "kubeconfigPath": "/opt/kafka-usermgmt/.kube/config-both",
+    "kubeconfigPath": "/opt/kafka-usermgmt/.kube/config",
     "sites": [
       { "name": "cwdc", "namespace": "esb-prod-cwdc", "ocContext": "cwdc" },
       { "name": "tls2", "namespace": "esb-prod-tls2", "ocContext": "tls2" }

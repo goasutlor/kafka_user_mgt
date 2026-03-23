@@ -2,30 +2,30 @@
 # =============================================================================
 # Go-Live readiness verification — OC, Kafka, every configured namespace, optional Portal HTTP
 # =============================================================================
-# รายงานแบบละเอียด: แต่ละบรรทัด [PASS] / [FAIL] / [WARN] พร้อมคำแนะนำแก้ไข
+# Detailed output: each line [PASS] / [FAIL] / [WARN] with remediation hints
 #
-# วิธีใช้:
-#   1) จากโฟลเดอร์โปรเจกต์ (มี master.config.json):
+# Usage:
+#   1) From project dir (with master.config.json):
 #        ./scripts/verify-golive.sh --config deploy/config/master.config.json
 #        ./scripts/verify-golive.sh --config /path/to/master.config.json --portal-url https://host:3443
 #
-#   2) ส่งต่อจาก gen.sh (เมนู [7] หรือ GEN_MODE=7) — ใช้ env ที่ gen ตั้งแล้ว:
+#   2) From gen.sh (menu [7] or GEN_MODE=7) — uses env already set by gen:
 #        ./scripts/verify-golive.sh --from-gen-env
 #
-#   3) ตั้ง env เอง (helper node เดียวกับที่รัน gen.sh):
+#   3) Set env yourself (same helper node as gen.sh):
 #        export GEN_BASE_DIR=/opt/kafka-usermgmt GEN_OCP_SITES=cwdc:ns1,tls2:ns2
 #        export GEN_CLIENT_CONFIG=... GEN_ADMIN_CONFIG=... GEN_K8S_SECRET_NAME=...
 #        ./scripts/verify-golive.sh
 #
-# ตัวเลือก:
-#   --json              พิมพ์บรรทัด NDJSON (id, level, message) + บรรทัดสุดท้าย summary
-#   --quick             โหมดเร็ว: ข้าม kafka-acls --list (ผลลัพธ์ใหญ่) และบางเช็คเสริม
-#   --npm-audit         รัน npm audit --omit=dev (webapp) ถ้ามี npm
-#   --with-api-smoke    เรียก POST cleanup-acl (ตรวจว่า backend เรียก gen ได้)
-#   --no-portal         ไม่เรียก HTTP แม้มี --portal-url
-#   --portal-url URL    ทดสอบ API แบบขนาน + HTTP security headers + path traversal + validation POSTs
+# Options:
+#   --json              NDJSON lines (id, level, message) + final summary line
+#   --quick             Fast mode: skip kafka-acls --list (large output) and some extra checks
+#   --npm-audit         Run npm audit --omit=dev (webapp) if npm exists
+#   --with-api-smoke    POST cleanup-acl (verify backend can invoke gen)
+#   --no-portal         Do not call HTTP even if --portal-url is set
+#   --portal-url URL    Parallel API tests + HTTP security headers + path traversal + validation POSTs
 #
-# Exit code: 0 = ไม่มี FAIL (อาจมี WARN), 1 = มีอย่างน้อยหนึ่ง FAIL
+# Exit code: 0 = no FAIL (WARN allowed), 1 = at least one FAIL
 # =============================================================================
 
 set -o pipefail
@@ -106,11 +106,11 @@ section() {
 }
 
 remediate_oc() {
-  echo "        → แก้: oc login --server=... ; ตรวจ KUBECONFIG ; context ต้องตรงกับ oc config get-contexts"
+  echo "        → Fix: oc login --server=... ; check KUBECONFIG ; context must match oc config get-contexts"
 }
 
 remediate_kafka() {
-  echo "        → แก้: bootstrap ใน config, admin .properties (SASL/TLS), ssl.truststore.location ต้องชี้ไฟล์ที่ container/host เห็น, เครือข่ายถึง broker"
+  echo "        → Fix: bootstrap in config, admin .properties (SASL/TLS), ssl.truststore.location must point to a file visible on container/host, network must reach brokers"
 }
 
 # --- load configuration ---
@@ -151,7 +151,7 @@ if [[ -n "$MASTER_CONFIG" ]]; then
   K8S_SECRET_NAME=$(jq -r '.kafka.k8sSecretName // "kafka-server-side-credentials"' "$MASTER_CONFIG")
   BOOTSTRAP_PRIMARY=$(jq -r '.kafka.bootstrapServers // empty' "$MASTER_CONFIG")
   BOOTSTRAP_BOTH="$BOOTSTRAP_PRIMARY"
-  kc_tpl=$(jq -r '.oc.kubeconfig // "{runtimeRoot}/.kube/config-both"' "$MASTER_CONFIG")
+  kc_tpl=$(jq -r '.oc.kubeconfig // "{runtimeRoot}/.kube/config"' "$MASTER_CONFIG")
   KUBECONFIG_DISCOVER=$(expand_rt "$kc_tpl" "$RT")
   [[ -n "${KUBECONFIG:-}" ]] || export KUBECONFIG="$KUBECONFIG_DISCOVER"
   jq -r '
@@ -198,7 +198,7 @@ else
   fi
 fi
 
-# Merge pairs from environments.json (ทุก environment / ทุก site)
+# Merge pairs from environments.json (every environment / every site)
 if [[ -f "$ENV_JSON_PATH" ]] && command -v jq >/dev/null 2>&1; then
   jq -r '.. | objects | select(has("ocContext") and has("namespace")) | "\(.ocContext)|\(.namespace)"' "$ENV_JSON_PATH" 2>/dev/null >> "$ALL_PAIRS_FILE" || true
 fi
@@ -206,7 +206,7 @@ fi
 sort -u "$ALL_PAIRS_FILE" -o "$ALL_PAIRS_FILE"
 PAIR_LINES=$(wc -l < "$ALL_PAIRS_FILE" 2>/dev/null | tr -d ' \r\n')
 PAIR_LINES=${PAIR_LINES:-0}
-[[ "${PAIR_LINES:-0}" -gt 0 ]] || warn "pairs_none" "ไม่พบคู่ context|namespace ใน config — ตั้ง GEN_OCP_SITES หรือใช้ --config master.config.json ที่มี fallbackSites/environments"
+[[ "${PAIR_LINES:-0}" -gt 0 ]] || warn "pairs_none" "No context|namespace pairs in config — set GEN_OCP_SITES or use --config master.config.json with fallbackSites/environments"
 
 TOPICS_SH="$KAFKA_BIN/kafka-topics.sh"
 ACLS_SH="$KAFKA_BIN/kafka-acls.sh"
@@ -222,22 +222,22 @@ ACLS_SH="$KAFKA_BIN/kafka-acls.sh"
 [[ "$JSON_MODE" != true ]] && echo " KUBECONFIG=${KUBECONFIG:-<unset>}"
 
 # --- Section: tools ---
-section "1) เครื่องมือพื้นฐาน (jq, oc, timeout)"
-if command -v jq >/dev/null 2>&1; then pass "tool_jq" "jq พร้อมใช้"; else fail "tool_jq" "ไม่พบ jq — ติดตั้ง jq แล้วรันใหม่"; fi
-if command -v oc >/dev/null 2>&1; then pass "tool_oc" "oc CLI พร้อมใช้ ($(oc version --client 2>/dev/null | head -1 || echo ok))"; else fail "tool_oc" "ไม่พบ oc — ติดตั้ง OpenShift CLI"; fi
-if command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1; then pass "tool_timeout" "timeout command พร้อม"; else warn "tool_timeout" "ไม่มี timeout (macOS: brew install coreutils) — บางเช็คอาจค้าง"; fi
+section "1) Core tools (jq, oc, timeout)"
+if command -v jq >/dev/null 2>&1; then pass "tool_jq" "jq available"; else fail "tool_jq" "jq not found — install jq and re-run"; fi
+if command -v oc >/dev/null 2>&1; then pass "tool_oc" "oc CLI available ($(oc version --client 2>/dev/null | head -1 || echo ok))"; else fail "tool_oc" "oc not found — install OpenShift CLI"; fi
+if command -v timeout >/dev/null 2>&1 || command -v gtimeout >/dev/null 2>&1; then pass "tool_timeout" "timeout command available"; else warn "tool_timeout" "No timeout (macOS: brew install coreutils) — some checks may hang"; fi
 
 # --- Section: files ---
-section "2) ไฟล์ config และ Kafka binaries"
-[[ -f "$CLIENT_CONFIG" ]] && pass "file_client_props" "Client properties: $CLIENT_CONFIG" || fail "file_client_props" "ไม่พบ client properties: $CLIENT_CONFIG — วางไฟล์ใต้ configs/ ตาม runtime root"
-[[ -f "$ADMIN_CONFIG" ]] && pass "file_admin_props" "Admin properties: $ADMIN_CONFIG" || fail "file_admin_props" "ไม่พบ admin properties: $ADMIN_CONFIG — จำเป็นสำหรับ kafka-topics / kafka-acls"
-[[ -f "$TOPICS_SH" ]] && pass "file_kafka_topics_sh" "kafka-topics.sh: $TOPICS_SH" || fail "file_kafka_topics_sh" "ไม่พบ $TOPICS_SH — ติดตั้ง Kafka ใต้ BASE_DIR หรือตั้ง GEN_KAFKA_BIN"
-[[ -f "$ACLS_SH" ]] && pass "file_kafka_acls_sh" "kafka-acls.sh: $ACLS_SH" || warn "file_kafka_acls_sh" "ไม่พบ kafka-acls.sh — ตรวจ ACL จากเมนูจะใช้ไม่ได้"
+section "2) Config files and Kafka binaries"
+[[ -f "$CLIENT_CONFIG" ]] && pass "file_client_props" "Client properties: $CLIENT_CONFIG" || fail "file_client_props" "Missing client properties: $CLIENT_CONFIG — place file under configs/ per runtime root"
+[[ -f "$ADMIN_CONFIG" ]] && pass "file_admin_props" "Admin properties: $ADMIN_CONFIG" || fail "file_admin_props" "Missing admin properties: $ADMIN_CONFIG — required for kafka-topics / kafka-acls"
+[[ -f "$TOPICS_SH" ]] && pass "file_kafka_topics_sh" "kafka-topics.sh: $TOPICS_SH" || fail "file_kafka_topics_sh" "Not found: $TOPICS_SH — install Kafka under BASE_DIR or set GEN_KAFKA_BIN"
+[[ -f "$ACLS_SH" ]] && pass "file_kafka_acls_sh" "kafka-acls.sh: $ACLS_SH" || warn "file_kafka_acls_sh" "kafka-acls.sh not found — menu ACL checks will not work"
 
 if [[ -n "${KUBECONFIG:-}" ]]; then
-  [[ -f "$KUBECONFIG" ]] && pass "file_kubeconfig" "Kubeconfig: $KUBECONFIG" || fail "file_kubeconfig" "KUBECONFIG ชี้ไฟล์ที่ไม่มี: $KUBECONFIG"
+  [[ -f "$KUBECONFIG" ]] && pass "file_kubeconfig" "Kubeconfig: $KUBECONFIG" || fail "file_kubeconfig" "KUBECONFIG points to missing file: $KUBECONFIG"
 else
-  warn "file_kubeconfig" "KUBECONFIG ยังไม่ตั้ง — oc จะใช้ default ~/.kube/config"
+  warn "file_kubeconfig" "KUBECONFIG unset — oc will use default ~/.kube/config"
 fi
 
 # Truststore from admin props
@@ -246,47 +246,47 @@ if [[ -f "$ADMIN_CONFIG" ]]; then
   if [[ -n "$ts_line" ]]; then
     ts_path="${ts_line#*=}"
     ts_path=$(echo "$ts_path" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//;s/^"//;s/"$//;s/^'"'"'//;s/'"'"'$//')
-    [[ -f "$ts_path" ]] && pass "truststore_file" "Truststore มีอยู่: $ts_path" || fail "truststore_file" "Truststore ไม่พบที่ $ts_path (จาก admin properties) — คัดลอก .jks ให้ตรง path ที่ container เห็น"
+    [[ -f "$ts_path" ]] && pass "truststore_file" "Truststore present: $ts_path" || fail "truststore_file" "Truststore missing at $ts_path (from admin properties) — copy .jks to a path visible on container"
   else
-    warn "truststore_prop" "ไม่พบ ssl.truststore.location ใน admin properties (อาจเป็น PLAINTEXT หรือใช้ config อื่น)"
+    warn "truststore_prop" "ssl.truststore.location not found in admin properties (may be PLAINTEXT or other config)"
   fi
 fi
 
 # --- Section: Kafka ---
-section "3) Kafka — bootstrap และสิทธิ์ admin"
+section "3) Kafka — bootstrap and admin permissions"
 if [[ -z "$BOOTSTRAP_PRIMARY" ]]; then
-  fail "kafka_bootstrap_empty" "bootstrap servers ว่าง — ตั้งใน master.config / GEN_VERIFY_BOOTSTRAP_CWDC"
+  fail "kafka_bootstrap_empty" "bootstrap servers empty — set in master.config / GEN_VERIFY_BOOTSTRAP_CWDC"
 elif [[ -f "$TOPICS_SH" && -f "$ADMIN_CONFIG" ]]; then
   list_out=$(timeout "$TIMEOUT_SEC" "$TOPICS_SH" --bootstrap-server "$BOOTSTRAP_PRIMARY" --command-config "$ADMIN_CONFIG" --list 2>&1)
   rc=$?
   if [[ $rc -eq 0 ]]; then
     n=$(echo "$list_out" | grep -c . || true)
-    pass "kafka_topics_list" "kafka-topics --list สำเร็จ (bootstrap: $BOOTSTRAP_PRIMARY, ~$n บรรทัด)"
+    pass "kafka_topics_list" "kafka-topics --list OK (bootstrap: $BOOTSTRAP_PRIMARY, ~$n lines)"
   else
-    fail "kafka_topics_list" "kafka-topics --list ล้มเหลว (exit $rc): $(echo "$list_out" | head -c 400 | tr '\n' ' ')"
+    fail "kafka_topics_list" "kafka-topics --list failed (exit $rc): $(echo "$list_out" | head -c 400 | tr '\n' ' ')"
     remediate_kafka
   fi
-  # kafka-acls: หนักเมื่อ ACL เยอะ — ข้ามใน --quick
+  # kafka-acls: heavy when many ACLs — skip in --quick
   if [[ "$QUICK_MODE" == true ]]; then
-    warn "kafka_acls_skipped" "Quick mode: ข้าม kafka-acls --list (รันเต็มเมื่อไม่ใส่ --quick)"
+    warn "kafka_acls_skipped" "Quick mode: skipping kafka-acls --list (full run without --quick)"
   elif [[ -f "$ACLS_SH" ]]; then
     acl_out=$(timeout "$TIMEOUT_SEC" "$ACLS_SH" --bootstrap-server "$BOOTSTRAP_PRIMARY" --command-config "$ADMIN_CONFIG" --list 2>&1)
     rc2=$?
     if [[ $rc2 -eq 0 ]]; then
-      pass "kafka_acls_list" "kafka-acls --list สำเร็จ (สิทธิ์อ่าน ACL ของ admin OK)"
+      pass "kafka_acls_list" "kafka-acls --list OK (admin can read ACLs)"
     else
-      warn "kafka_acls_list" "kafka-acls --list ล้มเหลว (exit $rc2): $(echo "$acl_out" | head -c 300 | tr '\n' ' ')"
+      warn "kafka_acls_list" "kafka-acls --list failed (exit $rc2): $(echo "$acl_out" | head -c 300 | tr '\n' ' ')"
       remediate_kafka
     fi
   fi
 else
-  warn "kafka_skip" "ข้าม Kafka live tests — ขาด script หรือ admin config"
+  warn "kafka_skip" "Skipping Kafka live tests — missing script or admin config"
 fi
 
-# --- Section: OpenShift — whoami/nodes ครั้งเดียวต่อ context; secret ทุกคู่ ctx|ns ---
-section "4) OpenShift — (optimized) whoami+nodes ต่อ context แล้ว secret ทุก namespace"
+# --- Section: OpenShift — whoami/nodes once per context; secret for each ctx|ns pair ---
+section "4) OpenShift — (optimized) whoami+nodes per context, then secret per namespace"
 if ! command -v oc >/dev/null 2>&1; then
-  fail "oc_section_skip" "ไม่มี oc — ข้ามการตรวจทุก namespace (ติดตั้ง oc แล้วรันใหม่)"
+  fail "oc_section_skip" "oc missing — skipping all-namespace checks (install oc and re-run)"
 else
   cut -d'|' -f1 "$ALL_PAIRS_FILE" 2>/dev/null | sort -u > "$CTX_UNIQUE"
   while IFS= read -r ctx; do
@@ -296,7 +296,7 @@ else
     if [[ $rcw -eq 0 ]]; then
       pass "oc_ctx_${ctx}_whoami" "oc whoami OK (context=$ctx) → $who_out"
     else
-      fail "oc_ctx_${ctx}_whoami" "oc whoami ล้มเหลว context=$ctx: $(echo "$who_out" | head -c 350 | tr '\n' ' ')"
+      fail "oc_ctx_${ctx}_whoami" "oc whoami failed context=$ctx: $(echo "$who_out" | head -c 350 | tr '\n' ' ')"
       remediate_oc
     fi
     nodes_out=$(timeout "$OCP_TIMEOUT" oc get nodes --context "$ctx" -o name 2>&1)
@@ -304,7 +304,7 @@ else
     if [[ $rcn -eq 0 ]]; then
       pass "oc_ctx_${ctx}_nodes" "oc get nodes OK (context=$ctx)"
     else
-      fail "oc_ctx_${ctx}_nodes" "oc get nodes ล้มเหลว context=$ctx: $(echo "$nodes_out" | head -c 300 | tr '\n' ' ')"
+      fail "oc_ctx_${ctx}_nodes" "oc get nodes failed context=$ctx: $(echo "$nodes_out" | head -c 300 | tr '\n' ' ')"
       remediate_oc
     fi
   done < "$CTX_UNIQUE"
@@ -318,24 +318,24 @@ else
     sec_out=$(timeout "$OCP_TIMEOUT" oc get secret "$K8S_SECRET_NAME" -n "$ns" --context "$ctx" -o name 2>&1)
     rcs=$?
     if [[ $rcs -eq 0 ]]; then
-      pass "${id_base}_secret" "Secret $K8S_SECRET_NAME มีใน namespace $ns (context=$ctx)"
+      pass "${id_base}_secret" "Secret $K8S_SECRET_NAME exists in namespace $ns (context=$ctx)"
       pdata=$(timeout "$OCP_TIMEOUT" oc get secret "$K8S_SECRET_NAME" -n "$ns" --context "$ctx" -o jsonpath='{.data.plain-users\.json}' 2>/dev/null | base64 -d 2>/dev/null)
       if [[ -n "$pdata" ]] && echo "$pdata" | jq empty 2>/dev/null; then
         nu=$(echo "$pdata" | jq 'keys | length' 2>/dev/null || echo "?")
-        pass "${id_base}_plain_users" "plain-users.json อ่านได้และเป็น JSON (ประมาณ $nu keys)"
+        pass "${id_base}_plain_users" "plain-users.json readable and valid JSON (~$nu keys)"
       else
-        warn "${id_base}_plain_users" "secret มีแต่ดึง/แปลง plain-users.json ไม่ได้ — ตรวจ key plain-users.json และสิทธิ์"
+        warn "${id_base}_plain_users" "secret exists but plain-users.json could not be fetched/decoded — check key plain-users.json and RBAC"
       fi
     else
-      fail "${id_base}_secret" "ไม่พบ secret $K8S_SECRET_NAME ใน namespace $ns (context=$ctx): $(echo "$sec_out" | head -c 300 | tr '\n' ' ')"
-      echo "        → แก้: ตรวจชื่อ secret (k8sSecretName), namespace ต่อ environment, และว่า Confluent สร้าง secret นี้แล้ว"
+      fail "${id_base}_secret" "Secret $K8S_SECRET_NAME not found in namespace $ns (context=$ctx): $(echo "$sec_out" | head -c 300 | tr '\n' ' ')"
+      echo "        → Fix: check secret name (k8sSecretName), namespace per environment, and that Confluent created this secret"
     fi
   done < "$ALL_PAIRS_FILE"
 fi
 
 # --- Section: Portal HTTP (parallel JSON APIs + security probes) ---
 if [[ -n "$PORTAL_URL" ]]; then
-  section "5) Web Portal — API แบบขนาน + HTTP security + validation routes — $PORTAL_URL"
+  section "5) Web Portal — parallel API + HTTP security + validation routes — $PORTAL_URL"
   CURL_K=""
   [[ "$PORTAL_URL" == https://* ]] && CURL_K="-k"
   if command -v curl >/dev/null 2>&1; then
@@ -361,37 +361,37 @@ if [[ -n "$PORTAL_URL" ]]; then
     if [[ "$_stc" == "200" ]] && grep -q '"ok"[[:space:]]*:[[:space:]]*true' "$PORTAL_WORK/st.json" 2>/dev/null; then
       pass "http_setup_status" "GET /api/setup/status → 200 ok:true"
     else
-      fail "http_setup_status" "GET /api/setup/status → HTTP ${_stc} หรือไม่มี ok:true"
+      fail "http_setup_status" "GET /api/setup/status → HTTP ${_stc} or missing ok:true"
     fi
     read -r _tc < "$PORTAL_WORK/t.code"
     if [[ "$_tc" == "200" ]] && grep -q '"ok"[[:space:]]*:[[:space:]]*true' "$PORTAL_WORK/t.json" 2>/dev/null; then
       pass "http_topics" "GET /api/topics → 200 ok:true"
     else
-      fail "http_topics" "GET /api/topics → HTTP ${_tc} หรือ ok ไม่เป็น true"
+      fail "http_topics" "GET /api/topics → HTTP ${_tc} or ok not true"
     fi
     read -r _uc < "$PORTAL_WORK/u.code"
     if [[ "$_uc" == "200" ]] && grep -q '"ok"[[:space:]]*:[[:space:]]*true' "$PORTAL_WORK/u.json" 2>/dev/null; then
       pass "http_users" "GET /api/users → 200 ok:true"
     else
-      fail "http_users" "GET /api/users → HTTP ${_uc} หรือ ok ไม่เป็น true"
+      fail "http_users" "GET /api/users → HTTP ${_uc} or ok not true"
     fi
 
     if [[ "$QUICK_MODE" != true ]]; then
-      section "5b) HTTP security headers (หน้าแรก)"
+      section "5b) HTTP security headers (home page)"
       hdr=$(curl -sI -m 15 $CURL_K "$base/" 2>/dev/null || true)
-      echo "$hdr" | grep -qi 'x-frame-options:' && pass "sec_x_frame" "X-Frame-Options พร้อมบน /" || warn "sec_x_frame" "ไม่พบ X-Frame-Options บน / — ลด clickjacking risk"
-      echo "$hdr" | grep -qi 'x-content-type-options:' && pass "sec_nosniff" "X-Content-Type-Options พร้อม" || warn "sec_nosniff" "ไม่พบ X-Content-Type-Options — MIME sniffing risk"
-      echo "$hdr" | grep -qi 'referrer-policy:' && pass "sec_referrer" "Referrer-Policy พร้อม" || warn "sec_referrer" "ไม่พบ Referrer-Policy"
+      echo "$hdr" | grep -qi 'x-frame-options:' && pass "sec_x_frame" "X-Frame-Options present on /" || warn "sec_x_frame" "X-Frame-Options missing on / — clickjacking risk"
+      echo "$hdr" | grep -qi 'x-content-type-options:' && pass "sec_nosniff" "X-Content-Type-Options present" || warn "sec_nosniff" "X-Content-Type-Options missing — MIME sniffing risk"
+      echo "$hdr" | grep -qi 'referrer-policy:' && pass "sec_referrer" "Referrer-Policy present" || warn "sec_referrer" "Referrer-Policy missing"
 
       section "5c) Input / path safety (API)"
       pt=$(curl -sS -m 15 $CURL_K -o /dev/null -w "%{http_code}" "$base/api/download/../x" 2>/dev/null || echo 000)
-      if [[ "$pt" == "400" || "$pt" == "404" ]]; then pass "sec_path_traversal" "GET /api/download path traversal → $pt (ปฏิเสธตามคาด)"; else fail "sec_path_traversal" "GET /api/download/../x → HTTP $pt (คาด 400 หรือ 404)"; fi
+      if [[ "$pt" == "400" || "$pt" == "404" ]]; then pass "sec_path_traversal" "GET /api/download path traversal → $pt (rejected as expected)"; else fail "sec_path_traversal" "GET /api/download/../x → HTTP $pt (expected 400 or 404)"; fi
       pv=$(curl -sS -m 15 $CURL_K -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" -d '{}' "$base/api/add-user" 2>/dev/null || echo 000)
-      [[ "$pv" == "400" ]] && pass "sec_add_user_validate" "POST /api/add-user {} → 400 validation" || warn "sec_add_user_validate" "POST /api/add-user {} → HTTP $pv (คาด 400)"
+      [[ "$pv" == "400" ]] && pass "sec_add_user_validate" "POST /api/add-user {} → 400 validation" || warn "sec_add_user_validate" "POST /api/add-user {} → HTTP $pv (expected 400)"
       ptst=$(curl -sS -m 15 $CURL_K -o /dev/null -w "%{http_code}" -X POST -H "Content-Type: application/json" -d '{}' "$base/api/test-user" 2>/dev/null || echo 000)
       [[ "$ptst" == "400" ]] && pass "sec_test_user_validate" "POST /api/test-user {} → 400" || warn "sec_test_user_validate" "POST /api/test-user {} → HTTP $ptst"
     else
-      warn "sec_skipped" "Quick mode: ข้าม security header และ path/validation probes"
+      warn "sec_skipped" "Quick mode: skipping security header and path/validation probes"
     fi
 
     if [[ "$API_SMOKE" == true ]]; then
@@ -399,20 +399,20 @@ if [[ -n "$PORTAL_URL" ]]; then
       sc=$(curl -sS -m 60 $CURL_K -o "$PORTAL_WORK/cl.json" -w "%{http_code}" -X POST -H "Content-Type: application/json" -d '{}' "$base/api/cleanup-acl" 2>/dev/null || echo 000)
       if [[ "$sc" == "200" || "$sc" == "500" ]]; then
         if grep -qE 'ENOENT|spawn bash|gen\.sh not found' "$PORTAL_WORK/cl.json" 2>/dev/null; then
-          fail "api_gen_cleanup" "cleanup-acl: backend เรียก gen/bash ไม่ได้ — ตรวจ image และ scriptPath"
+          fail "api_gen_cleanup" "cleanup-acl: backend cannot invoke gen/bash — check image and scriptPath"
         else
-          pass "api_gen_cleanup" "POST /api/cleanup-acl → $sc (backend รับและเรียกสคริปต์ได้)"
+          pass "api_gen_cleanup" "POST /api/cleanup-acl → $sc (backend received request and invoked script)"
         fi
       else
         warn "api_gen_cleanup" "POST /api/cleanup-acl → HTTP $sc"
       fi
     fi
   else
-    warn "http_curl" "ไม่มี curl — ข้ามการทดสอบ Portal"
+    warn "http_curl" "curl missing — skipping Portal HTTP tests"
   fi
 else
   section "5) Web Portal"
-  warn "http_skip" "ไม่ได้ส่ง --portal-url — ข้าม HTTP (แนะนำ: --portal-url + ./scripts/check-deployment.sh)"
+  warn "http_skip" "No --portal-url — skipping HTTP (recommended: --portal-url + ./scripts/check-deployment.sh)"
 fi
 
 if [[ "$NPM_AUDIT" == true ]]; then
@@ -420,18 +420,18 @@ if [[ "$NPM_AUDIT" == true ]]; then
   WP="$PROJECT_ROOT/webapp"
   if command -v npm >/dev/null 2>&1 && [[ -f "$WP/package.json" ]]; then
     if npm audit --omit=dev --audit-level=high -C "$WP" >/dev/null 2>&1; then
-      pass "npm_audit" "npm audit --omit=dev: ไม่มี high/critical (หรือ npm ผ่าน)"
+      pass "npm_audit" "npm audit --omit=dev: no high/critical (or npm clean)"
     else
-      warn "npm_audit" "npm audit พบช่องโหว่ระดับ high+ — รัน: cd webapp && npm audit (แก้ด้วย npm audit fix หรืออัปเดตแพ็กเกจ)"
+      warn "npm_audit" "npm audit found high+ issues — run: cd webapp && npm audit (fix with npm audit fix or upgrade packages)"
       npm audit --omit=dev --audit-level=moderate -C "$WP" 2>&1 | head -n 40 | sed 's/^/   /' || true
     fi
   else
-    warn "npm_audit_skip" "ไม่มี npm หรือ webapp/package.json — ข้าม npm audit"
+    warn "npm_audit_skip" "npm or webapp/package.json missing — skipping npm audit"
   fi
 fi
 
 # --- Summary ---
-section "สรุปผล"
+section "Summary"
 echo ""
 echo "  PASS: $PASS_COUNT"
 echo "  WARN: $WARN_COUNT"
@@ -445,10 +445,10 @@ if [[ "$JSON_MODE" == true ]]; then
 fi
 
 if [[ $FAIL_COUNT -gt 0 ]]; then
-  [[ "$JSON_MODE" != true ]] && echo "❌ ยังไม่ควร Go-Live — แก้ FAIL ทั้งหมดแล้วรันสคริปต์นี้อีกครั้ง"
+  [[ "$JSON_MODE" != true ]] && echo "❌ Not ready for Go-Live — fix all FAIL items and run this script again"
   exit 1
 fi
 
-[[ "$JSON_MODE" != true ]] && echo "✅ ไม่มี FAIL — ผ่านเกณฑ์ขั้นต่ำ (ตรวจ WARN ก่อนปล่อย production จริง)"
-[[ "$JSON_MODE" != true ]] && echo "   แนะนำ: รัน ./scripts/check-deployment.sh <portal-url> และทดสอบ E2E ด้วยข้อมูลจริง (scripts/check-e2e.sh)"
+[[ "$JSON_MODE" != true ]] && echo "✅ No FAIL — minimum bar passed (review WARN before true production)"
+[[ "$JSON_MODE" != true ]] && echo "   Recommended: run ./scripts/check-deployment.sh <portal-url> and E2E with real data (scripts/check-e2e.sh)"
 exit 0

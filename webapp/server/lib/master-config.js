@@ -19,6 +19,33 @@ function expandRt(str, runtimeRoot) {
   return str.split('{runtimeRoot}').join(runtimeRoot);
 }
 
+/**
+ * If the configured kubeconfig file is missing, fall back to the other common name under runtimeRoot/.kube
+ * (oc login creates `config`; merged multi-cluster files are often `config-both`).
+ */
+function resolveRuntimeKubeconfigPath(expandedAbs, runtimeRoot) {
+  const norm = path.normalize(expandedAbs);
+  const rt = path.normalize(runtimeRoot);
+  try {
+    if (fs.existsSync(norm)) return norm;
+  } catch (_) {
+    return norm;
+  }
+  const base = path.basename(norm);
+  const kubeDir = path.join(rt, '.kube');
+  try {
+    if (base === 'config-both') {
+      const alt = path.join(kubeDir, 'config');
+      if (fs.existsSync(alt)) return alt;
+    }
+    if (base === 'config') {
+      const alt = path.join(kubeDir, 'config-both');
+      if (fs.existsSync(alt)) return alt;
+    }
+  } catch (_) { /* ignore */ }
+  return norm;
+}
+
 /** Matches Dockerfile KAFKA_TOOLS_BIN parent + symlink name (bind-mount hides /opt/kafka-usermgmt/kafka_*). */
 const IMAGE_EMBEDDED_KAFKA_BIN = '/opt/apache-kafka/kafka_2.13-3.6.1/bin';
 
@@ -75,7 +102,7 @@ function expandMasterToLegacy(raw, masterFileAbsPath) {
   const scriptName = k.scriptName || 'gen.sh';
   const clientFile = k.clientPropertiesFile || 'kafka-client.properties';
   const adminFile = k.adminPropertiesFile || 'kafka-client-master.properties';
-  const kubeTemplate = oc.kubeconfig || '{runtimeRoot}/.kube/config-both';
+  const kubeTemplate = oc.kubeconfig || '{runtimeRoot}/.kube/config';
   const kafkaDirRaw = k.clientInstallDir != null && String(k.clientInstallDir).trim()
     ? String(k.clientInstallDir).trim()
     : 'kafka_2.13-3.6.1';
@@ -101,7 +128,7 @@ function expandMasterToLegacy(raw, masterFileAbsPath) {
     adminConfig: path.join(rt, 'configs', adminFile),
     logFile: path.join(rt, 'provisioning.log'),
     k8sSecretName: k.k8sSecretName || 'kafka-server-side-credentials',
-    kubeconfigPath: expandRt(kubeTemplate, rt),
+    kubeconfigPath: resolveRuntimeKubeconfigPath(expandRt(kubeTemplate, rt), rt),
     sites: [],
   };
 
@@ -189,4 +216,5 @@ module.exports = {
   isMasterConfig,
   expandMasterToLegacy,
   syncEnvironmentsDerivedFile,
+  resolveRuntimeKubeconfigPath,
 };

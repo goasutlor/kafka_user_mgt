@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# ย้ายไฟล์ .enc ที่อยู่ที่ root ไปไว้ใน user_output/ (รันครั้งเดียวบน server)
+# Move .enc files from repo root into user_output/ (one-time on server)
 ROOT="${1:-.}"
 if [ ! -d "$ROOT" ]; then
   echo "Usage: $0 [ROOT_DIR]"

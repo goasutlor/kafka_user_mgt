@@ -1,9 +1,9 @@
 #!/bin/bash
-# เทสแบบ E2E — เรียก Add user / Remove ด้วยข้อมูลจริง (ใช้ใน Lab ก่อน deploy จริง)
-# ต้องมี: topic ที่มีจริง, username ที่ยังไม่มีในระบบ, passphrase สำหรับ pack
-# ใช้: export TEST_SYSTEM=TestE2E TEST_TOPIC=your_topic TEST_USER=testuser999 TEST_PASSPHRASE=secret123
-#      ./scripts/check-e2e.sh https://10.235.160.31
-# จะลอง Add user → ถ้าสำเร็จลอง Remove user นั้น (หรือแค่รายงานผล)
+# E2E test — Add user / Remove with real data (lab check before production deploy)
+# Requires: an existing topic, a username not yet in the system, passphrase for pack
+# Usage: export TEST_SYSTEM=TestE2E TEST_TOPIC=your_topic TEST_USER=testuser999 TEST_PASSPHRASE=secret123
+#        ./scripts/check-e2e.sh https://10.235.160.31
+# Tries Add user → on success tries Remove (or reports only)
 
 BASE_URL="${1:-http://localhost:3000}"
 CURL_OPTS="-s -m 60"
@@ -15,7 +15,7 @@ TEST_USER="${TEST_USER:-}"
 TEST_PASSPHRASE="${TEST_PASSPHRASE:-}"
 
 if [[ -z "$TEST_TOPIC" || -z "$TEST_USER" || -z "$TEST_PASSPHRASE" ]]; then
-  echo "Usage: export TEST_TOPIC=<topic มีจริง> TEST_USER=<username ยังไม่มี> TEST_PASSPHRASE=<รหัสสำหรับ .enc>"
+  echo "Usage: export TEST_TOPIC=<existing topic> TEST_USER=<unused username> TEST_PASSPHRASE=<passphrase for .enc>"
   echo "       ./scripts/check-e2e.sh https://10.235.160.31"
   echo "Optional: TEST_SYSTEM=TestE2E (default)"
   exit 1
@@ -36,7 +36,7 @@ body=$(curl $CURL_OPTS -X POST "$BASE_URL/api/add-user" -H "Content-Type: applic
   \"confirmPassphrase\": \"$TEST_PASSPHRASE\"
 }")
 if echo "$body" | grep -q '"ok":true'; then
-  echo "[PASS] POST /api/add-user — สร้าง user สำเร็จ"
+  echo "[PASS] POST /api/add-user — user created"
   ADD_OK=1
 else
   err=$(echo "$body" | grep -oE '"error":"[^"]*"' | head -1)
@@ -46,16 +46,16 @@ else
   exit 1
 fi
 
-# 2. Remove user (ลบที่เพิ่งสร้าง)
+# 2. Remove user (the one just created)
 body2=$(curl $CURL_OPTS -X POST "$BASE_URL/api/remove-user" -H "Content-Type: application/json" -d "{\"users\": \"$TEST_USER\"}")
 if echo "$body2" | grep -q '"ok":true'; then
-  echo "[PASS] POST /api/remove-user — ลบ user สำเร็จ"
+  echo "[PASS] POST /api/remove-user — user removed"
 else
   err2=$(echo "$body2" | grep -oE '"error":"[^"]*"' | head -1)
-  echo "[WARN] POST /api/remove-user — $err2 (อาจต้องลบมือหรือข้าม)"
+  echo "[WARN] POST /api/remove-user — $err2 (manual cleanup or skip may be needed)"
 fi
 
 echo ""
-echo "--- E2E: Add user + Remove user ทำงานได้ — พร้อม deploy จริง ---"
+echo "--- E2E: Add user + Remove user OK — ready for production deploy ---"
 echo ""
 exit 0

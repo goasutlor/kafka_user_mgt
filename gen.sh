@@ -5,7 +5,7 @@
 # TARGET: plain-users.json (Key-Value JSON Format)
 # LOGIC : Inject/Update user credentials inside JSON
 #         without creating separate secret keys.
-# OCP   : Always add to every site (context:namespace) — จำนวน site กำหนดโดย GEN_OCP_SITES หรือค่า default สอง site
+# OCP   : Always add to every site (context:namespace) — site count from GEN_OCP_SITES or default two sites
 # KAFKA : Bootstrap uses both sites for resilience (same cluster)
 # PLAIN : CFK hot-reloads plain-users.json (~30-60s). Script retries until auth succeeds (max 300s).
 # ACL   : Script adds ACL (Read only or All) + consumer group ACL; validates.
@@ -35,13 +35,13 @@
 # 2026-03-22  Setup wizard: truststore can stay on runtime mount only — Web verifies path + keytool -list; GEN_MODE unchanged.
 # 2026-03-22  Per-environment Kafka bootstrap: with GEN_ACTIVE_ENV_ID + environments.json, if the active env object has bootstrapServers, override BOOTSTRAP_CWDC/BOTH (parity with Web portal env switch).
 # 2026-03-22  Init Kafka client .properties templates: menu [8] and GEN_MODE=8 — scripts/ensure-kafka-client-props.sh (parity with web setup save; GEN_KAFKA_BOOTSTRAP optional). Full PEM/JKS + SASL materialization (no CHANGE_ME) is via the web setup wizard only — use mount configs/ to adjust later.
-# 2026-03-21  Go-Live verify: menu [7] and GEN_NONINTERACTIVE=1 GEN_MODE=7 — scripts/verify-golive.sh (ทุก namespace จาก master/environments, Kafka, optional Portal). Env: GOLIVE_PORTAL_URL, GOLIVE_JSON=1.
+# 2026-03-21  Go-Live verify: menu [7] and GEN_NONINTERACTIVE=1 GEN_MODE=7 — scripts/verify-golive.sh (all namespaces from master/environments, Kafka, optional Portal). Env: GOLIVE_PORTAL_URL, GOLIVE_JSON=1.
 # 2026-03-21  Preflight / Kafka admin list: menu [6] and GEN_NONINTERACTIVE=1 GEN_MODE=6 — kafka-topics.sh --list (parity with web setup Verify deep check). Web setup: deep verify runs same + oc whoami.
 # 2026-03-18  Add ACL for existing user: GEN_MODE=5 (CLI menu [5] + non-interactive). No new credential; add topic ACL + consumer group for user already in secret. Web: Add ACL to existing user (summary + confirm). Audit: create-topic label + add-acl-existing.
 # 2026-03-15  Create topic: use broker default for partitions and replication factor (rack-aware placement). No GEN_PARTITIONS/GEN_REPLICATION_FACTOR; kafka-topics.sh --create without --partitions/--replication-factor so broker default.num.partitions and default.replication.factor apply. CLI and Web parity.
 # 2026-03-15  Create topic (CLI + Web parity): GEN_MODE=4 — interactive menu [4] Create new topic; non-interactive env GEN_TOPIC_NAME (or GEN_TOPIC) only. validate_topic_name(); kafka-topics.sh --create; log CREATE_TOPIC to provisioning.log.
 # 2026-03-15  PARITY note in header: every feature must exist in both CLI (gen.sh) and GUI/API (100%).
-# 2026-02-xx  Multi-site (ไม่ยึดชื่อ): GEN_OCP_SITES="ctx1:ns1,ctx2:ns2" รองรับหลาย cluster OCP; ไม่ตั้งจะใช้ OCP_CTX_CWDC/NS_CWDC + OCP_CTX_TLS2/NS_TLS2. ทุก flow (Add/Remove/Change password/Verify) วนตาม SITE_CTX/SITE_NS; revert site ก่อนหน้าถ้า patch ล้มเหลว.
+# 2026-02-xx  Multi-site (names not fixed): GEN_OCP_SITES="ctx1:ns1,ctx2:ns2" for multiple OCP clusters; if unset use OCP_CTX_CWDC/NS_CWDC + OCP_CTX_TLS2/NS_TLS2. All flows (Add/Remove/Change password/Verify) iterate SITE_CTX/SITE_NS; revert previous site if a patch fails.
 # 2026-02-xx  All script output files (.enc packs) go to user_output in the same path as the script (USER_OUTPUT_DIR=$SCRIPT_DIR/user_output). Override with GEN_USER_OUTPUT_DIR. GEN_PACK_DIR echoes this so Web/download can find files.
 # 2026-02-19  Non-interactive Add user / Change password: GEN_PASSPHRASE for .enc file; script echoes GEN_PACK_FILE= and GEN_PACK_NAME= for Web download and decrypt instructions.
 # 2026-02-19  Non-interactive (Web): GEN_MODE=2 (Test user), GEN_MODE=3 with GEN_ACTION=1|2|3 (Remove, Change password, Cleanup ACL). Env: GEN_KAFKA_USER, GEN_TEST_PASS, GEN_TOPIC_NAME; GEN_USERS; GEN_CHANGE_USER, GEN_NEW_PASSWORD.
@@ -122,7 +122,7 @@ BOOTSTRAP_CWDC="kafka.apps.cwdc.esb-kafka-prod.intra.ais:443"
 BOOTSTRAP_TLS2="kafka.apps.tls2.esb-kafka-prod.intra.ais:443"
 BOOTSTRAP_BOTH="${BOOTSTRAP_CWDC},${BOOTSTRAP_TLS2}"
 
-# OCP Context (for oc commands — add secret to every site). Default สอง site; override ด้วย GEN_OCP_SITES="ctx1:ns1,ctx2:ns2" (ไม่ยึดชื่อ)
+# OCP Context (for oc commands — add secret to every site). Default two sites; override with GEN_OCP_SITES="ctx1:ns1,ctx2:ns2" (context names are not fixed)
 OCP_CTX_CWDC="${OCP_CTX_CWDC:-cwdc}"
 OCP_CTX_TLS2="${OCP_CTX_TLS2:-tls2}"
 NS_CWDC="${NS_CWDC:-esb-prod-cwdc}"
@@ -161,7 +161,7 @@ if [ -n "${GEN_ACTIVE_ENV_ID:-}" ] && [ -f "$ENV_JSON" ] && command -v jq >/dev/
     fi
 fi
 
-# Build site arrays (ใช้ทั้ง script). ถ้าไม่ตั้ง GEN_OCP_SITES จะใช้ค่า CWDC/TLS2 ด้านบน
+# Build site arrays (used throughout script). If GEN_OCP_SITES is unset, use CWDC/TLS2 values above
 if [ -n "${GEN_OCP_SITES}" ]; then
     SITE_CTX=()
     SITE_NS=()
@@ -387,7 +387,7 @@ verify_user_absent_from_secret() {
     return 0
 }
 
-# Non-interactive Mode 7: full Go-Live verify (before PRE-CHECK — รายงานไฟล์หาย/oc/kafka ครบในครั้งเดียว)
+# Non-interactive Mode 7: full Go-Live verify (before PRE-CHECK — single pass: missing files / oc / kafka)
 if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "7" ]; then
     _vsites=""
     for ((i=0;i<NUM_SITES;i++)); do
@@ -641,7 +641,7 @@ while true; do
         echo "   [4] Create new topic (Kafka topic only; then use [1] to onboard user)"
         echo "   [5] Add ACL for existing user (add topic permission only; no new credential)"
         echo "   [6] Preflight — list Kafka topics (admin config; same check as web setup Verify)"
-        echo "   [7] Go-Live verify — ตรวจทุกอย่าง (OC+Kafka+ทุก namespace+optional Portal URL)"
+        echo "   [7] Go-Live verify — full check (OC+Kafka+all namespaces+optional Portal URL)"
         echo "   [8] Create Kafka client .properties templates (configs/; same as web setup save)"
         echo "   [Q] Quit"
         read -p "   Select mode [1-8/Q]: " SCRIPT_MODE
@@ -1412,7 +1412,7 @@ while true; do
                     echo "-------------------------------------------------------"
                     echo "   Select permission level:"
                     echo "   [1] Read (R) - consume only"
-                    echo "   [2] Client - Produce + Consume + Describe (แนะนำ)"
+                    echo "   [2] Client - Produce + Consume + Describe (recommended)"
                     echo "   [3] All - full access"
                     read -p "   Select [1-3] (default: 2): " ACL_CHOICE
                     [[ -z "$ACL_CHOICE" ]] && ACL_CHOICE="2"
@@ -2073,7 +2073,7 @@ case "$ACL_CHOICE" in
     3|*)
         ACL_OPS="All"
         ACL_DESC="All"
-        ACL_WHAT="full access (รวม Alter, Delete, Create ฯลฯ)"
+        ACL_WHAT="full access (includes Alter, Delete, Create, etc.)"
         NEED_CONSUMER_GROUP=true
         ;;
 esac

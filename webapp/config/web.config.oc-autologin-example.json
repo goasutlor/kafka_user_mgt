@@ -6,7 +6,7 @@
     "logFile": "/tmp/provisioning.log",
     "k8sSecretName": "kafka-server-side-credentials",
     "bootstrapServers": "kafka.apps.cwdc.esb-kafka-prod.intra.ais:443,kafka.apps.tls2.esb-kafka-prod.intra.ais:443",
-    "kubeconfigPath": "/opt/kafka-usermgmt/.kube/config-both",
+    "kubeconfigPath": "/opt/kafka-usermgmt/.kube/config",
     "sites": [
       { "name": "cwdc", "namespace": "esb-prod-cwdc", "ocContext": "cwdc" },
       { "name": "tls2", "namespace": "esb-prod-tls2", "ocContext": "tls2" }

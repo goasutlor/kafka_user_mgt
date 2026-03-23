@@ -213,7 +213,7 @@ function buildFilesFromSetupBody(body, configAbsPath) {
     },
     oc: {
       ocPath: String(body.ocPath != null ? body.ocPath : '/host/usr/bin').trim(),
-      kubeconfig: String(body.kubeconfig || '{runtimeRoot}/.kube/config-both').trim(),
+      kubeconfig: String(body.kubeconfig || '{runtimeRoot}/.kube/config').trim(),
       autoLogin: body.ocAutoLogin === true,
       loginServers: ocLoginServers,
     },
@@ -414,7 +414,7 @@ function masterToSetupWizardBody(master) {
     clientPropertiesFile: String(kafka.clientPropertiesFile || 'kafka-client.properties').trim(),
     adminPropertiesFile: String(kafka.adminPropertiesFile || 'kafka-client-master.properties').trim(),
     ocPath: String(oc.ocPath != null ? oc.ocPath : '/host/usr/bin').trim(),
-    kubeconfig: String(oc.kubeconfig || '{runtimeRoot}/.kube/config-both').trim(),
+    kubeconfig: String(oc.kubeconfig || '{runtimeRoot}/.kube/config').trim(),
     ocAutoLogin: oc.autoLogin === true,
     ocTopology: sites.length >= 2 ? 'dual' : 'single',
     ocSites: sites.length ? ocSites : undefined,

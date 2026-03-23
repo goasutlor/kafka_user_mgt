@@ -158,6 +158,15 @@ function spawnWithTimeout(exe, args, env, timeoutMs) {
   });
 }
 
+/** Parse context NAMEs from `oc config get-contexts --no-headers` (first column or second if current marker *). */
+function parseContextNamesFromGetContextsStdout(stdout) {
+  const lines = (stdout || '').trim().split(/\n/).filter(Boolean);
+  return lines.map((line) => {
+    const parts = line.trim().split(/\s+/).filter(Boolean);
+    return parts[0] === '*' ? (parts[1] || parts[0]) : (parts[0] || '');
+  }).filter(Boolean);
+}
+
 /** Unix: warn if .properties is readable by group/other (credential files). */
 function checkSensitiveFilePermissions(filePath, checks, idPrefix) {
   if (process.platform === 'win32' || !filePath || !fs.existsSync(filePath)) return;
@@ -506,18 +515,47 @@ async function runSetupPreview(body, configAbsPath, options) {
       const whoamiResults = await Promise.all(
         contexts.map((ctx) => spawnWithTimeout(ocExe, ['whoami', '--context', ctx], ocEnv, ocTimeout).then((r) => ({ ctx, r })))
       );
+      let whoamiFailureCount = 0;
       for (const { ctx, r } of whoamiResults) {
         if (r.status === 0) {
           const who = (r.stdout || '').split('\n')[0].trim();
           checks.push({ id: 'oc_whoami_' + ctx, level: 'ok', message: `oc whoami (${ctx}): ${who || 'ok'} (parallel)` });
         } else {
+          whoamiFailureCount += 1;
           const err = ((r.stderr || r.stdout || '') + '').trim().slice(0, 300);
+          const hint =
+            /does not exist/i.test(err)
+              ? ' Context name must match a NAME from `oc config get-contexts` for this kubeconfig (see oc_context_diagnostic below).'
+              : '';
           checks.push({
             id: 'oc_whoami_' + ctx,
             level: 'error',
-            message: `oc whoami failed for context "${ctx}" (secret updates need a valid login). ${err}`,
+            message: `oc whoami failed for context "${ctx}" (secret updates need a valid login). ${err}.${hint}`,
           });
         }
+      }
+      if (whoamiFailureCount > 0 && kcExpanded && fs.existsSync(kcExpanded) && fs.existsSync(ocExe)) {
+        const gr = spawnSync(ocExe, ['config', 'get-contexts', '--no-headers'], {
+          encoding: 'utf8',
+          timeout: 15000,
+          maxBuffer: 256 * 1024,
+          env: ocEnv,
+        });
+        const present = parseContextNamesFromGetContextsStdout(gr.stdout);
+        const missing = contexts.filter((c) => !present.includes(c));
+        const kcEsc = kcExpanded.replace(/"/g, '\\"');
+        let diag =
+          `Kubeconfig "${kcExpanded}" vs setup: required ocContext=[${contexts.join(', ')}]; ` +
+          `names present in file=[${present.length ? present.join(', ') : '(none or unreadable)'}]; ` +
+          `missing from file=[${missing.length ? missing.join(', ') : '—'}]. ` +
+          `Fix: merge kubeconfigs / oc login so each required name exists, or change environments fallbackSites/sites ocContext to match an existing NAME. ` +
+          `Confirm on host (same file as container): KUBECONFIG="${kcEsc}" oc config get-contexts` +
+          ` && KUBECONFIG="${kcEsc}" oc whoami --context '<name>'.`;
+        if (gr.status !== 0) {
+          const ge = ((gr.stderr || gr.stdout || '') + '').trim().slice(0, 220);
+          diag += ` (oc config get-contexts failed: ${ge})`;
+        }
+        checks.push({ id: 'oc_context_diagnostic', level: 'error', message: diag });
       }
     }
   }

@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
-# ย้ายทุกอย่างเข้า ROOT เดียว — รันแล้วแก้แค่ ROOT / config เมื่อย้าย user
-# ใช้:
+# Move everything under a single ROOT — after run, only adjust ROOT / config when moving users
+# Usage:
 #   OLD_ROOT=/app/user2/kotestkafka NEW_ROOT=/opt/kafka-usermgmt ./scripts/move-to-root.sh
-#   หรือแก้ OLD_ROOT/NEW_ROOT ด้านล่างแล้วรัน
+#   Or set OLD_ROOT/NEW_ROOT below and run
 
 set -e
 OLD_ROOT="${OLD_ROOT:-/app/user2/kotestkafka}"
@@ -27,7 +27,7 @@ echo "NEW_ROOT=$NEW_ROOT"
 read -p "Continue? [y/N] " c
 [[ "${c,,}" == "y" ]] || exit 0
 
-# โครงสร้าง
+# Layout
 mkdir -p "$NEW_ROOT"/{configs,user_output,.kube,Docker/ssl}
 mkdir -p "$NEW_ROOT/kafka_2.13-3.6.1/bin"
 
@@ -46,7 +46,7 @@ fi
 # Kafka bin
 [[ -d "$OLD_ROOT/kafka_2.13-3.6.1" ]] && cp -a "$OLD_ROOT/kafka_2.13-3.6.1/"* "$NEW_ROOT/kafka_2.13-3.6.1/" 2>/dev/null || true
 
-# .kube (ถ้าอยู่ใต้ OLD_ROOT)
+# .kube (if under OLD_ROOT)
 [[ -d "$OLD_ROOT/.kube" ]] && cp -a "$OLD_ROOT/.kube/"* "$NEW_ROOT/.kube/" 2>/dev/null || true
 
 # Docker: config + ssl

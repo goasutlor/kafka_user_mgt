@@ -1,12 +1,12 @@
 #!/bin/bash
-# เทส oc + kubeconfig ตาม web.config.json (ทุก site) — รันบน host ก่อน deploy
-# ไม่ต้องรัน container; ถ้า PASS แปลว่า credentials ใช้ได้ ถ้า deploy ไป GET /api/users ควรได้
+# Test oc + kubeconfig from web.config.json (every site) — run on host before deploy.
+# No container required; PASS means credentials work for a future GET /api/users.
 #
-# ใช้:
+# Usage:
 #   ./scripts/check-oc-users-from-config.sh
 #   ./scripts/check-oc-users-from-config.sh /path/to/web.config.json
 #
-# ต้องมี: oc, jq
+# Requires: oc, jq
 
 CONFIG="${1:-}"
 for cand in "$CONFIG" "$CONFIG_PATH" "webapp/config/web.config.json" "config/web.config.json"; do
@@ -14,17 +14,17 @@ for cand in "$CONFIG" "$CONFIG_PATH" "webapp/config/web.config.json" "config/web
 done
 if [[ ! -r "$CONFIG" ]]; then
   echo "Usage: $0 [path/to/web.config.json]"
-  echo "  หรือ set CONFIG_PATH แล้วรัน $0"
-  echo "  ต้องมี jq และ oc"
+  echo "  Or set CONFIG_PATH and run $0"
+  echo "  Requires jq and oc"
   exit 1
 fi
 
 if ! command -v jq &>/dev/null; then
-  echo "[FAIL] ไม่พบ jq — ติดตั้งก่อน (apt install jq / yum install jq)"
+  echo "[FAIL] jq not found — install (apt install jq / yum install jq)"
   exit 1
 fi
 if ! command -v oc &>/dev/null; then
-  echo "[FAIL] ไม่พบ oc — ติดตั้ง OpenShift CLI ก่อน"
+  echo "[FAIL] oc not found — install OpenShift CLI"
   exit 1
 fi
 
@@ -38,17 +38,17 @@ if [[ -z "$SITES_JSON" || "$SITES_JSON" == "null" ]]; then
 fi
 
 if [[ -z "$KUBE" || "$KUBE" == "null" ]]; then
-  echo "[FAIL] ใน $CONFIG ไม่มี gen.kubeconfigPath"
+  echo "[FAIL] $CONFIG missing gen.kubeconfigPath"
   exit 1
 fi
 if [[ ! -r "$KUBE" ]]; then
-  echo "[FAIL] ไฟล์ kubeconfig อ่านไม่ได้: $KUBE"
-  echo "   รันจาก host ที่มี path นี้ (หรือ path ที่ mount เข้า container)"
+  echo "[FAIL] kubeconfig not readable: $KUBE"
+  echo "   Run from a host where this path exists (or matches the container mount)"
   exit 1
 fi
 
 echo ""
-echo "--- Shell test: oc get secret (ตาม web.config.json) — ก่อน deploy ---"
+echo "--- Shell test: oc get secret (from web.config.json) — before deploy ---"
 echo "   config: $CONFIG"
 echo "   kubeconfig: $KUBE"
 echo "   secret: $SECRET"
@@ -58,7 +58,6 @@ PASS=0
 FAIL=0
 FAILED_SITES=()
 
-# รายการ sites จาก jq
 idx=0
 while true; do
   name=$(echo "$SITES_JSON" | jq -r ".[$idx].name // empty")
@@ -68,10 +67,10 @@ while true; do
   out=$(KUBECONFIG="$KUBE" oc get secret "$SECRET" -n "$ns" --context "$ctx" -o jsonpath='{.data.plain-users\.json}' 2>&1)
   code=$?
   if [[ $code -eq 0 && -n "$out" ]]; then
-    echo "[PASS] Site $name ($ctx) — oc get secret ได้ (plain-users.json ความยาว ${#out})"
+    echo "[PASS] Site $name ($ctx) — oc get secret OK (plain-users.json length ${#out})"
     PASS=$((PASS + 1))
   else
-    echo "[FAIL] Site $name ($ctx) — oc get secret ไม่ผ่าน"
+    echo "[FAIL] Site $name ($ctx) — oc get secret failed"
     echo "   $(echo "$out" | head -3 | tr '\n' ' ')"
     FAIL=$((FAIL + 1))
     FAILED_SITES+=("$name")
@@ -82,10 +81,10 @@ done
 echo ""
 echo "--- Result: $PASS passed, $FAIL failed ---"
 if [[ $FAIL -gt 0 ]]; then
-  echo "   แก้: บน host รัน oc login ใหม่ให้ครบทุก context ที่ใช้ แล้วรันสคริปต์นี้ซ้ำ (ดู ADD-USER-TROUBLESHOOT.md § provide credentials)"
+  echo "   Fix: oc login for every context, re-run (see ADD-USER-TROUBLESHOOT.md)"
 fi
 if [[ $PASS -gt 0 ]]; then
-  echo "   ถ้า deploy/restart container โดย mount kubeconfig นี้ GET /api/users ควรได้ (อย่างน้อยจาก site ที่ PASS)"
+  echo "   After deploy with this kubeconfig mounted, GET /api/users should work for PASS sites"
   exit 0
 fi
 exit 1

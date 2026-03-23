@@ -1,6 +1,6 @@
 #!/bin/bash
-# รัน Web ด้วย Node ตรงๆ (ติดแค่ Node 18+ + express)
-# เบื้องต้น: วาง run-node.sh ไว้โฟลเดอร์เดียวกับ gen.sh แล้วรันจากโฟลเดอร์นั้น: ./run-node.sh
+# Run the web UI with Node only (needs Node 18+ and express).
+# Place run-node.sh next to gen.sh and run from that directory: ./run-node.sh
 
 set -e
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -16,7 +16,7 @@ WEBAPP_DIR="${WEBAPP_DIR:-$SCRIPT_DIR/webapp}"
 [ ! -f "$WEBAPP_DIR/package.json" ] && { echo "ERROR: $WEBAPP_DIR/package.json not found"; exit 1; }
 cd "$WEBAPP_DIR"
 
-# ติดตั้ง dependency เฉพาะ production (มีแค่ express)
+# Production dependencies only (express)
 if [ ! -d "node_modules/express" ]; then
   echo "Installing dependencies (express only)..."
   npm install --omit=dev
