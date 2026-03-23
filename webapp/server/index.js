@@ -1116,6 +1116,67 @@ function validateSafeName(value, label, maxLen) {
   return null;
 }
 
+const ACL_ALLOWED_OPS_BY_TYPE = {
+  topic: new Set(['READ', 'WRITE', 'DESCRIBE', 'DESCRIBE_CONFIGS', 'CREATE', 'DELETE', 'ALTER', 'ALTER_CONFIGS', 'ALL']),
+  group: new Set(['READ', 'DESCRIBE', 'DELETE', 'ALL']),
+  cluster: new Set(['DESCRIBE', 'IDEMPOTENT_WRITE', 'CREATE', 'ALTER', 'CLUSTER_ACTION', 'DESCRIBE_CONFIGS', 'ALL']),
+  'transactional-id': new Set(['WRITE', 'DESCRIBE', 'ALL']),
+};
+
+function validateAclResourceName(name, label) {
+  if (typeof name !== 'string') return `${label} must be a string`;
+  const s = name.trim();
+  if (!s) return `${label} is required`;
+  if (s.length > MAX_TOPIC_LEN) return `${label} must be at most ${MAX_TOPIC_LEN} characters`;
+  if (!/^[a-zA-Z0-9_.\-*]+$/.test(s)) return `${label} may only contain letters, numbers, underscore, hyphen, period, and *`;
+  return null;
+}
+
+/** @param {{ resources?: unknown[] }} aclConfig */
+function normalizeAclConfigResources(aclConfig) {
+  const errors = [];
+  /** @type {{ type: string, name: string, pattern: 'LITERAL'|'PREFIXED', ops: string[] }[]} */
+  const normalizedResources = [];
+  let fallbackTopic = '';
+  const resources = aclConfig && typeof aclConfig === 'object' && Array.isArray(aclConfig.resources)
+    ? aclConfig.resources
+    : [];
+  if (resources.length === 0) errors.push('aclConfig.resources must not be empty');
+  if (resources.length > 100) errors.push('aclConfig.resources must be at most 100 entries');
+  for (let i = 0; i < resources.length; i += 1) {
+    const r = resources[i] || {};
+    const rt = String(r.type || '').trim().toLowerCase();
+    if (!Object.prototype.hasOwnProperty.call(ACL_ALLOWED_OPS_BY_TYPE, rt)) {
+      errors.push(`aclConfig.resources[${i}].type is invalid`);
+      continue;
+    }
+    const pattern = String(r.pattern || 'LITERAL').trim().toUpperCase();
+    if (pattern !== 'LITERAL' && pattern !== 'PREFIXED') {
+      errors.push(`aclConfig.resources[${i}].pattern must be LITERAL or PREFIXED`);
+    }
+    const ops = Array.isArray(r.ops) ? r.ops.map((o) => String(o || '').trim().toUpperCase()).filter(Boolean) : [];
+    if (ops.length === 0) errors.push(`aclConfig.resources[${i}].ops must not be empty`);
+    const allowed = ACL_ALLOWED_OPS_BY_TYPE[rt];
+    for (const op of ops) {
+      if (!allowed.has(op)) errors.push(`aclConfig.resources[${i}].ops contains invalid operation: ${op}`);
+    }
+    let resourceName = '';
+    if (rt !== 'cluster') {
+      const en = validateAclResourceName(r.name, `aclConfig.resources[${i}].name`);
+      if (en) errors.push(en);
+      resourceName = String(r.name || '').trim();
+    }
+    if (!fallbackTopic && rt === 'topic' && resourceName && resourceName !== '*') fallbackTopic = resourceName;
+    normalizedResources.push({
+      type: rt,
+      name: resourceName,
+      pattern: (pattern === 'PREFIXED' ? 'PREFIXED' : 'LITERAL'),
+      ops: [...new Set(ops)],
+    });
+  }
+  return { errors, normalizedResources, fallbackTopic };
+}
+
 // Validate config and gen.sh before running (for production tracing)
 function validateGenReady() {
   if (!config) loadConfig();
@@ -1915,52 +1976,13 @@ app.post('/api/add-acl-existing-user', (req, res) => {
   const e1 = validateSafeName(username, 'username', MAX_USERNAME_LEN);
   if (e1) errors.push(e1);
   const hasAclConfig = aclConfig && typeof aclConfig === 'object' && Array.isArray(aclConfig.resources);
-  const safeAclResourceName = (name, label) => {
-    if (typeof name !== 'string') return `${label} must be a string`;
-    const s = name.trim();
-    if (!s) return `${label} is required`;
-    if (s.length > MAX_TOPIC_LEN) return `${label} must be at most ${MAX_TOPIC_LEN} characters`;
-    if (!/^[a-zA-Z0-9_.\-*]+$/.test(s)) return `${label} may only contain letters, numbers, underscore, hyphen, period, and *`;
-    return null;
-  };
-  const allowedOpsByType = {
-    topic: new Set(['READ', 'WRITE', 'DESCRIBE', 'DESCRIBE_CONFIGS', 'CREATE', 'DELETE', 'ALTER', 'ALTER_CONFIGS', 'ALL']),
-    group: new Set(['READ', 'DESCRIBE', 'DELETE', 'ALL']),
-    cluster: new Set(['DESCRIBE', 'IDEMPOTENT_WRITE', 'CREATE', 'ALTER', 'CLUSTER_ACTION', 'DESCRIBE_CONFIGS', 'ALL']),
-    'transactional-id': new Set(['WRITE', 'DESCRIBE', 'ALL']),
-  };
-  /** @type {{ type: string, name: string, pattern: 'LITERAL'|'PREFIXED', ops: string[] }[]} */
-  const normalizedResources = [];
+  let normalizedResources = [];
   let fallbackTopic = '';
   if (hasAclConfig) {
-    if (aclConfig.resources.length === 0) errors.push('aclConfig.resources must not be empty');
-    if (aclConfig.resources.length > 100) errors.push('aclConfig.resources must be at most 100 entries');
-    for (let i = 0; i < (aclConfig.resources || []).length; i += 1) {
-      const r = aclConfig.resources[i] || {};
-      const rt = String(r.type || '').trim().toLowerCase();
-      if (!Object.prototype.hasOwnProperty.call(allowedOpsByType, rt)) {
-        errors.push(`aclConfig.resources[${i}].type is invalid`);
-        continue;
-      }
-      const pattern = String(r.pattern || 'LITERAL').trim().toUpperCase();
-      if (pattern !== 'LITERAL' && pattern !== 'PREFIXED') {
-        errors.push(`aclConfig.resources[${i}].pattern must be LITERAL or PREFIXED`);
-      }
-      const ops = Array.isArray(r.ops) ? r.ops.map((o) => String(o || '').trim().toUpperCase()).filter(Boolean) : [];
-      if (ops.length === 0) errors.push(`aclConfig.resources[${i}].ops must not be empty`);
-      const allowed = allowedOpsByType[rt];
-      for (const op of ops) {
-        if (!allowed.has(op)) errors.push(`aclConfig.resources[${i}].ops contains invalid operation: ${op}`);
-      }
-      let resourceName = '';
-      if (rt !== 'cluster') {
-        const en = safeAclResourceName(r.name, `aclConfig.resources[${i}].name`);
-        if (en) errors.push(en);
-        resourceName = String(r.name || '').trim();
-      }
-      if (!fallbackTopic && rt === 'topic' && resourceName && resourceName !== '*') fallbackTopic = resourceName;
-      normalizedResources.push({ type: rt, name: resourceName, pattern: (pattern === 'PREFIXED' ? 'PREFIXED' : 'LITERAL'), ops: [...new Set(ops)] });
-    }
+    const n = normalizeAclConfigResources(aclConfig);
+    errors.push(...n.errors);
+    normalizedResources = n.normalizedResources;
+    fallbackTopic = n.fallbackTopic;
   } else {
     const e2 = validateSafeName(topic, 'topic', MAX_TOPIC_LEN);
     if (e2) errors.push(e2);
@@ -2581,7 +2603,7 @@ app.post('/api/add-user', (req, res) => {
   }
   const {
     systemName, topic, username, acl, aclGroupExtra, passphrase, confirmPassphrase,
-    skipKafkaValidation, validateConsume,
+    skipKafkaValidation, validateConsume, aclConfig, permissionType, host,
   } = req.body || {};
   const errors = [];
   const e1 = validateSafeName(systemName, 'systemName', MAX_SYSTEM_NAME_LEN);
@@ -2594,9 +2616,16 @@ app.post('/api/add-user', (req, res) => {
   if (passphrase && passphrase.length > 1024) errors.push('passphrase must be at most 1024 characters');
   if (!confirmPassphrase || typeof confirmPassphrase !== 'string') errors.push('confirmPassphrase required');
   if (passphrase && confirmPassphrase && passphrase !== confirmPassphrase) errors.push('passphrase and confirmPassphrase do not match');
+  const hasAclConfig = aclConfig && typeof aclConfig === 'object' && Array.isArray(aclConfig.resources);
   const allowedGroupOps = ['Describe', 'Delete'];
   const extraList = Array.isArray(aclGroupExtra) ? aclGroupExtra.filter((o) => allowedGroupOps.includes(String(o))) : [];
-  if (aclGroupExtra != null && !Array.isArray(aclGroupExtra)) errors.push('aclGroupExtra must be an array');
+  if (!hasAclConfig && aclGroupExtra != null && !Array.isArray(aclGroupExtra)) errors.push('aclGroupExtra must be an array');
+  let normalizedAclResources = [];
+  if (hasAclConfig) {
+    const n = normalizeAclConfigResources(aclConfig);
+    errors.push(...n.errors);
+    normalizedAclResources = n.normalizedResources;
+  }
   const skipVal = skipKafkaValidation === true || skipKafkaValidation === 'true' || skipKafkaValidation === 1 || skipKafkaValidation === '1';
   const consumeOff = validateConsume === false || validateConsume === 'false' || validateConsume === 0 || validateConsume === '0';
   if (skipKafkaValidation != null && typeof skipKafkaValidation !== 'boolean' && skipKafkaValidation !== 'true' && skipKafkaValidation !== 'false' && skipKafkaValidation !== 1 && skipKafkaValidation !== 0 && skipKafkaValidation !== '1' && skipKafkaValidation !== '0') {
@@ -2613,15 +2642,21 @@ app.post('/api/add-user', (req, res) => {
     GEN_SYSTEM_NAME: String(systemName).trim(),
     GEN_TOPIC_NAME: String(topic).trim(),
     GEN_KAFKA_USER: String(username).trim(),
-    GEN_ACL: (acl === 'read' || acl === '1') ? '1' : (acl === 'client') ? '2' : '3',
     GEN_PASSPHRASE: String(passphrase),
   };
+  if (hasAclConfig && normalizedAclResources.length) {
+    env.GEN_ACL_CONFIG_JSON = JSON.stringify(normalizedAclResources);
+    env.GEN_ACL_PERMISSION_TYPE = String(permissionType || 'ALLOW').trim().toUpperCase() === 'DENY' ? 'DENY' : 'ALLOW';
+    env.GEN_ACL_HOST = String(host || '*').trim() || '*';
+  } else {
+    env.GEN_ACL = (acl === 'read' || acl === '1') ? '1' : (acl === 'client' || acl === '2') ? '2' : '3';
+    if (extraList.length) env.GEN_ACL_GROUP_EXTRA = extraList.join(',');
+  }
   if (skipVal) {
     env.GEN_VALIDATE_SKIP = '1';
   } else {
     env.GEN_VALIDATE_CONSUME = consumeOff ? '0' : '1';
   }
-  if (extraList.length) env.GEN_ACL_GROUP_EXTRA = extraList.join(',');
 
   const wantStream = req.query.stream === '1' || (req.headers.accept || '').includes('application/x-ndjson');
   if (wantStream) {

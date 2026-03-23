@@ -52,6 +52,7 @@
 # 2026-02-19  Non-interactive Add user / Change password: GEN_PASSPHRASE for .enc file; script echoes GEN_PACK_FILE= and GEN_PACK_NAME= for Web download and decrypt instructions.
 # 2026-02-19  Non-interactive (Web): GEN_MODE=2 (Test user), GEN_MODE=3 with GEN_ACTION=1|2|3 (Remove, Change password, Cleanup ACL). Env: GEN_KAFKA_USER, GEN_TEST_PASS, GEN_TOPIC_NAME; GEN_USERS; GEN_CHANGE_USER, GEN_NEW_PASSWORD.
 #            Add user (GEN_MODE=1): optional GEN_VALIDATE_SKIP=1 (skip broker tests) or GEN_VALIDATE_CONSUME=0|1 (auth-only vs auth+consume); Web/API sends same via skipKafkaValidation / validateConsume.
+#            Add user advanced ACL: GEN_ACL_CONFIG_JSON (JSON array of {type,name,pattern,ops}) + GEN_ACL_PERMISSION_TYPE + GEN_ACL_HOST — same shape as mode 5 / Web aclConfig (Portal Add user + Create topic + Add ACL existing).
 # 2026-02-19  Add new user: check username already exists (block duplicate to avoid human error). Lock remains file-based in /tmp.
 # 2026-02-19  Phase 1 Production Readiness (PRODUCTION_READINESS_AUDIT.md)
 #             - Lock file: prevent concurrent runs (gen_kafka_user.lock)
@@ -359,6 +360,75 @@ acl_operation_for_remove() {
         *)               echo "$1" ;;  # pass through if already correct or unknown
     esac
 }
+
+# Apply multi-resource ACL from GEN_ACL_CONFIG_JSON (non-empty JSON array).
+# Principal: User:$1. Uses GEN_ACL_PERMISSION_TYPE (ALLOW|DENY), GEN_ACL_HOST.
+# Second arg: error_exit step tag (e.g. ADD_ACL_EXISTING, ADD_USER_ACL).
+apply_kafka_acl_bundle_from_json() {
+    local KAFKA_USER="$1"
+    local ERR_TAG="${2:-ADD_ACL}"
+    local _row _rtype _rname _pattern _ops _res_flag _cmd _out
+    local _ptype _principal_flag _host_flag _acl_host
+    _ptype=$(echo "${GEN_ACL_PERMISSION_TYPE:-ALLOW}" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')
+    [ "$_ptype" != "DENY" ] && _ptype="ALLOW"
+    _principal_flag="--allow-principal"
+    _host_flag="--allow-host"
+    if [ "$_ptype" = "DENY" ]; then
+        _principal_flag="--deny-principal"
+        _host_flag="--deny-host"
+    fi
+    _acl_host=$(trim_ws "${GEN_ACL_HOST:-*}")
+    [ -z "$_acl_host" ] && _acl_host="*"
+    while IFS= read -r _row; do
+        [ -z "$_row" ] && continue
+        _rtype=$(echo "$_row" | jq -r '.type // ""' | tr '[:upper:]' '[:lower:]')
+        _rname=$(echo "$_row" | jq -r '.name // ""')
+        _pattern=$(echo "$_row" | jq -r '(.pattern // "LITERAL") | ascii_upcase')
+        [ "$_pattern" != "PREFIXED" ] && _pattern="LITERAL"
+        _ops=$(echo "$_row" | jq -r '.ops[]?')
+        [ -z "$_ops" ] && error_exit "$ERR_TAG" "ACL resource has no operations."
+        _res_flag=""
+        case "$_rtype" in
+            topic)
+                _rname=$(trim_ws "$_rname")
+                [ -z "$_rname" ] && error_exit "$ERR_TAG" "Topic resource name is required."
+                _res_flag="--topic"
+                ;;
+            group)
+                _rname=$(trim_ws "$_rname")
+                [ -z "$_rname" ] && error_exit "$ERR_TAG" "Group resource name is required."
+                _res_flag="--group"
+                ;;
+            cluster)
+                _res_flag="--cluster"
+                ;;
+            transactional-id|transactional_id)
+                _rname=$(trim_ws "$_rname")
+                [ -z "$_rname" ] && error_exit "$ERR_TAG" "Transactional-id resource name is required."
+                _res_flag="--transactional-id"
+                ;;
+            *)
+                error_exit "$ERR_TAG" "Unsupported ACL resource type: $_rtype"
+                ;;
+        esac
+        _cmd=("$KAFKA_BIN/kafka-acls.sh" "--bootstrap-server" "$BOOTSTRAP_BOTH" "--command-config" "$ADMIN_CONFIG" "--add" "$_principal_flag" "User:$KAFKA_USER")
+        if [ -n "$_acl_host" ]; then
+            _cmd+=("$_host_flag" "$_acl_host")
+        fi
+        while IFS= read -r _op; do
+            [ -z "$_op" ] && continue
+            _op_cli=$(acl_operation_for_remove "$_op")
+            _cmd+=("--operation" "$_op_cli")
+        done <<< "$_ops"
+        _cmd+=("$_res_flag")
+        if [ "$_res_flag" != "--cluster" ]; then
+            _cmd+=("$_rname" "--resource-pattern-type" "$_pattern")
+        fi
+        _out=$("${_cmd[@]}" </dev/null 2>&1)
+        [ $? -ne 0 ] && { echo "$_out" | sed 's/^/   /'; error_exit "$ERR_TAG" "ACL add failed for resource type=$_rtype name=$_rname pattern=$_pattern"; }
+    done < <(echo "$GEN_ACL_CONFIG_JSON" | jq -c '.[]')
+}
+
 # error_exit [step_name] message  — log, print, exit 1 (step_name optional, for tracing)
 error_exit() {
     local step="$1" msg="$2"
@@ -562,7 +632,11 @@ if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "1" ]; then
     SYSTEM_NAME="${GEN_SYSTEM_NAME:?GEN_SYSTEM_NAME required for non-interactive}"
     TOPIC_NAME="${GEN_TOPIC_NAME:?GEN_TOPIC_NAME required for non-interactive}"
     KAFKA_USER="${GEN_KAFKA_USER:?GEN_KAFKA_USER required for non-interactive}"
-    ACL_CHOICE="${GEN_ACL:-2}"
+    if [ -n "${GEN_ACL_CONFIG_JSON:-}" ]; then
+        ACL_CHOICE=""
+    else
+        ACL_CHOICE="${GEN_ACL:-2}"
+    fi
     status_msg "Validating Topic '$TOPIC_NAME'"
     timeout $TIMEOUT_SEC $KAFKA_BIN/kafka-topics.sh --bootstrap-server $BOOTSTRAP_BOTH --command-config $ADMIN_CONFIG --describe --topic "$TOPIC_NAME" > $TMP_DIR/topic_out 2>/dev/null || true
     [ -s $TMP_DIR/topic_out ] || error_exit "Topic '$TOPIC_NAME' not found or no permission."
@@ -678,65 +752,8 @@ if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "5" ]; then
         _res_count=$(echo "$GEN_ACL_CONFIG_JSON" | jq -r 'if type=="array" then length else -1 end' 2>/dev/null)
         [ "$_res_count" -lt 1 ] && error_exit "GEN_ACL_CONFIG_JSON must be a non-empty JSON array."
         done_msg
-        _ptype=$(echo "${GEN_ACL_PERMISSION_TYPE:-ALLOW}" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')
-        [ "$_ptype" != "DENY" ] && _ptype="ALLOW"
-        _principal_flag="--allow-principal"
-        _host_flag="--allow-host"
-        if [ "$_ptype" = "DENY" ]; then
-            _principal_flag="--deny-principal"
-            _host_flag="--deny-host"
-        fi
-        _acl_host=$(trim_ws "${GEN_ACL_HOST:-*}")
-        [ -z "$_acl_host" ] && _acl_host="*"
         status_msg "Applying ACL resources ($_res_count item(s))"
-        while IFS= read -r _row; do
-            [ -z "$_row" ] && continue
-            _rtype=$(echo "$_row" | jq -r '.type // ""' | tr '[:upper:]' '[:lower:]')
-            _rname=$(echo "$_row" | jq -r '.name // ""')
-            _pattern=$(echo "$_row" | jq -r '(.pattern // "LITERAL") | ascii_upcase')
-            [ "$_pattern" != "PREFIXED" ] && _pattern="LITERAL"
-            _ops=$(echo "$_row" | jq -r '.ops[]?')
-            [ -z "$_ops" ] && error_exit "ACL resource has no operations."
-            _res_flag=""
-            case "$_rtype" in
-                topic)
-                    _rname=$(trim_ws "$_rname")
-                    [ -z "$_rname" ] && error_exit "Topic resource name is required."
-                    _res_flag="--topic"
-                    ;;
-                group)
-                    _rname=$(trim_ws "$_rname")
-                    [ -z "$_rname" ] && error_exit "Group resource name is required."
-                    _res_flag="--group"
-                    ;;
-                cluster)
-                    _res_flag="--cluster"
-                    ;;
-                transactional-id|transactional_id)
-                    _rname=$(trim_ws "$_rname")
-                    [ -z "$_rname" ] && error_exit "Transactional-id resource name is required."
-                    _res_flag="--transactional-id"
-                    ;;
-                *)
-                    error_exit "Unsupported ACL resource type: $_rtype"
-                    ;;
-            esac
-            _cmd=("$KAFKA_BIN/kafka-acls.sh" "--bootstrap-server" "$BOOTSTRAP_BOTH" "--command-config" "$ADMIN_CONFIG" "--add" "$_principal_flag" "User:$KAFKA_USER")
-            if [ -n "$_acl_host" ]; then
-                _cmd+=("$_host_flag" "$_acl_host")
-            fi
-            while IFS= read -r _op; do
-                [ -z "$_op" ] && continue
-                _op_cli=$(acl_operation_for_remove "$_op")
-                _cmd+=("--operation" "$_op_cli")
-            done <<< "$_ops"
-            _cmd+=("$_res_flag")
-            if [ "$_res_flag" != "--cluster" ]; then
-                _cmd+=("$_rname" "--resource-pattern-type" "$_pattern")
-            fi
-            _out=$("${_cmd[@]}" </dev/null 2>&1)
-            [ $? -ne 0 ] && { echo "$_out" | sed 's/^/   /'; error_exit "ADD_ACL_EXISTING" "ACL add failed for resource type=$_rtype name=$_rname pattern=$_pattern"; }
-        done < <(echo "$GEN_ACL_CONFIG_JSON" | jq -c '.[]')
+        apply_kafka_acl_bundle_from_json "$KAFKA_USER" "ADD_ACL_EXISTING"
         done_msg
         log_action "ADD_ACL_EXISTING | user=$KAFKA_USER | resources=$_res_count | permission=$_ptype | host=$_acl_host"
         echo -e "   ${GREEN}ACL config applied for User:$KAFKA_USER (${_res_count} resource item(s))${NC}"
@@ -2212,13 +2229,21 @@ done_msg
 echo -e "\n-------------------------------------------------------"
 echo "  ADD ACL (for topic: $TOPIC_NAME)"
 echo "-------------------------------------------------------"
-if [ "${GEN_NONINTERACTIVE}" != "1" ] || [ -z "$ACL_CHOICE" ]; then
+NEED_CONSUMER_GROUP=true
+if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ -n "${GEN_ACL_CONFIG_JSON:-}" ]; then
+    status_msg "Applying ACL from resource bundle (GEN_ACL_CONFIG_JSON)"
+    apply_kafka_acl_bundle_from_json "$KAFKA_USER" "ADD_USER_ACL"
+    done_msg
+    echo -e "   ${GREEN}ACL bundle applied for User:$KAFKA_USER${NC}"
+    NEED_CONSUMER_GROUP=false
+elif [ "${GEN_NONINTERACTIVE}" != "1" ] || [ -z "$ACL_CHOICE" ]; then
     echo "   Topic ACL presets:"
     echo "   [1] Read — consume only (Read, Describe, DescribeConfigs)"
     echo "   [2] Client — Produce + Consume + Describe (Read, Write, Describe, DescribeConfigs). Recommended for normal clients; no admin rights."
     echo "   [3] All — full access (includes Create, Alter, Delete topic; admin-level)."
     read -p "   Select [1-3] (default: 2): " ACL_CHOICE
 fi
+if [ "$NEED_CONSUMER_GROUP" = "true" ]; then
 [[ -z "$ACL_CHOICE" ]] && ACL_CHOICE="2"
 
 case "$ACL_CHOICE" in
@@ -2277,6 +2302,7 @@ else
 fi
 [ $? -ne 0 ] && { echo -e "\n   ${RED}❌ ACL add failed:${NC}"; echo "$acl_out" | sed 's/^/   /'; error_exit "Check admin credentials in $ADMIN_CONFIG."; }
 done_msg
+fi
 
 # 4b-2. Consumer Group ACL — Required for running a real consumer (e.g. commit offset).
 #        Having only Topic READ is not enough; you must have READ on ResourceType=GROUP too, else commit offset fails.

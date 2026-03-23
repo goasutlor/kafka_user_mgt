@@ -996,31 +996,30 @@
 
         <div class="wizard-panel" id="wizard-panel-3" data-step="3">
           <h3>Permission (ACL)</h3>
-          <p class="step-desc">Topic ACL and optional Consumer Group permissions. Consumer Group <strong>Read</strong> is added by default (required for consume/produce).</p>
-
+          <p class="step-desc">Role template + Resource + Operation — <strong>ชุดเดียวกับ</strong> Add ACL to existing user. Topic จากขั้นก่อนจะถูก sync เข้า topic ตัวแรกเมื่อเข้าขั้นนี้ (แก้ไขได้).</p>
           <div class="form-group">
-            <label for="acl">Topic ACL</label>
-            <select id="acl">
-              <option value="read">Read — consume only (Read, Describe, DescribeConfigs)</option>
-              <option value="client" selected>Client — Produce + Consume + Describe (recommended; no admin rights)</option>
-              <option value="all">All — full access (includes Create, Alter, Delete topic; admin-level)</option>
-            </select>
-            <p class="hint" style="margin-top:4px; font-size:12px;">Read = consume messages. Write = produce messages. Describe = view metadata. Client = Read + Write + Describe + DescribeConfigs.</p>
+            <label>Role Template (Production-grade)</label>
+            <div id="acl-role-grid-add" class="users-list" style="display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:10px;"></div>
           </div>
-
-          <div class="form-group" style="margin-top:14px; padding:10px 12px; background:var(--code-bg); border:1px solid var(--border); border-radius:6px;">
-            <strong style="display:block; margin-bottom:6px;">Consumer Group ACL</strong>
-            <p class="hint" style="font-size:12px; margin-bottom:8px;">Consumer Group <strong>Read</strong> is added automatically (required for consume and typical produce flows). Optionally add:</p>
-            <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:6px; font-size:13px; font-weight:normal;">
-              <input type="checkbox" id="acl-group-describe" />
-              <span><strong>Describe</strong> — View consumer group metadata (members, offsets). Useful for monitoring.</span>
-            </label>
-            <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; font-weight:normal;">
-              <input type="checkbox" id="acl-group-delete" />
-              <span><strong>Delete</strong> — Allow deleting the consumer group. Grant only if the client must delete groups.</span>
-            </label>
+          <div class="form-group">
+            <label>Identity fields</label>
+            <div style="display:grid; grid-template-columns:repeat(2,minmax(220px,1fr)); gap:8px;">
+              <input type="text" id="acl-bootstrap-add" placeholder="Bootstrap Server" value="localhost:9092" />
+              <input type="text" id="acl-host-add" placeholder="Host" value="*" />
+              <select id="acl-permission-type-add"><option value="ALLOW" selected>ALLOW</option><option value="DENY">DENY</option></select>
+            </div>
           </div>
-
+          <div class="form-group">
+            <label>ACL Detail</label>
+            <div id="acl-resources-list-add"></div>
+            <button type="button" id="btn-acl-add-resource-add" class="btn btn-secondary" style="margin-top:8px;">+ Add resource</button>
+          </div>
+          <div class="form-group" id="acl-warning-box-add" style="display:none;"></div>
+          <div class="form-group">
+            <label>Generated command preview</label>
+            <button type="button" id="btn-acl-copy-command-add" class="btn btn-secondary">Copy command</button>
+            <pre id="acl-command-preview-add" class="code-block" style="margin-top:8px; max-height:260px; overflow:auto; font-size:12px;"></pre>
+          </div>
           <details class="acl-reference" style="margin-top:12px; padding:10px 12px; background:var(--code-bg); border:1px solid var(--border); border-radius:6px; font-size:12px;">
             <summary style="cursor:pointer; font-weight:600;">Kafka ACL reference (English)</summary>
             <table style="margin-top:8px; width:100%; border-collapse:collapse;">
@@ -1032,7 +1031,7 @@
                 <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">DescribeConfigs</td><td style="padding:4px 8px;">View topic configuration.</td></tr>
                 <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">Create, Alter, AlterConfigs, Delete</td><td style="padding:4px 8px;">Admin-level: create/alter/delete topics. Do not grant to normal clients.</td></tr>
                 <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">All</td><td style="padding:4px 8px;">All of the above.</td></tr>
-                <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">Consumer Group</td><td style="padding:4px 8px;">Read</td><td style="padding:4px 8px;">Join group and consume. <strong>Added by default</strong> (required for consume).</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">Consumer Group</td><td style="padding:4px 8px;">Read</td><td style="padding:4px 8px;">Join group and consume. Add via designer when needed (e.g. Consumer / Prosumer templates).</td></tr>
                 <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;"></td><td style="padding:4px 8px;">Describe</td><td style="padding:4px 8px;">View group metadata (members, offsets). Optional.</td></tr>
                 <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;"></td><td style="padding:4px 8px;">Delete</td><td style="padding:4px 8px;">Delete the consumer group. Optional; grant only if needed.</td></tr>
               </tbody>
@@ -1041,6 +1040,7 @@
           <div class="wizard-actions">
             <button type="button" id="wizard-back-3" class="btn btn-secondary">Back</button>
             <button type="button" id="wizard-next-3" class="btn btn-primary">Next</button>
+            <span class="step-error" id="step3-error"></span>
           </div>
         </div>
 
@@ -1177,29 +1177,34 @@
         </div>
         <div class="wizard-panel" id="ct-wizard-panel-4" data-step="4">
           <h3>Permission (ACL)</h3>
-          <p class="step-desc">Topic ACL and optional Consumer Group permissions.</p>
+          <p class="step-desc">Role template + Resource + Operation — <strong>ชุดเดียวกับ</strong> Add new user / Add ACL to existing user. Topic จากขั้นก่อนจะ sync เข้า topic ตัวแรก.</p>
           <div class="form-group">
-            <label for="ct-acl">Topic ACL</label>
-            <select id="ct-acl">
-              <option value="read">Read — consume only</option>
-              <option value="client" selected>Client — Produce + Consume + Describe (recommended)</option>
-              <option value="all">All — full access (admin-level)</option>
-            </select>
+            <label>Role Template (Production-grade)</label>
+            <div id="acl-role-grid-ct" class="users-list" style="display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:10px;"></div>
           </div>
-          <div class="form-group" style="margin-top:14px; padding:10px 12px; background:var(--code-bg); border:1px solid var(--border); border-radius:6px;">
-            <strong style="display:block; margin-bottom:6px;">Consumer Group ACL</strong>
-            <label style="display:flex; align-items:flex-start; gap:8px; margin-bottom:6px; font-size:13px; font-weight:normal;">
-              <input type="checkbox" id="ct-acl-group-describe" />
-              <span>Describe</span>
-            </label>
-            <label style="display:flex; align-items:flex-start; gap:8px; font-size:13px; font-weight:normal;">
-              <input type="checkbox" id="ct-acl-group-delete" />
-              <span>Delete</span>
-            </label>
+          <div class="form-group">
+            <label>Identity fields</label>
+            <div style="display:grid; grid-template-columns:repeat(2,minmax(220px,1fr)); gap:8px;">
+              <input type="text" id="acl-bootstrap-ct" placeholder="Bootstrap Server" value="localhost:9092" />
+              <input type="text" id="acl-host-ct" placeholder="Host" value="*" />
+              <select id="acl-permission-type-ct"><option value="ALLOW" selected>ALLOW</option><option value="DENY">DENY</option></select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>ACL Detail</label>
+            <div id="acl-resources-list-ct"></div>
+            <button type="button" id="btn-acl-add-resource-ct" class="btn btn-secondary" style="margin-top:8px;">+ Add resource</button>
+          </div>
+          <div class="form-group" id="acl-warning-box-ct" style="display:none;"></div>
+          <div class="form-group">
+            <label>Generated command preview</label>
+            <button type="button" id="btn-acl-copy-command-ct" class="btn btn-secondary">Copy command</button>
+            <pre id="acl-command-preview-ct" class="code-block" style="margin-top:8px; max-height:260px; overflow:auto; font-size:12px;"></pre>
           </div>
           <div class="wizard-actions">
             <button type="button" id="ct-wizard-back-4" class="btn btn-secondary">Back</button>
             <button type="button" id="ct-wizard-next-4" class="btn btn-primary">Next</button>
+            <span class="step-error" id="ct-step4-error"></span>
           </div>
         </div>
         <div class="wizard-panel" id="ct-wizard-panel-5" data-step="5">
@@ -1277,34 +1282,26 @@
       </div>
       <div class="form-group">
         <label>Role Template (Production-grade)</label>
-        <div id="acl-role-grid" class="users-list" style="display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:10px;"></div>
+        <div id="acl-role-grid-exist" class="users-list" style="display:grid; grid-template-columns:repeat(3,minmax(220px,1fr)); gap:10px;"></div>
       </div>
       <div class="form-group">
         <label>Identity fields</label>
         <div style="display:grid; grid-template-columns:repeat(2,minmax(220px,1fr)); gap:8px;">
-          <input type="text" id="acl-bootstrap" placeholder="Bootstrap Server" value="localhost:9092" />
-          <input type="text" id="acl-host" placeholder="Host" value="*" />
-          <select id="acl-permission-type"><option value="ALLOW" selected>ALLOW</option><option value="DENY">DENY</option></select>
+          <input type="text" id="acl-bootstrap-exist" placeholder="Bootstrap Server" value="localhost:9092" />
+          <input type="text" id="acl-host-exist" placeholder="Host" value="*" />
+          <select id="acl-permission-type-exist"><option value="ALLOW" selected>ALLOW</option><option value="DENY">DENY</option></select>
         </div>
       </div>
       <div class="form-group">
         <label>ACL Detail</label>
-        <div id="acl-resources-list"></div>
-        <button type="button" id="btn-acl-add-resource" class="btn btn-secondary" style="margin-top:8px;">+ Add resource</button>
+        <div id="acl-resources-list-exist"></div>
+        <button type="button" id="btn-acl-add-resource-exist" class="btn btn-secondary" style="margin-top:8px;">+ Add resource</button>
       </div>
-      <div class="form-group" id="acl-warning-box" style="display:none;"></div>
+      <div class="form-group" id="acl-warning-box-exist" style="display:none;"></div>
       <div class="form-group">
         <label>Generated command preview</label>
-        <button type="button" id="btn-acl-copy-command" class="btn btn-secondary">Copy command</button>
-        <pre id="acl-command-preview" class="code-block" style="margin-top:8px; max-height:260px; overflow:auto; font-size:12px;"></pre>
-      </div>
-      <div class="form-group">
-        <label for="acl-existing-acl">Permission (ACL)</label>
-        <select id="acl-existing-acl">
-          <option value="1">Read — consume only</option>
-          <option value="2" selected>Client — Produce + Consume + Describe</option>
-          <option value="3">All — full access</option>
-        </select>
+        <button type="button" id="btn-acl-copy-command-exist" class="btn btn-secondary">Copy command</button>
+        <pre id="acl-command-preview-exist" class="code-block" style="margin-top:8px; max-height:260px; overflow:auto; font-size:12px;"></pre>
       </div>
       <div class="form-group" id="acl-existing-confirm-wrap" style="display:none;">
         <p class="step-desc"><strong id="acl-existing-confirm-msg"></strong></p>
@@ -2150,17 +2147,13 @@
         function saveWizardState() {
           try {
             var el = document.getElementById('system');
-            var desc = document.getElementById('acl-group-describe');
-            var del = document.getElementById('acl-group-delete');
             var skipB = document.getElementById('add-skip-validation');
             var authB = document.getElementById('add-auth-only');
             var data = {
               system: el ? el.value.trim() : '',
               topic: (document.getElementById('topic') || {}).value.trim() || '',
               username: (document.getElementById('username') || {}).value.trim() || '',
-              acl: (document.getElementById('acl') || {}).value || 'client',
-              aclGroupDescribe: desc ? desc.checked : false,
-              aclGroupDelete: del ? del.checked : false,
+              aclDesignerAdd: typeof aclDesignerStates !== 'undefined' && aclDesignerStates.add ? JSON.stringify({ role: aclDesignerStates.add.selectedRole, resources: aclDesignerStates.add.resources }) : '',
               addSkipValidation: skipB ? skipB.checked : false,
               addAuthOnly: authB ? authB.checked : false,
               step: currentStep
@@ -2179,12 +2172,16 @@
             if (top && s.topic) top.value = s.topic;
             var user = document.getElementById('username');
             if (user && s.username) user.value = s.username;
-            var aclEl = document.getElementById('acl');
-            if (aclEl && s.acl) aclEl.value = s.acl;
-            var desc = document.getElementById('acl-group-describe');
-            var del = document.getElementById('acl-group-delete');
-            if (desc) desc.checked = !!s.aclGroupDescribe;
-            if (del) del.checked = !!s.aclGroupDelete;
+            if (s.aclDesignerAdd && typeof aclDesignerStates !== 'undefined') {
+              try {
+                var ad = JSON.parse(s.aclDesignerAdd);
+                if (ad && ad.resources && ad.resources.length) {
+                  aclDesignerStates.add.selectedRole = ad.role || 'consumer';
+                  aclDesignerStates.add.resources = ad.resources;
+                  if (typeof renderAclDesigner === 'function') renderAclDesigner('add');
+                }
+              } catch (_) {}
+            }
             var skipB = document.getElementById('add-skip-validation');
             var authB = document.getElementById('add-auth-only');
             if (skipB && authB) {
@@ -2208,9 +2205,10 @@
             var sys = document.getElementById('system'); if (sys) sys.value = '';
             var top = document.getElementById('topic'); if (top) top.value = '';
             var user = document.getElementById('username'); if (user) user.value = '';
-            var aclEl = document.getElementById('acl'); if (aclEl) aclEl.value = 'client';
-            var desc = document.getElementById('acl-group-describe'); if (desc) desc.checked = false;
-            var del = document.getElementById('acl-group-delete'); if (del) del.checked = false;
+            if (typeof aclDesignerStates !== 'undefined') {
+              aclDesignerStates.add = typeof defaultAclDesignerState === 'function' ? defaultAclDesignerState() : { selectedRole: 'consumer', resources: [] };
+              if (typeof renderAclDesigner === 'function') renderAclDesigner('add');
+            }
             var skipB = document.getElementById('add-skip-validation');
             var authB = document.getElementById('add-auth-only');
             if (skipB) skipB.checked = false;
@@ -2236,6 +2234,10 @@
           document.querySelectorAll('.wizard-panel').forEach(function (el) {
             el.classList.toggle('active', parseInt(el.getAttribute('data-step'), 10) === step);
           });
+          if (step === 3 && typeof syncWizardTopicIntoAclDesigner === 'function') {
+            syncWizardTopicIntoAclDesigner('add');
+            renderAclDesigner('add');
+          }
           saveWizardState();
         }
 
@@ -2269,6 +2271,10 @@
                 if (errEl) { errEl.innerHTML = 'Username already exists. Pick a different one, or <a href="#add-acl-existing">add this topic to this user</a>.'; errEl.style.visibility = 'visible'; }
                 return;
               }
+            } else if (step === 3) {
+              var eAcl = typeof validateAclDesignerStep === 'function' ? validateAclDesignerStep('add') : '';
+              if (eAcl) { setStepError('step3-error', eAcl); return; }
+              setStepError('step3-error', '');
             } else if (step === 4) {
               var passphrase = (document.getElementById('passphrase').value || '').trim();
               var passphraseConfirm = (document.getElementById('passphrase-confirm').value || '').trim();
@@ -2288,11 +2294,11 @@
         });
         var btnExecuteCancel = document.getElementById('btn-execute-cancel');
         if (btnExecuteCancel) btnExecuteCancel.addEventListener('click', function () { showStep(1); });
-        ['system', 'topic', 'username', 'acl'].forEach(function (id) {
+        ['system', 'topic', 'username'].forEach(function (id) {
           var el = document.getElementById(id);
           if (el) el.addEventListener('input', saveWizardState);
         });
-        ['acl-group-describe', 'acl-group-delete', 'add-skip-validation', 'add-auth-only'].forEach(function (id) {
+        ['add-skip-validation', 'add-auth-only'].forEach(function (id) {
           var el = document.getElementById(id);
           if (el) el.addEventListener('change', function () {
             var skip = document.getElementById('add-skip-validation');
@@ -2306,62 +2312,19 @@
             if (currentStep === 5) renderSummary();
           });
         });
-        (function () {
-          var aclSel = document.getElementById('acl');
-          if (aclSel) aclSel.addEventListener('change', function () { saveWizardState(); if (currentStep === 5) renderSummary(); });
-        })();
-
-        function buildAclCapabilityMatrixHtml(acl, groupDescribe, groupDelete) {
-          var tick = '<span style="color:var(--success);font-weight:700;" title="Yes">✓</span>';
-          var no = '<span style="color:var(--text-muted);font-weight:600;" title="No">—</span>';
-          var consume, produce, tDesc, tDescCfg, tAdmin;
-          if (acl === 'read') {
-            consume = tick; produce = no; tDesc = tick; tDescCfg = tick; tAdmin = no;
-          } else if (acl === 'client') {
-            consume = tick; produce = tick; tDesc = tick; tDescCfg = tick; tAdmin = no;
-          } else {
-            consume = tick; produce = tick; tDesc = tick; tDescCfg = tick; tAdmin = tick;
-          }
-          var cgRead = tick;
-          var cgDesc = groupDescribe ? tick : no;
-          var cgDel = groupDelete ? tick : no;
-          var presetLabel = acl === 'read' ? 'Read (consume only)' : (acl === 'client' ? 'Client (produce + consume + describe)' : 'All (full / admin-level)');
-          var rows = [
-            ['รับข้อความจาก topic <span style="color:var(--text-muted);font-size:11px;">Consume · Topic Read</span>', consume],
-            ['ส่งข้อความเข้า topic <span style="color:var(--text-muted);font-size:11px;">Produce · Topic Write</span>', produce],
-            ['ดู metadata ของ topic <span style="color:var(--text-muted);font-size:11px;">Describe</span>', tDesc],
-            ['ดู config ของ topic <span style="color:var(--text-muted);font-size:11px;">DescribeConfigs</span>', tDescCfg],
-            ['สร้าง / แก้ / ลบ topic <span style="color:var(--text-muted);font-size:11px;">admin</span>', tAdmin],
-            ['เข้าร่วม consumer group <span style="color:var(--text-muted);font-size:11px;">Group Read · *</span>', cgRead],
-            ['ดูข้อมูล consumer group <span style="color:var(--text-muted);font-size:11px;">optional</span>', cgDesc],
-            ['ลบ consumer group <span style="color:var(--text-muted);font-size:11px;">optional</span>', cgDel]
-          ];
-          var html = '<p class="hint" style="margin:0 0 8px; font-size:12px;"><strong>Preset:</strong> ' + escapeHtml(presetLabel) + '</p>';
-          html += '<table class="acl-matrix-table" style="width:100%;max-width:640px;border-collapse:collapse;font-size:13px;border:1px solid var(--border);">';
-          html += '<thead><tr style="border-bottom:2px solid var(--border);background:var(--code-bg);"><th style="text-align:left;padding:10px 12px;">สิทธิ์ที่จะได้รับ</th><th style="text-align:center;padding:10px 12px;width:72px;">ให้</th></tr></thead><tbody>';
-          rows.forEach(function (r) {
-            html += '<tr style="border-bottom:1px solid var(--border);"><td style="padding:10px 12px;vertical-align:middle;line-height:1.45;">' + r[0] + '</td><td style="text-align:center;padding:10px 12px;font-size:16px;">' + r[1] + '</td></tr>';
-          });
-          html += '</tbody></table>';
-          return html;
-        }
 
         function renderSummary() {
           var system = document.getElementById('system').value.trim();
           var topic = document.getElementById('topic').value.trim();
           var username = document.getElementById('username').value.trim();
-          var acl = document.getElementById('acl').value;
-          var gDesc = document.getElementById('acl-group-describe') && document.getElementById('acl-group-describe').checked;
-          var gDel = document.getElementById('acl-group-delete') && document.getElementById('acl-group-delete').checked;
           var html = '<div class="wizard-summary-block" style="margin-bottom:14px;"><strong style="color:var(--text-muted); font-size:12px; text-transform:uppercase;">Identification</strong><br>';
           html += '<strong>Client System:</strong> ' + escapeHtml(system) + ' &nbsp;|&nbsp; <strong>Topic:</strong> ' + escapeHtml(topic) + ' &nbsp;|&nbsp; <strong>Username:</strong> ' + escapeHtml(username) + '</div>';
-          html += '<div class="wizard-summary-block" style="margin-bottom:12px;"><strong style="color:var(--text-muted); font-size:12px; text-transform:uppercase;">ACL ที่จะถูก assign</strong> <span style="color:var(--text-muted);font-size:12px;">(✓ = ได้รับสิทธิ์ · — = ไม่ได้รับ)</span>';
-          html += buildAclCapabilityMatrixHtml(acl, gDesc, gDel);
+          html += (typeof window.buildAclDesignerSummaryHtml === 'function' ? window.buildAclDesignerSummaryHtml('add') : '');
           var skipV = document.getElementById('add-skip-validation') && document.getElementById('add-skip-validation').checked;
           var authO = document.getElementById('add-auth-only') && document.getElementById('add-auth-only').checked;
           var valLabel = skipV ? 'Skipped (no broker test)' : (authO ? 'Auth only (no consume)' : 'Auth + consume (default)');
           html += '<p class="hint" style="margin:10px 0 0; font-size:12px;"><strong>Post-create validation:</strong> ' + escapeHtml(valLabel) + '</p>';
-          html += '<p class="hint" style="margin:12px 0 0; font-size:12px;">กด <strong>Create user + ACL and download pack</strong> เพื่อรัน gen.sh ตามสรุปนี้</p></div>';
+          html += '<p class="hint" style="margin:12px 0 0; font-size:12px;">กด <strong>Create user + ACL and download pack</strong> เพื่อรัน gen.sh ตามสรุปนี้</p>';
           document.getElementById('wizard-summary').innerHTML = html;
         }
         function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
@@ -2640,6 +2603,10 @@
           document.querySelectorAll('#create-topic-onboard .wizard-panel').forEach(function (el) {
             el.classList.toggle('active', parseInt(el.getAttribute('data-step'), 10) === step);
           });
+          if (step === 4 && typeof syncWizardTopicIntoAclDesigner === 'function') {
+            syncWizardTopicIntoAclDesigner('ct');
+            renderAclDesigner('ct');
+          }
         }
         function setCTStepError(id, msg) {
           var el = document.getElementById(id);
@@ -2702,7 +2669,12 @@
           showStepCT(4);
         });
         document.getElementById('ct-wizard-back-4').addEventListener('click', function () { showStepCT(3); });
-        document.getElementById('ct-wizard-next-4').addEventListener('click', function () { showStepCT(5); });
+        document.getElementById('ct-wizard-next-4').addEventListener('click', function () {
+          setCTStepError('ct-step4-error', '');
+          var eAcl = typeof validateAclDesignerStep === 'function' ? validateAclDesignerStep('ct') : '';
+          if (eAcl) { setCTStepError('ct-step4-error', eAcl); return; }
+          showStepCT(5);
+        });
         document.getElementById('ct-wizard-back-5').addEventListener('click', function () { showStepCT(4); });
         document.getElementById('ct-wizard-next-5').addEventListener('click', function () {
           setCTStepError('ct-step5-error', '');
@@ -2718,9 +2690,6 @@
           var system = (document.getElementById('ct-system').value || '').trim();
           var topic = (document.getElementById('ct-topic').value || '').trim();
           var username = (document.getElementById('ct-username').value || '').trim();
-          var acl = (document.getElementById('ct-acl').value || 'client');
-          var gDesc = document.getElementById('ct-acl-group-describe') && document.getElementById('ct-acl-group-describe').checked;
-          var gDel = document.getElementById('ct-acl-group-delete') && document.getElementById('ct-acl-group-delete').checked;
           var topicCreated = (document.getElementById('ct-topic-name').value || '').trim();
           var html = '<div class="wizard-summary-block" style="margin-bottom:14px;"><strong style="color:var(--text-muted); font-size:12px; text-transform:uppercase;">สรุปก่อนสร้าง</strong><br>';
           html += '<strong>Client System:</strong> ' + escapeHtmlCt(system) + ' &nbsp;|&nbsp; <strong>Topic:</strong> ' + escapeHtmlCt(topic) + ' &nbsp;|&nbsp; <strong>Username:</strong> ' + escapeHtmlCt(username) + '</div>';
@@ -2730,9 +2699,8 @@
           if (!topic) {
             html += '<p class="hint" style="color:var(--danger); margin-bottom:10px;">⚠ ยังไม่มี topic — กลับไปขั้น 1 ให้สร้าง topic สำเร็จก่อน</p>';
           }
-          html += '<div class="wizard-summary-block"><strong style="color:var(--text-muted); font-size:12px; text-transform:uppercase;">ACL ที่จะถูก assign</strong> <span style="color:var(--text-muted);font-size:12px;">(✓ = ได้รับ · — = ไม่ได้รับ)</span>';
-          html += buildAclCapabilityMatrixHtml(acl, gDesc, gDel);
-          html += '<p class="hint" style="margin:12px 0 0; font-size:12px;">กด <strong>Create user + ACL and download pack</strong> เพื่อรัน gen.sh (หลังสร้าง topic แล้ว)</p></div>';
+          html += (typeof window.buildAclDesignerSummaryHtml === 'function' ? window.buildAclDesignerSummaryHtml('ct') : '');
+          html += '<p class="hint" style="margin:12px 0 0; font-size:12px;">กด <strong>Create user + ACL and download pack</strong> เพื่อรัน gen.sh (หลังสร้าง topic แล้ว)</p>';
           document.getElementById('ct-wizard-summary').innerHTML = html;
         }
         async function loadCTUsers() {
@@ -2778,12 +2746,9 @@
           var system = document.getElementById('ct-system').value.trim();
           var topic = document.getElementById('ct-topic').value.trim();
           var username = document.getElementById('ct-username').value.trim();
-          var acl = document.getElementById('ct-acl').value;
           var passphrase = (document.getElementById('ct-passphrase').value || '').trim();
           var passphraseConfirm = (document.getElementById('ct-passphrase-confirm').value || '').trim();
-          var aclGroupExtra = [];
-          if (document.getElementById('ct-acl-group-describe') && document.getElementById('ct-acl-group-describe').checked) aclGroupExtra.push('Describe');
-          if (document.getElementById('ct-acl-group-delete') && document.getElementById('ct-acl-group-delete').checked) aclGroupExtra.push('Delete');
+          var aclSide = typeof buildAclApiSidecar === 'function' ? buildAclApiSidecar('ct') : { permissionType: 'ALLOW', host: '*', aclConfig: { role: 'consumer', resources: [] } };
           var resultEl = document.getElementById('ct-api-result');
           var downloadBlock = document.getElementById('ct-api-download-block');
           var progressWrap = document.getElementById('ct-progress-wrap');
@@ -2814,7 +2779,8 @@
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
               body: JSON.stringify({
-                systemName: system, topic: topic, username: username, acl: acl, aclGroupExtra: aclGroupExtra, passphrase: passphrase, confirmPassphrase: passphraseConfirm,
+                systemName: system, topic: topic, username: username, passphrase: passphrase, confirmPassphrase: passphraseConfirm,
+                permissionType: aclSide.permissionType, host: aclSide.host, aclConfig: aclSide.aclConfig,
                 skipKafkaValidation: !!(document.getElementById('ct-skip-validation') && document.getElementById('ct-skip-validation').checked),
                 validateConsume: !(document.getElementById('ct-auth-only') && document.getElementById('ct-auth-only').checked),
               })
@@ -2994,45 +2960,74 @@
           { key: 'streams', title: 'Kafka Streams App', badge: 'Write + Create + Group', desc: 'ต้องสร้าง internal changelog/repartition' },
           { key: 'admin', title: 'Topic Admin', badge: 'Full topic admin', desc: 'Platform/DevOps only' }
         ];
-        var aclDesignerState = { selectedRole: 'consumer', resources: JSON.parse(JSON.stringify(ACL_ROLE_DEFAULTS.consumer)) };
-        function syncAclTopicFromFirstTopicResource() {
+        var ACL_DESIGNER_SUFFIXES = ['add', 'ct', 'exist'];
+        var ACL_PAGE_META = {
+          add: { usernameId: 'username', topicId: 'topic' },
+          ct: { usernameId: 'ct-username', topicId: 'ct-topic' },
+          exist: { usernameId: 'acl-existing-username', topicId: 'acl-existing-topic' }
+        };
+        function defaultAclDesignerState() {
+          return { selectedRole: 'consumer', resources: JSON.parse(JSON.stringify(ACL_ROLE_DEFAULTS.consumer)) };
+        }
+        var aclDesignerStates = { add: defaultAclDesignerState(), ct: defaultAclDesignerState(), exist: defaultAclDesignerState() };
+        function syncAclTopicFromFirstTopicResource(suffix) {
+          var st = aclDesignerStates[suffix];
+          if (!st) return;
           var t = '';
-          for (var i = 0; i < aclDesignerState.resources.length; i += 1) {
-            var r = aclDesignerState.resources[i];
+          for (var i = 0; i < st.resources.length; i += 1) {
+            var r = st.resources[i];
             if (r.type === 'topic' && r.name && r.name !== '*') { t = r.name; break; }
           }
-          if (t && document.getElementById('acl-existing-topic')) document.getElementById('acl-existing-topic').value = t;
+          var meta = ACL_PAGE_META[suffix];
+          if (t && meta && meta.topicId) {
+            var tel = document.getElementById(meta.topicId);
+            if (tel) tel.value = t;
+          }
         }
-        function renderAclRoleCards() {
-          var grid = document.getElementById('acl-role-grid');
+        function syncWizardTopicIntoAclDesigner(suffix) {
+          var meta = ACL_PAGE_META[suffix];
+          if (!meta || !meta.topicId) return;
+          var tv = (document.getElementById(meta.topicId) || {}).value.trim();
+          if (!tv) return;
+          var st = aclDesignerStates[suffix];
+          for (var i = 0; i < st.resources.length; i += 1) {
+            if (st.resources[i].type === 'topic') { st.resources[i].name = tv; break; }
+          }
+        }
+        function renderAclRoleCards(suffix) {
+          var grid = document.getElementById('acl-role-grid-' + suffix);
           if (!grid) return;
+          var st = aclDesignerStates[suffix];
           grid.innerHTML = ACL_ROLE_CARDS.map(function (c) {
-            var active = c.key === aclDesignerState.selectedRole;
+            var active = c.key === st.selectedRole;
             return '<button type="button" class="btn btn-secondary acl-role-card" data-role="' + c.key + '" style="text-align:left; border:' + (active ? '2px solid var(--primary)' : '1px solid var(--border)') + '; background:' + (active ? 'rgba(55,138,221,0.14)' : 'var(--card-bg)') + ';"><strong>' + escapeHtml(c.title) + '</strong><br><span class="hint">' + escapeHtml(c.desc) + '</span><br><span class="hint" style="font-weight:600;">' + escapeHtml(c.badge) + '</span></button>';
           }).join('');
           grid.querySelectorAll('.acl-role-card').forEach(function (btn) {
             btn.addEventListener('click', function () {
               var role = this.getAttribute('data-role');
               if (!ACL_ROLE_DEFAULTS[role]) return;
-              aclDesignerState.selectedRole = role;
-              aclDesignerState.resources = JSON.parse(JSON.stringify(ACL_ROLE_DEFAULTS[role]));
-              syncAclTopicFromFirstTopicResource();
-              renderAclDesigner();
+              aclDesignerStates[suffix].selectedRole = role;
+              aclDesignerStates[suffix].resources = JSON.parse(JSON.stringify(ACL_ROLE_DEFAULTS[role]));
+              if (suffix !== 'exist') syncWizardTopicIntoAclDesigner(suffix);
+              syncAclTopicFromFirstTopicResource(suffix);
+              renderAclDesigner(suffix);
             });
           });
         }
         function normalizeAclOperation(op) {
           return String(op || '').trim().toUpperCase().replace(/-/g, '_');
         }
-        function buildAclCommandsPreview() {
-          var principal = (document.getElementById('acl-existing-username').value || '').trim();
-          var bootstrap = (document.getElementById('acl-bootstrap').value || 'localhost:9092').trim() || 'localhost:9092';
-          var permissionType = ((document.getElementById('acl-permission-type').value || 'ALLOW') + '').toUpperCase() === 'DENY' ? 'DENY' : 'ALLOW';
-          var host = (document.getElementById('acl-host').value || '*').trim() || '*';
+        function buildAclCommandsPreview(suffix) {
+          var meta = ACL_PAGE_META[suffix] || {};
+          var principal = meta.usernameId ? ((document.getElementById(meta.usernameId) || {}).value || '').trim() : '';
+          var bootstrap = (document.getElementById('acl-bootstrap-' + suffix).value || 'localhost:9092').trim() || 'localhost:9092';
+          var permissionType = ((document.getElementById('acl-permission-type-' + suffix).value || 'ALLOW') + '').toUpperCase() === 'DENY' ? 'DENY' : 'ALLOW';
+          var host = (document.getElementById('acl-host-' + suffix).value || '*').trim() || '*';
           var pflag = permissionType === 'DENY' ? '--deny-principal' : '--allow-principal';
           var hflag = permissionType === 'DENY' ? '--deny-host' : '--allow-host';
           var cmds = [];
-          aclDesignerState.resources.forEach(function (r) {
+          var st = aclDesignerStates[suffix];
+          st.resources.forEach(function (r) {
             var ops = (r.ops || []).map(normalizeAclOperation).filter(Boolean);
             if (!ops.length) return;
             var parts = [
@@ -3055,90 +3050,147 @@
           });
           return cmds.join('\n\n');
         }
-        function collectAclWarnings() {
+        function collectAclWarnings(suffix) {
           var warnings = [];
-          if (aclDesignerState.selectedRole === 'admin') warnings.push('Admin ACL ควรให้เฉพาะ platform/devops team เท่านั้น');
-          if (aclDesignerState.selectedRole === 'idempotent') {
-            var hasIdem = aclDesignerState.resources.some(function (r) { return r.type === 'cluster' && (r.ops || []).map(normalizeAclOperation).indexOf('IDEMPOTENT_WRITE') !== -1; });
+          var st = aclDesignerStates[suffix];
+          if (st.selectedRole === 'admin') warnings.push('Admin ACL ควรให้เฉพาะ platform/devops team เท่านั้น');
+          if (st.selectedRole === 'idempotent') {
+            var hasIdem = st.resources.some(function (r) { return r.type === 'cluster' && (r.ops || []).map(normalizeAclOperation).indexOf('IDEMPOTENT_WRITE') !== -1; });
             if (!hasIdem) warnings.push('Idempotent producer ต้องมี CLUSTER:IDEMPOTENT_WRITE');
           }
-          aclDesignerState.resources.forEach(function (r) {
-            if ((r.type === 'group') && r.name === '*' && aclDesignerState.selectedRole !== 'monitor' && aclDesignerState.selectedRole !== 'admin') {
+          st.resources.forEach(function (r) {
+            if ((r.type === 'group') && r.name === '*' && st.selectedRole !== 'monitor' && st.selectedRole !== 'admin') {
               warnings.push('ควรระบุชื่อ consumer group จริงๆ แทน * เพื่อป้องกัน rogue consumer');
             }
             if (r.type === 'topic' && !String(r.name || '').trim()) warnings.push('กรุณาระบุชื่อ topic');
           });
           return warnings;
         }
-        function renderAclDesigner() {
-          renderAclRoleCards();
-          var wrap = document.getElementById('acl-resources-list');
-          var preview = document.getElementById('acl-command-preview');
+        function renderAclDesigner(suffix) {
+          renderAclRoleCards(suffix);
+          var wrap = document.getElementById('acl-resources-list-' + suffix);
+          var preview = document.getElementById('acl-command-preview-' + suffix);
           if (!wrap || !preview) return;
-          wrap.innerHTML = aclDesignerState.resources.map(function (r, idx) {
+          var st = aclDesignerStates[suffix];
+          wrap.innerHTML = st.resources.map(function (r, idx) {
             var ops = ACL_OPS_BY_TYPE[r.type] || [];
             var opHtml = ops.map(function (op) {
               var checked = (r.ops || []).map(normalizeAclOperation).indexOf(op) !== -1;
-              return '<label style="display:inline-flex; align-items:center; gap:6px; margin-right:10px; opacity:' + (checked ? '1' : '.65') + '; text-decoration:' + (checked ? 'none' : 'line-through') + ';"><input type="checkbox" data-acl-op="' + op + '" data-acl-idx="' + idx + '" ' + (checked ? 'checked' : '') + ' />' + op + '</label>';
+              return '<label style="display:inline-flex; align-items:center; gap:6px; margin-right:10px; opacity:' + (checked ? '1' : '.65') + '; text-decoration:' + (checked ? 'none' : 'line-through') + ';"><input type="checkbox" data-acl-suf="' + suffix + '" data-acl-op="' + op + '" data-acl-idx="' + idx + '" ' + (checked ? 'checked' : '') + ' />' + op + '</label>';
             }).join('');
             return '<div style="border:1px solid var(--border); border-radius:8px; padding:10px; margin-bottom:8px;">'
               + '<div style="display:flex; gap:8px; margin-bottom:8px;">'
-              + '<select data-acl-type="' + idx + '"><option value="topic"' + (r.type === 'topic' ? ' selected' : '') + '>TOPIC</option><option value="group"' + (r.type === 'group' ? ' selected' : '') + '>GROUP</option><option value="cluster"' + (r.type === 'cluster' ? ' selected' : '') + '>CLUSTER</option><option value="transactional-id"' + (r.type === 'transactional-id' ? ' selected' : '') + '>TRANSACTIONAL_ID</option></select>'
-              + '<input type="text" data-acl-name="' + idx + '" value="' + escapeHtml(r.name || '') + '" placeholder="Resource name" ' + (r.type === 'cluster' ? 'disabled' : '') + ' />'
-              + '<select data-acl-pattern="' + idx + '"><option value="LITERAL"' + ((r.pattern || 'LITERAL') === 'LITERAL' ? ' selected' : '') + '>LITERAL</option><option value="PREFIXED"' + ((r.pattern || '') === 'PREFIXED' ? ' selected' : '') + '>PREFIXED</option></select>'
-              + '<button type="button" class="btn btn-secondary" data-acl-remove="' + idx + '">×</button></div><div>' + opHtml + '</div></div>';
+              + '<select data-acl-suf="' + suffix + '" data-acl-type="' + idx + '"><option value="topic"' + (r.type === 'topic' ? ' selected' : '') + '>TOPIC</option><option value="group"' + (r.type === 'group' ? ' selected' : '') + '>GROUP</option><option value="cluster"' + (r.type === 'cluster' ? ' selected' : '') + '>CLUSTER</option><option value="transactional-id"' + (r.type === 'transactional-id' ? ' selected' : '') + '>TRANSACTIONAL_ID</option></select>'
+              + '<input type="text" data-acl-suf="' + suffix + '" data-acl-name="' + idx + '" value="' + escapeHtml(r.name || '') + '" placeholder="Resource name" ' + (r.type === 'cluster' ? 'disabled' : '') + ' />'
+              + '<select data-acl-suf="' + suffix + '" data-acl-pattern="' + idx + '"><option value="LITERAL"' + ((r.pattern || 'LITERAL') === 'LITERAL' ? ' selected' : '') + '>LITERAL</option><option value="PREFIXED"' + ((r.pattern || '') === 'PREFIXED' ? ' selected' : '') + '>PREFIXED</option></select>'
+              + '<button type="button" class="btn btn-secondary" data-acl-suf="' + suffix + '" data-acl-remove="' + idx + '">×</button></div><div>' + opHtml + '</div></div>';
           }).join('');
-          preview.textContent = buildAclCommandsPreview() || '# No ACL command generated yet';
-          var warningBox = document.getElementById('acl-warning-box');
-          var ws = collectAclWarnings();
+          preview.textContent = buildAclCommandsPreview(suffix) || '# No ACL command generated yet';
+          var warningBox = document.getElementById('acl-warning-box-' + suffix);
+          var ws = collectAclWarnings(suffix);
           if (warningBox) {
             if (!ws.length) { warningBox.style.display = 'none'; warningBox.innerHTML = ''; }
             else { warningBox.style.display = 'block'; warningBox.innerHTML = '<div style="border:1px solid #d2a100; border-radius:8px; background:rgba(210,161,0,.08); padding:10px;">⚠ ' + ws.map(escapeHtml).join('<br>⚠ ') + '</div>'; }
           }
           wrap.querySelectorAll('[data-acl-remove]').forEach(function (el) {
             el.addEventListener('click', function () {
+              var suf = el.getAttribute('data-acl-suf');
               var i = parseInt(el.getAttribute('data-acl-remove'), 10);
-              aclDesignerState.resources.splice(i, 1);
-              renderAclDesigner();
+              aclDesignerStates[suf].resources.splice(i, 1);
+              renderAclDesigner(suf);
             });
           });
           wrap.querySelectorAll('[data-acl-type]').forEach(function (el) {
             el.addEventListener('change', function () {
+              var suf = el.getAttribute('data-acl-suf');
               var i = parseInt(el.getAttribute('data-acl-type'), 10);
-              aclDesignerState.resources[i].type = el.value;
-              if (el.value === 'cluster') aclDesignerState.resources[i].name = 'kafka-cluster';
+              aclDesignerStates[suf].resources[i].type = el.value;
+              if (el.value === 'cluster') aclDesignerStates[suf].resources[i].name = 'kafka-cluster';
               var allowed = ACL_OPS_BY_TYPE[el.value] || [];
-              aclDesignerState.resources[i].ops = (aclDesignerState.resources[i].ops || []).map(normalizeAclOperation).filter(function (op) { return allowed.indexOf(op) !== -1; });
-              renderAclDesigner();
+              aclDesignerStates[suf].resources[i].ops = (aclDesignerStates[suf].resources[i].ops || []).map(normalizeAclOperation).filter(function (op) { return allowed.indexOf(op) !== -1; });
+              renderAclDesigner(suf);
             });
           });
           wrap.querySelectorAll('[data-acl-name]').forEach(function (el) {
             el.addEventListener('input', function () {
+              var suf = el.getAttribute('data-acl-suf');
               var i = parseInt(el.getAttribute('data-acl-name'), 10);
-              aclDesignerState.resources[i].name = el.value;
-              syncAclTopicFromFirstTopicResource();
-              renderAclDesigner();
+              aclDesignerStates[suf].resources[i].name = el.value;
+              syncAclTopicFromFirstTopicResource(suf);
+              renderAclDesigner(suf);
             });
           });
           wrap.querySelectorAll('[data-acl-pattern]').forEach(function (el) {
             el.addEventListener('change', function () {
+              var suf = el.getAttribute('data-acl-suf');
               var i = parseInt(el.getAttribute('data-acl-pattern'), 10);
-              aclDesignerState.resources[i].pattern = el.value === 'PREFIXED' ? 'PREFIXED' : 'LITERAL';
-              renderAclDesigner();
+              aclDesignerStates[suf].resources[i].pattern = el.value === 'PREFIXED' ? 'PREFIXED' : 'LITERAL';
+              renderAclDesigner(suf);
             });
           });
           wrap.querySelectorAll('[data-acl-op]').forEach(function (el) {
             el.addEventListener('change', function () {
+              var suf = el.getAttribute('data-acl-suf');
               var i = parseInt(el.getAttribute('data-acl-idx'), 10);
               var op = normalizeAclOperation(el.getAttribute('data-acl-op'));
-              var arr = (aclDesignerState.resources[i].ops || []).map(normalizeAclOperation);
+              var arr = (aclDesignerStates[suf].resources[i].ops || []).map(normalizeAclOperation);
               if (el.checked && arr.indexOf(op) === -1) arr.push(op);
               if (!el.checked) arr = arr.filter(function (x) { return x !== op; });
-              aclDesignerState.resources[i].ops = arr;
-              renderAclDesigner();
+              aclDesignerStates[suf].resources[i].ops = arr;
+              renderAclDesigner(suf);
             });
           });
         }
+        function validateAclDesignerStep(suffix) {
+          var st = aclDesignerStates[suffix];
+          if (!st.resources.length) return 'กรุณาเพิ่มอย่างน้อย 1 ACL resource';
+          var invalid = st.resources.some(function (r) {
+            if (!r || !r.type) return true;
+            if (r.type !== 'cluster' && !(r.name || '').trim()) return true;
+            return !(r.ops && r.ops.length);
+          });
+          if (invalid) return 'กรอก resource name (ยกเว้น cluster) และเลือก operation ให้ครบ';
+          return '';
+        }
+        window.validateAclDesignerStep = validateAclDesignerStep;
+        function buildAclConfigPayload(suffix) {
+          var st = aclDesignerStates[suffix];
+          return {
+            role: st.selectedRole,
+            resources: st.resources.map(function (r) {
+              return {
+                type: r.type,
+                name: (r.type === 'cluster' ? 'kafka-cluster' : (r.name || '').trim()),
+                pattern: r.pattern === 'PREFIXED' ? 'PREFIXED' : 'LITERAL',
+                ops: (r.ops || []).map(normalizeAclOperation)
+              };
+            })
+          };
+        }
+        function buildAclApiSidecar(suffix) {
+          return {
+            permissionType: (document.getElementById('acl-permission-type-' + suffix).value || 'ALLOW').toUpperCase() === 'DENY' ? 'DENY' : 'ALLOW',
+            host: (document.getElementById('acl-host-' + suffix).value || '*').trim() || '*',
+            aclConfig: buildAclConfigPayload(suffix)
+          };
+        }
+        window.buildAclApiSidecar = buildAclApiSidecar;
+        window.buildAclDesignerSummaryHtml = function (suffix) {
+          var st = aclDesignerStates[suffix];
+          var card = ACL_ROLE_CARDS.filter(function (c) { return c.key === st.selectedRole; })[0];
+          var title = card ? card.title : st.selectedRole;
+          var perm = (document.getElementById('acl-permission-type-' + suffix) || {}).value || 'ALLOW';
+          var host = (document.getElementById('acl-host-' + suffix) || {}).value || '*';
+          var lines = st.resources.map(function (r, i) {
+            var ops = (r.ops || []).map(normalizeAclOperation).join(', ');
+            var nm = r.type === 'cluster' ? '(cluster)' : (r.name || '');
+            return '<li><strong>' + escapeHtml(r.type) + '</strong> · ' + escapeHtml(nm) + ' · ' + escapeHtml(r.pattern || 'LITERAL') + ' · <span style="color:var(--text-muted)">' + escapeHtml(ops) + '</span></li>';
+          });
+          return '<div class="wizard-summary-block" style="margin-bottom:12px;"><strong style="color:var(--text-muted); font-size:12px; text-transform:uppercase;">ACL (production designer)</strong>'
+            + '<p class="hint" style="margin:4px 0 8px;">Role template: <strong>' + escapeHtml(title) + '</strong></p>'
+            + '<ul style="margin:0; padding-left:18px; font-size:13px; line-height:1.5;">' + lines.join('') + '</ul>'
+            + '<p class="hint" style="margin:8px 0 0; font-size:12px;">' + escapeHtml(perm) + ' · host <code>' + escapeHtml(host) + '</code></p></div>';
+        };
         function renderUsersFilteredAclExisting() {
           var box = document.getElementById('users-list-box-acl-existing');
           if (!box) return;
@@ -3147,7 +3199,7 @@
           if (list.length === 0) { box.innerHTML = '<span class="hint">ไม่มี user ที่ตรงกับ filter</span>'; return; }
           box.innerHTML = list.map(function (u) { return '<span data-username="' + escapeHtml(u) + '">' + escapeHtml(u) + '</span>'; }).join('');
           box.querySelectorAll('span[data-username]').forEach(function (span) {
-            span.addEventListener('click', function () { document.getElementById('acl-existing-username').value = this.getAttribute('data-username'); renderAclDesigner(); });
+            span.addEventListener('click', function () { document.getElementById('acl-existing-username').value = this.getAttribute('data-username'); renderAclDesigner('exist'); });
           });
         }
         function renderTopicsFilteredAclExisting() {
@@ -3161,8 +3213,8 @@
             span.addEventListener('click', function () {
               var v = this.getAttribute('data-topic');
               document.getElementById('acl-existing-topic').value = v;
-              if (aclDesignerState.resources.length && aclDesignerState.resources[0].type === 'topic') aclDesignerState.resources[0].name = v;
-              renderAclDesigner();
+              if (aclDesignerStates.exist.resources.length && aclDesignerStates.exist.resources[0].type === 'topic') aclDesignerStates.exist.resources[0].name = v;
+              renderAclDesigner('exist');
             });
           });
         }
@@ -3201,19 +3253,44 @@
         document.getElementById('filter-users-acl-existing').addEventListener('input', renderUsersFilteredAclExisting);
         var filterTopicsAclExisting = document.getElementById('filter-topics-acl-existing');
         if (filterTopicsAclExisting) filterTopicsAclExisting.addEventListener('input', renderTopicsFilteredAclExisting);
-        document.getElementById('btn-acl-add-resource').addEventListener('click', function () {
-          aclDesignerState.resources.push({ type: 'topic', name: '', pattern: 'LITERAL', ops: ['READ'] });
-          renderAclDesigner();
+        ACL_DESIGNER_SUFFIXES.forEach(function (suf) {
+          var btnAdd = document.getElementById('btn-acl-add-resource-' + suf);
+          if (btnAdd) btnAdd.addEventListener('click', function () {
+            aclDesignerStates[suf].resources.push({ type: 'topic', name: '', pattern: 'LITERAL', ops: ['READ'] });
+            renderAclDesigner(suf);
+          });
+          var btnCopy = document.getElementById('btn-acl-copy-command-' + suf);
+          if (btnCopy) btnCopy.addEventListener('click', function () {
+            var txt = buildAclCommandsPreview(suf);
+            if (!txt) return;
+            if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).catch(function () {});
+          });
+          ['acl-bootstrap-' + suf, 'acl-permission-type-' + suf, 'acl-host-' + suf].forEach(function (id) {
+            var el = document.getElementById(id);
+            if (el) {
+              el.addEventListener('input', function () { renderAclDesigner(suf); });
+              el.addEventListener('change', function () { renderAclDesigner(suf); });
+            }
+          });
         });
-        document.getElementById('btn-acl-copy-command').addEventListener('click', function () {
-          var txt = buildAclCommandsPreview();
-          if (!txt) return;
-          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).catch(function () {});
-        });
-        ['acl-bootstrap', 'acl-permission-type', 'acl-host', 'acl-existing-username'].forEach(function (id) {
+        var aclExistUserEl = document.getElementById('acl-existing-username');
+        if (aclExistUserEl) {
+          aclExistUserEl.addEventListener('input', function () { renderAclDesigner('exist'); });
+          aclExistUserEl.addEventListener('change', function () { renderAclDesigner('exist'); });
+        }
+        ['username', 'topic'].forEach(function (id) {
           var el = document.getElementById(id);
-          if (el) el.addEventListener('input', renderAclDesigner);
-          if (el) el.addEventListener('change', renderAclDesigner);
+          if (el) {
+            el.addEventListener('input', function () { if (typeof renderAclDesigner === 'function') renderAclDesigner('add'); });
+            el.addEventListener('change', function () { renderAclDesigner('add'); });
+          }
+        });
+        ['ct-username', 'ct-topic'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) {
+            el.addEventListener('input', function () { renderAclDesigner('ct'); });
+            el.addEventListener('change', function () { renderAclDesigner('ct'); });
+          }
         });
 
         document.getElementById('btn-acl-existing-load-acls').addEventListener('click', async function () {
@@ -3237,14 +3314,14 @@
           var resultEl = document.getElementById('acl-existing-result');
           if (resultEl) resultEl.style.display = 'none';
           if (!username) { if (msgEl) msgEl.textContent = 'กรุณาใส่ username'; if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } return; }
-          if (!aclDesignerState.resources.length) { if (msgEl) msgEl.textContent = 'กรุณาเพิ่มอย่างน้อย 1 resource'; if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } return; }
-          var invalid = aclDesignerState.resources.some(function (r) {
+          if (!aclDesignerStates.exist.resources.length) { if (msgEl) msgEl.textContent = 'กรุณาเพิ่มอย่างน้อย 1 resource'; if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } return; }
+          var invalid = aclDesignerStates.exist.resources.some(function (r) {
             if (!r || !r.type) return true;
             if (r.type !== 'cluster' && !(r.name || '').trim()) return true;
             return !(r.ops && r.ops.length);
           });
           if (invalid) { if (msgEl) msgEl.textContent = 'กรอก resource name (ยกเว้น cluster) และเลือก operation ให้ครบ'; if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } return; }
-          if (msgEl) msgEl.textContent = 'คุณจะเพิ่ม ACL แบบละเอียดให้ user \u201c' + username + '\u201d ทั้งหมด ' + aclDesignerState.resources.length + ' resource item(s). ยืนยันหรือไม่?';
+          if (msgEl) msgEl.textContent = 'คุณจะเพิ่ม ACL แบบละเอียดให้ user \u201c' + username + '\u201d ทั้งหมด ' + aclDesignerStates.exist.resources.length + ' resource item(s). ยืนยันหรือไม่?';
           if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
         });
 
@@ -3255,10 +3332,7 @@
         document.getElementById('btn-acl-existing-confirm').addEventListener('click', async function () {
           var username = (document.getElementById('acl-existing-username').value || '').trim();
           var topic = (document.getElementById('acl-existing-topic').value || '').trim();
-          var aclSel = document.getElementById('acl-existing-acl');
-          var aclVal = aclSel ? aclSel.value : '2';
-          var permissionType = (document.getElementById('acl-permission-type').value || 'ALLOW').toUpperCase() === 'DENY' ? 'DENY' : 'ALLOW';
-          var host = (document.getElementById('acl-host').value || '*').trim() || '*';
+          var side = buildAclApiSidecar('exist');
           var resultEl = document.getElementById('acl-existing-result');
           var wrap = document.getElementById('acl-existing-confirm-wrap');
           var btn = document.getElementById('btn-acl-existing-confirm');
@@ -3273,20 +3347,9 @@
               body: JSON.stringify({
                 username: username,
                 topic: topic,
-                acl: aclVal,
-                permissionType: permissionType,
-                host: host,
-                aclConfig: {
-                  role: aclDesignerState.selectedRole,
-                  resources: aclDesignerState.resources.map(function (r) {
-                    return {
-                      type: r.type,
-                      name: (r.type === 'cluster' ? 'kafka-cluster' : (r.name || '').trim()),
-                      pattern: r.pattern === 'PREFIXED' ? 'PREFIXED' : 'LITERAL',
-                      ops: (r.ops || []).map(normalizeAclOperation)
-                    };
-                  })
-                }
+                permissionType: side.permissionType,
+                host: side.host,
+                aclConfig: side.aclConfig
               })
             });
             var j = await res.json();
@@ -3302,7 +3365,9 @@
           }
           if (btn) btn.disabled = false;
         });
-        renderAclDesigner();
+        renderAclDesigner('add');
+        renderAclDesigner('ct');
+        renderAclDesigner('exist');
 
         // ไม่โหลด topic/user อัตโนมัติ — แสดง hint ให้กดปุ่มโหลด จะได้ไม่โชว์ error ก่อนผู้ใช้กด
         var topicsBox = document.getElementById('topics-list-box');
@@ -3390,7 +3455,6 @@
         var system = document.getElementById('system').value.trim();
         var topic = document.getElementById('topic').value.trim();
         var username = document.getElementById('username').value.trim();
-        var acl = document.getElementById('acl').value;
         var passphrase = (document.getElementById('passphrase').value || '').trim();
         var passphraseConfirm = (document.getElementById('passphrase-confirm').value || '').trim();
         var resultEl = document.getElementById('api-result');
@@ -3408,6 +3472,11 @@
         if (cachedUsersList.length > 0 && cachedUsersList.indexOf(username) !== -1) {
           try { sessionStorage.setItem('addAclExistingPrefill', JSON.stringify({ topic: topic, username: username })); } catch (_) {}
           resultEl.innerHTML = '<span style="color:var(--danger)">Username already exists. Pick a different one, or <a href="#add-acl-existing" style="color:var(--link);">add this topic to this user</a>.</span>';
+          return;
+        }
+        var vAclExec = window.validateAclDesignerStep && window.validateAclDesignerStep('add');
+        if (vAclExec) {
+          resultEl.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(vAclExec) + '</span>';
           return;
         }
         resultEl.innerHTML = '';
@@ -3428,16 +3497,15 @@
         if (btnCancelAdd) btnCancelAdd.style.display = 'inline-block';
         if (btnExecuteCancel) btnExecuteCancel.style.display = 'none';
         currentAbort.add = null;
-        var aclGroupExtra = [];
-        if (document.getElementById('acl-group-describe') && document.getElementById('acl-group-describe').checked) aclGroupExtra.push('Describe');
-        if (document.getElementById('acl-group-delete') && document.getElementById('acl-group-delete').checked) aclGroupExtra.push('Delete');
+        var aclSideAdd = typeof window.buildAclApiSidecar === 'function' ? window.buildAclApiSidecar('add') : { permissionType: 'ALLOW', host: '*', aclConfig: { role: 'consumer', resources: [] } };
         var ADD_USER_TIMEOUT_MS = 600000; // 10 นาที (script อาจรอนานตอน auth retry)
         try {
           var f = fetchWithTimeout('/api/add-user?stream=1', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
             body: JSON.stringify({
-              systemName: system, topic: topic, username: username, acl: acl, aclGroupExtra: aclGroupExtra, passphrase: passphrase, confirmPassphrase: passphraseConfirm,
+              systemName: system, topic: topic, username: username, passphrase: passphrase, confirmPassphrase: passphraseConfirm,
+              permissionType: aclSideAdd.permissionType, host: aclSideAdd.host, aclConfig: aclSideAdd.aclConfig,
               skipKafkaValidation: !!(document.getElementById('add-skip-validation') && document.getElementById('add-skip-validation').checked),
               validateConsume: !(document.getElementById('add-auth-only') && document.getElementById('add-auth-only').checked),
             })

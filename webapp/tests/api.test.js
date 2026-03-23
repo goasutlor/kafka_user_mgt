@@ -194,6 +194,22 @@ describe('API', () => {
     }
   });
 
+  it('POST /api/add-user rejects empty aclConfig.resources', async () => {
+    const res = await request(app)
+      .post('/api/add-user')
+      .send({
+        systemName: 'TestSystem',
+        topic: 'test-topic',
+        username: 'testuser',
+        passphrase: 'secret123',
+        confirmPassphrase: 'secret123',
+        aclConfig: { role: 'consumer', resources: [] },
+      })
+      .expect(400);
+    assert.ok(Array.isArray(res.body.errors));
+    assert.ok(res.body.errors.some((e) => /aclConfig\.resources/i.test(e)));
+  });
+
   it('POST /api/add-user rejects invalid skipKafkaValidation / validateConsume types', async () => {
     const base = {
       systemName: 'TestSystem',
