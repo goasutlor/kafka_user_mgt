@@ -599,8 +599,28 @@
       font-weight: 600;
       flex-shrink: 0;
     }
+    .progress-steps-list .step-line .step-err {
+      color: var(--danger);
+      font-weight: 600;
+      flex-shrink: 0;
+    }
     .progress-steps-list .step-line .step-pending { color: var(--text-muted); flex-shrink: 0; }
     .progress-steps-list .step-line .step-name { flex: 1; }
+    .progress-steps-list .step-line.gen-task-line { flex-wrap: wrap; align-items: flex-start; }
+    .progress-steps-list .gen-task-stderr {
+      width: 100%;
+      flex-basis: 100%;
+      margin: 4px 0 0 0;
+      padding: 6px 8px;
+      font-size: 11px;
+      white-space: pre-wrap;
+      max-height: 120px;
+      overflow: auto;
+      background: var(--code-bg);
+      border-radius: 4px;
+      border: 1px solid var(--border);
+    }
+    .error-task-status-list { margin-top: 6px; }
     .result-error-wrap { margin-top: 4px; }
     .result-error-wrap .btn-copy-error { margin-left: 8px; font-size: 12px; padding: 4px 10px; background: var(--code-bg); border: 1px solid var(--border); color: var(--link); cursor: pointer; border-radius: 6px; }
     .result-error-wrap .btn-copy-error:hover { background: var(--border); }
@@ -1318,6 +1338,7 @@
       var loginEnvSelectionRequired = false;
       var loginEnvSingleDeployment = false;
       var loginEnvUnconfigured = false;
+      var loginEnvLegacyNamespacePick = false;
       var cachedSetupPageUrl = '/setup.html';
 
       function fetchAuth(url, options) {
@@ -1361,6 +1382,7 @@
             var j = x.j || {};
             var bad = !x.httpOk || j.ok === false;
             loginEnvUnconfigured = j.unconfigured === true;
+            loginEnvLegacyNamespacePick = j.legacyNamespacePick === true;
             loginEnvironmentsEnabled = !bad && j.enabled === true && Array.isArray(j.environments) && j.environments.length > 0;
             loginEnvironmentsList = loginEnvironmentsEnabled ? j.environments : [];
             loginDefaultEnvironmentId = j.defaultEnvironmentId || (loginEnvironmentsList[0] && loginEnvironmentsList[0].id) || '';
@@ -1374,6 +1396,7 @@
               loginEnvSelectionRequired = false;
               loginEnvSingleDeployment = false;
               loginEnvUnconfigured = false;
+              loginEnvLegacyNamespacePick = false;
               if (stat) stat.style.display = 'none';
               if (sel) {
                 sel.style.display = 'none';
@@ -1419,7 +1442,9 @@
                   fillEnvironmentSelect(sel, loginEnvironmentsList, loginDefaultEnvironmentId);
                   sel.required = loginEnvSelectionRequired;
                   if (hint) {
-                    hint.textContent = 'Choose Dev, SIT, or UAT before signing in. The bar at the top shows the active environment after login.';
+                    hint.textContent = loginEnvLegacyNamespacePick
+                      ? 'เลือก namespace ที่จะใช้กับ portal รอบนี้ — มาจากหลายแถวใน config (gen.sites). หลังล็อกอินเปลี่ยนได้ที่แถบด้านบน / Pick the OpenShift namespace for this session; switch anytime from the header.'
+                      : 'Choose Dev, SIT, or UAT before signing in. The bar at the top shows the active environment after login.';
                   }
                 }
               } else {
@@ -1444,6 +1469,7 @@
             loginEnvSelectionRequired = false;
             loginEnvSingleDeployment = false;
             loginEnvUnconfigured = false;
+            loginEnvLegacyNamespacePick = false;
             if (grp) grp.style.display = 'block';
             if (sel) {
               sel.required = false;
@@ -1493,7 +1519,8 @@
         wrap.classList.add('visible');
         if (ctxBar) {
           var bits = [];
-          if (env.multiEnv) bits.push('Environment: ' + (env.label || env.id));
+          if (env.legacyNamespacePick) bits.push('Namespace target (multiple gen.sites)');
+          else if (env.multiEnv) bits.push('Environment: ' + (env.label || env.id));
           else bits.push('Target (single mode — enable multi-environment in setup for Dev/SIT/UAT switch)');
           if (env.namespaces && env.namespaces.length) bits.push('Namespace: ' + env.namespaces.join(', '));
           if (env.contextSummary) bits.push('OC context: ' + env.contextSummary);
@@ -1717,6 +1744,7 @@
         var id = setTimeout(function () { c.abort(); }, timeoutMs);
         options = options || {};
         options.signal = c.signal;
+        if (!options.credentials) options.credentials = 'same-origin';
         var promise = fetch(url, options).finally(function () { clearTimeout(id); });
         return {
           promise: promise,
@@ -1738,7 +1766,28 @@
           msg += '<br><details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;">Details (stderr)</summary><pre style="margin-top:4px;font-size:11px;white-space:pre-wrap;max-height:200px;overflow:auto;background:var(--code-bg);padding:8px;">' + escapeHtml(j.stderr.trim().slice(-2000)) + '</pre></details>';
         else if (j.stdout && j.stdout.trim())
           msg += '<br><details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;">Details (stdout)</summary><pre style="margin-top:4px;font-size:11px;white-space:pre-wrap;max-height:120px;overflow:auto;background:var(--code-bg);padding:8px;">' + escapeHtml(j.stdout.trim().slice(-1000)) + '</pre></details>';
+        if (j.tasks && j.tasks.length)
+          msg += '<div style="margin-top:10px;font-size:12px;"><strong>Task status</strong>' + renderGenTasksBlockHtml(j.tasks) + '</div>';
         return msg;
+      }
+      function genTaskRowHtml(t, escFn) {
+        escFn = escFn || escapeHtml;
+        var st = t.status || 'running';
+        var badgeClass = 'step-pending';
+        var badgeText = '…';
+        if (st === 'ok') { badgeClass = 'step-done'; badgeText = 'OK'; }
+        else if (st === 'error') { badgeClass = 'step-err'; badgeText = 'Error'; }
+        var extra = (st === 'error' && t.stderrTail) ? '<pre class="gen-task-stderr">' + escFn(t.stderrTail) + '</pre>' : '';
+        return '<div class="step-line gen-task-line"><span class="' + badgeClass + '">' + badgeText + '</span> <span class="step-name">' + escFn(t.label || '') + '</span>' + extra + '</div>';
+      }
+      function renderGenTasksBlockHtml(tasks, escFn) {
+        if (!tasks || !tasks.length) return '';
+        return '<div class="progress-steps-list error-task-status-list">' + tasks.map(function (t) { return genTaskRowHtml(t, escFn); }).join('') + '</div>';
+      }
+      function applyTasklogStepsList(el, tasks, escFn) {
+        if (!el || !tasks || !tasks.length) return;
+        el.innerHTML = tasks.map(function (t) { return genTaskRowHtml(t, escFn); }).join('');
+        el.scrollTop = el.scrollHeight;
       }
       // Plain-text error summary from API response (for log copy)
       function getPlainErrorFromApi(j) {
@@ -1747,6 +1796,10 @@
         if (j.step) msg += ' | Step: ' + j.step;
         if (j.phase) msg += ' | Phase: ' + j.phase;
         if (j.exitCode != null) msg += ' | Exit code: ' + j.exitCode;
+        if (j.tasks && j.tasks.length) {
+          var failed = j.tasks.filter(function (t) { return t.status === 'error'; });
+          if (failed.length) msg += ' | Failed at: ' + failed.map(function (t) { return t.label; }).join(', ');
+        }
         return msg;
       }
       // Build copyable error log for Day2 support (timestamp, action, error, step/phase/stderr/stdout)
@@ -1763,6 +1816,13 @@
           if (detail.exitCode != null) lines.push('Exit code: ' + detail.exitCode);
           if (detail.stderr && detail.stderr.trim()) lines.push('Stderr:\n' + detail.stderr.trim().slice(-2000));
           if (detail.stdout && detail.stdout.trim()) lines.push('Stdout:\n' + detail.stdout.trim().slice(-1000));
+          if (detail.tasks && detail.tasks.length) {
+            lines.push('Task status:');
+            detail.tasks.forEach(function (t) {
+              lines.push('  [' + (t.status || '?') + '] ' + (t.label || ''));
+              if (t.stderrTail) lines.push('      stderr (tail): ' + t.stderrTail);
+            });
+          }
         }
         return lines.join('\n');
       }
@@ -2589,6 +2649,8 @@
                       progressBar.style.width = pct + '%';
                       if (progressPercent) progressPercent.textContent = pct + '%';
                       if (obj.step) progressStepText.innerHTML = '<strong>' + escapeHtmlCt(obj.step) + '</strong>';
+                    } else if (obj.type === 'tasklog' && obj.tasks) {
+                      applyTasklogStepsList(stepsListEl, obj.tasks, escapeHtmlCt);
                     } else if (obj.type === 'result') j = obj;
                   } catch (_) {}
                 }
@@ -2632,9 +2694,9 @@
                 });
               }
             } else {
-              var errMsg = (j && (j.error || 'Failed')) || 'Failed';
-              if (j && j.detail) errMsg += ': ' + escapeHtmlCt(String(j.detail).slice(0, 300));
-              resultEl.innerHTML = '<span style="color:var(--danger)">' + errMsg + '</span>';
+              if (j && j.tasks && j.tasks.length) applyTasklogStepsList(stepsListEl, j.tasks, escapeHtmlCt);
+              if (j) renderAddUserError(resultEl, formatApiError(j), getPlainErrorFromApi(j), j, 'Create topic & onboard');
+              else resultEl.innerHTML = '<span style="color:var(--danger)">Failed</span>';
             }
           } catch (e) {
             progressWrap.classList.remove('visible');
@@ -2896,8 +2958,6 @@
         if (progressPercent) progressPercent.textContent = '0%';
         var stepsListEl = document.getElementById('progress-steps-list');
         stepsListEl.innerHTML = '';
-        var completedSteps = [];
-        var currentStepName = '';
         var btnCreate = document.getElementById('btn-create');
         var btnCancelAdd = document.getElementById('btn-cancel-add');
         var btnExecuteCancel = document.getElementById('btn-execute-cancel');
@@ -2905,30 +2965,6 @@
         if (btnCancelAdd) btnCancelAdd.style.display = 'inline-block';
         if (btnExecuteCancel) btnExecuteCancel.style.display = 'none';
         currentAbort.add = null;
-        (function addFirstStepLine() {
-          var line = document.createElement('div');
-          line.className = 'step-line';
-          line.innerHTML = '<span class="step-name">กำลังเชื่อมต่อ / เริ่มต้น...</span> <span class="step-pending">...</span>';
-          stepsListEl.appendChild(line);
-        })();
-        function addStepDone(name) {
-          if (!name) return;
-          completedSteps.push(name);
-          var first = stepsListEl.querySelector('.step-line');
-          var pending = first ? first.querySelector('.step-pending') : null;
-          var nameEl = first ? first.querySelector('.step-name') : null;
-          if (pending && nameEl && nameEl.textContent.trim() === name) {
-            nameEl.textContent = name;
-            pending.textContent = 'Done';
-            pending.className = 'step-done';
-          } else {
-            var line = document.createElement('div');
-            line.className = 'step-line';
-            line.innerHTML = '<span class="step-name">' + escapeHtml(name) + '</span> <span class="step-done">Done</span>';
-            stepsListEl.appendChild(line);
-          }
-          stepsListEl.scrollTop = stepsListEl.scrollHeight;
-        }
         var aclGroupExtra = [];
         if (document.getElementById('acl-group-describe') && document.getElementById('acl-group-describe').checked) aclGroupExtra.push('Describe');
         if (document.getElementById('acl-group-delete') && document.getElementById('acl-group-delete').checked) aclGroupExtra.push('Delete');
@@ -2964,22 +3000,19 @@
                     progressBar.style.width = pct + '%';
                     if (progressPercent) progressPercent.textContent = pct + '%';
                     if (obj.step) {
-                      addStepDone(currentStepName);
-                      currentStepName = obj.step;
                       progressStepText.innerHTML = '<strong>' + escapeHtml(obj.step) + '</strong>';
-                      var firstLine = stepsListEl.querySelector('.step-line .step-pending');
-                      if (firstLine && firstLine.previousElementSibling) firstLine.previousElementSibling.textContent = obj.step;
                       var hintEl = document.getElementById('progress-hint-add');
                       var isSlowStep = /Consume|Auth|Testing|retry|validat/i.test(obj.step);
                       if (hintEl) hintEl.style.display = isSlowStep ? 'block' : 'none';
                     }
+                  } else if (obj.type === 'tasklog' && obj.tasks) {
+                    applyTasklogStepsList(stepsListEl, obj.tasks);
                   } else if (obj.type === 'result') {
                     j = obj;
-                    addStepDone(currentStepName);
-                    currentStepName = '';
+                    if (j.tasks && j.tasks.length) applyTasklogStepsList(stepsListEl, j.tasks);
                     progressBar.style.width = '100%';
                     if (progressPercent) progressPercent.textContent = '100%';
-                    progressStepText.innerHTML = '<strong>เสร็จสิ้น</strong>';
+                    progressStepText.innerHTML = j.ok ? '<strong>เสร็จสิ้น</strong>' : '<strong>ล้มเหลว</strong>';
                     var hintDone = document.getElementById('progress-hint-add');
                     if (hintDone) hintDone.style.display = 'none';
                   }
@@ -3040,8 +3073,8 @@
         if (typeof currentAbort.add === 'function') currentAbort.add();
       });
 
-      function renderAddUserError(resultEl, htmlMsg, plainMsg, detail) {
-        var copyPayload = buildErrorLog('Add user', plainMsg, detail);
+      function renderAddUserError(resultEl, htmlMsg, plainMsg, detail, actionLabel) {
+        var copyPayload = buildErrorLog(actionLabel || 'Add user', plainMsg, detail);
         try {
           console.error('[Kafka User Mgmt]', copyPayload);
           var b64 = btoa(unescape(encodeURIComponent(copyPayload)));

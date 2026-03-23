@@ -741,6 +741,28 @@ app.get('/api/environments', (req, res) => {
   try {
     const sites = getSitesFromConfig();
     if (sites && sites.length) {
+      if (sites.length > 1) {
+        const environments = sites.map((s, i) => {
+          const ns = String(s.namespace || '').trim();
+          const ctx = String(s.ocContext || '').trim();
+          const shortLabel = (ns ? ns.slice(0, 10) : `S${i}`).toUpperCase();
+          return {
+            id: `lns-${i}`,
+            label: ns ? `${ns} (${ctx || 'context'})` : (ctx || `Site ${i}`),
+            shortLabel,
+            badgeColor: '#6e7781',
+          };
+        });
+        return res.json({
+          ok: true,
+          enabled: true,
+          selectionRequired: true,
+          singleDeployment: false,
+          legacyNamespacePick: true,
+          environments,
+          defaultEnvironmentId: 'lns-0',
+        });
+      }
       const ns = sites.map((s) => s.namespace).filter(Boolean);
       const primaryNs = ns[0] || '';
       const shortLabel = (primaryNs ? primaryNs.slice(0, 10) : 'NS').toUpperCase();
@@ -750,12 +772,12 @@ app.get('/api/environments', (req, res) => {
         selectionRequired: false,
         singleDeployment: true,
         environments: [{
-          id: 'default',
+          id: 'lns-0',
           label: primaryNs ? `Namespace: ${primaryNs}` : 'Deployment target',
           shortLabel,
           badgeColor: '#6e7781',
         }],
-        defaultEnvironmentId: 'default',
+        defaultEnvironmentId: 'lns-0',
       });
     }
   } catch (_) { /* ignore */ }
@@ -789,18 +811,47 @@ app.post('/api/login', (req, res) => {
   const auth = getAuthConfig();
   const st = getEnvironmentsState();
   function applySessionEnvironment() {
-    if (!st.active || !req.session) return true;
-    const raw = (req.body || {}).environmentId;
-    const eid = String(raw != null && raw !== '' ? raw : st.defaultId || '').trim();
-    if (!eid) {
-      res.status(400).json({ ok: false, error: 'Select an environment (Dev / SIT / UAT).' });
-      return false;
+    if (!req.session) return true;
+    const sitesAll = (() => {
+      try { return getSitesFromConfig(); } catch (_) { return []; }
+    })();
+    if (st.active) {
+      delete req.session.legacySiteIndex;
+      const raw = (req.body || {}).environmentId;
+      const eid = String(raw != null && raw !== '' ? raw : st.defaultId || '').trim();
+      if (!eid) {
+        res.status(400).json({ ok: false, error: 'Select an environment (Dev / SIT / UAT).' });
+        return false;
+      }
+      if (!ENVIRONMENT_ID_REGEX.test(eid) || !st.list.some((e) => e.id === eid)) {
+        res.status(400).json({ ok: false, error: 'Invalid environment' });
+        return false;
+      }
+      req.session.activeEnvironmentId = eid;
+      return true;
     }
-    if (!ENVIRONMENT_ID_REGEX.test(eid) || !st.list.some((e) => e.id === eid)) {
-      res.status(400).json({ ok: false, error: 'Invalid environment' });
-      return false;
+    delete req.session.activeEnvironmentId;
+    if (sitesAll && sitesAll.length > 1) {
+      const raw = (req.body || {}).environmentId;
+      const eid = String(raw != null && raw !== '' ? raw : '').trim();
+      const m = eid.match(LEGACY_SITE_ID_REGEX);
+      if (!m) {
+        res.status(400).json({ ok: false, error: 'Select a namespace (target) before signing in.' });
+        return false;
+      }
+      const idx = parseInt(m[1], 10);
+      if (idx < 0 || idx >= sitesAll.length) {
+        res.status(400).json({ ok: false, error: 'Invalid namespace target' });
+        return false;
+      }
+      req.session.legacySiteIndex = idx;
+      return true;
     }
-    req.session.activeEnvironmentId = eid;
+    if (sitesAll && sitesAll.length === 1) {
+      req.session.legacySiteIndex = 0;
+      return true;
+    }
+    delete req.session.legacySiteIndex;
     return true;
   }
   if (!auth.enabled) {
@@ -849,20 +900,27 @@ app.get('/api/me', (req, res) => {
       return payload;
     }
     try {
-      const sites = getSitesFromConfig();
-      if (sites && sites.length) {
+      const sitesAll = getSitesFromConfig();
+      const sites = getSitesForRequest(req);
+      if (sites && sites.length && sitesAll && sitesAll.length) {
         const ns = sites.map((s) => s.namespace).filter(Boolean);
         const ctxs = [...new Set(sites.map((s) => s.ocContext).filter(Boolean))];
         const primaryNs = ns[0] || '';
+        const multiNs = sitesAll.length > 1;
+        const idx = (req.session && typeof req.session.legacySiteIndex === 'number')
+          ? req.session.legacySiteIndex
+          : 0;
         payload.environment = {
-          id: 'default',
+          id: multiNs ? `lns-${idx}` : 'lns-0',
           label: primaryNs ? `Namespace: ${primaryNs}` : 'Deployment target',
           shortLabel: (primaryNs ? primaryNs.slice(0, 10) : 'NS').toUpperCase(),
           badgeColor: '#6e7781',
           namespaces: ns,
           ocContexts: ctxs,
           contextSummary: ctxs.join(', '),
-          singleDeployment: true,
+          singleDeployment: !multiNs,
+          multiEnv: multiNs,
+          legacyNamespacePick: multiNs,
         };
       }
     } catch (_) { /* ignore */ }
@@ -885,24 +943,60 @@ app.post('/api/session/environment', (req, res) => {
     return res.status(401).json({ ok: false, error: 'Unauthorized' });
   }
   const st = getEnvironmentsState();
-  if (!st.active) return res.status(400).json({ ok: false, error: 'Multi-environment is not enabled' });
   const eid = String((req.body || {}).environmentId || '').trim();
-  if (!ENVIRONMENT_ID_REGEX.test(eid) || !st.list.some((e) => e.id === eid)) {
-    return res.status(400).json({ ok: false, error: 'Invalid environment' });
+  if (st.active) {
+    if (!ENVIRONMENT_ID_REGEX.test(eid) || !st.list.some((e) => e.id === eid)) {
+      return res.status(400).json({ ok: false, error: 'Invalid environment' });
+    }
+    delete req.session.legacySiteIndex;
+    req.session.activeEnvironmentId = eid;
+    return req.session.save((err) => {
+      if (err) return res.status(500).json({ ok: false, error: 'Session error' });
+      const entry = st.list.find((e) => e.id === eid);
+      const sites = sitesFromEnvironmentEntry(entry);
+      res.json({
+        ok: true,
+        environment: {
+          id: entry.id,
+          label: entry.label,
+          shortLabel: entry.shortLabel || entry.label,
+          badgeColor: entry.badgeColor || null,
+          namespaces: (sites || []).map((s) => s.namespace),
+        },
+      });
+    });
   }
-  req.session.activeEnvironmentId = eid;
+  const sitesAll = (() => {
+    try { return getSitesFromConfig(); } catch (_) { return []; }
+  })();
+  if (!sitesAll || sitesAll.length < 2) {
+    return res.status(400).json({ ok: false, error: 'Namespace switcher is not available (single target only).' });
+  }
+  const m = eid.match(LEGACY_SITE_ID_REGEX);
+  if (!m) {
+    return res.status(400).json({ ok: false, error: 'Invalid namespace target' });
+  }
+  const idx = parseInt(m[1], 10);
+  if (idx < 0 || idx >= sitesAll.length) {
+    return res.status(400).json({ ok: false, error: 'Invalid namespace target' });
+  }
+  delete req.session.activeEnvironmentId;
+  req.session.legacySiteIndex = idx;
+  const one = sitesAll[idx];
+  const ns = String(one.namespace || '').trim();
+  const ctx = String(one.ocContext || '').trim();
   req.session.save((err) => {
     if (err) return res.status(500).json({ ok: false, error: 'Session error' });
-    const entry = st.list.find((e) => e.id === eid);
-    const sites = sitesFromEnvironmentEntry(entry);
     res.json({
       ok: true,
       environment: {
-        id: entry.id,
-        label: entry.label,
-        shortLabel: entry.shortLabel || entry.label,
-        badgeColor: entry.badgeColor || null,
-        namespaces: (sites || []).map((s) => s.namespace),
+        id: `lns-${idx}`,
+        label: ns ? `Namespace: ${ns}` : 'Deployment target',
+        shortLabel: (ns ? ns.slice(0, 10) : 'NS').toUpperCase(),
+        badgeColor: '#6e7781',
+        namespaces: ns ? [ns] : [],
+        ocContexts: ctx ? [ctx] : [],
+        contextSummary: ctx,
       },
     });
   });
@@ -959,6 +1053,8 @@ function getBaseEnv(req) {
 // Input validation: reduce risk of injection / overflow when passing to gen.sh env
 const SAFE_NAME_REGEX = /^[a-zA-Z0-9_.-]+$/;
 const ENVIRONMENT_ID_REGEX = /^[a-zA-Z0-9_-]+$/;
+/** Legacy multi-namespace (gen.sites[]): login / header use ids lns-0, lns-1, … */
+const LEGACY_SITE_ID_REGEX = /^lns-(\d+)$/;
 const MAX_USERNAME_LEN = 256;
 const MAX_TOPIC_LEN = 512;
 const MAX_SYSTEM_NAME_LEN = 128;
@@ -986,7 +1082,7 @@ function validateGenReady() {
 
 // Consistent error response and logging for API routes (production tracing)
 function apiError(res, route, err, options = {}) {
-  const { status = 500, step, phase, stderr, stdout, code } = options;
+  const { status = 500, step, phase, stderr, stdout, code, tasks } = options;
   const errorMessage = err && (err.message || String(err));
   const payload = { ok: false, error: errorMessage };
   if (step) payload.step = step;
@@ -994,6 +1090,7 @@ function apiError(res, route, err, options = {}) {
   if (stderr != null) payload.stderr = typeof stderr === 'string' ? stderr.slice(-3000) : stderr;
   if (stdout != null) payload.stdout = typeof stdout === 'string' ? stdout.slice(-1500) : stdout;
   if (code != null) payload.exitCode = code;
+  if (Array.isArray(tasks) && tasks.length) payload.tasks = tasks;
   const logLine = `[${route}] ${status} ${step || ''} ${phase || ''} code=${code ?? '?'} ${errorMessage || ''}`.trim();
   console.error(logLine);
   if (stderr && typeof stderr === 'string' && stderr.trim()) console.error('[stderr]', stderr.trim().slice(-500));
@@ -1024,7 +1121,8 @@ function runGen(envOverrides, req) {
 }
 
 // Like runGen but calls onLine(line) for each line of stdout (for progress streaming). Still returns { code, stdout, stderr }.
-function runGenStream(envOverrides, onLine, req) {
+// Optional onStderrLine(line) for live stderr (e.g. attach tail to current task).
+function runGenStream(envOverrides, onLine, req, onStderrLine) {
   if (!config) loadConfig();
   const scriptPath = config.gen?.scriptPath;
   if (!scriptPath || !fs.existsSync(scriptPath)) {
@@ -1041,6 +1139,7 @@ function runGenStream(envOverrides, onLine, req) {
     let stdout = '';
     let stderr = '';
     let buf = '';
+    let errBuf = '';
     proc.stdout.on('data', (d) => {
       const s = buf + d.toString();
       const lines = s.split(/\r?\n/);
@@ -1048,8 +1147,18 @@ function runGenStream(envOverrides, onLine, req) {
       for (const line of lines) if (line.trim() && onLine) onLine(line);
       stdout += d.toString();
     });
-    proc.stderr.on('data', (d) => { stderr += d.toString(); });
-    proc.on('close', (code) => resolve({ code, stdout, stderr }));
+    proc.stderr.on('data', (d) => {
+      stderr += d.toString();
+      if (!onStderrLine) return;
+      errBuf += d.toString();
+      const lines = errBuf.split(/\r?\n/);
+      errBuf = lines.pop() || '';
+      for (const line of lines) if (line.trim()) onStderrLine(line);
+    });
+    proc.on('close', (code) => {
+      if (onStderrLine && errBuf.trim()) onStderrLine(errBuf);
+      resolve({ code, stdout, stderr });
+    });
     proc.on('error', reject);
   });
 }
@@ -1066,6 +1175,59 @@ function parseProgressLine(line) {
   if (m) return m[1].trim();
   if (/\u2713|DONE|✅/.test(plain)) return null; // done marker, keep previous step
   return null;
+}
+
+/** Track gen.sh [PROCESSING] steps for streaming + error reports (which step failed). */
+function createGenTaskAccumulator() {
+  const tasks = [];
+  let runningIdx = -1;
+  return {
+    onStdoutLine(line) {
+      const lbl = parseProgressLine(line);
+      if (!lbl) return;
+      if (runningIdx >= 0 && tasks[runningIdx].label === lbl && tasks[runningIdx].status === 'running') return;
+      if (runningIdx >= 0 && tasks[runningIdx].status === 'running') tasks[runningIdx].status = 'ok';
+      tasks.push({ id: `step-${tasks.length + 1}`, label: lbl, status: 'running' });
+      runningIdx = tasks.length - 1;
+    },
+    onStderrLine(line) {
+      const plain = stripAnsi(line).trim();
+      if (!plain || runningIdx < 0) return;
+      if (tasks[runningIdx].status !== 'running') return;
+      const cur = tasks[runningIdx].stderrTail || '';
+      const next = cur ? `${cur}\n${plain}` : plain;
+      tasks[runningIdx].stderrTail = next.length > 900 ? next.slice(-900) : next;
+    },
+    snapshot() {
+      return tasks.map((t) => ({
+        id: t.id,
+        label: t.label,
+        status: t.status,
+        ...(t.stderrTail ? { stderrTail: t.stderrTail } : {}),
+      }));
+    },
+    finalize(code, stderr) {
+      if (runningIdx >= 0 && tasks[runningIdx].status === 'running') {
+        if (code !== 0) {
+          tasks[runningIdx].status = 'error';
+          if (!tasks[runningIdx].stderrTail && stderr) {
+            const tail = stripAnsi(stderr).trim().split(/\r?\n/).filter(Boolean).slice(-4).join(' | ');
+            if (tail) tasks[runningIdx].stderrTail = tail.slice(0, 800);
+          }
+        } else {
+          tasks[runningIdx].status = 'ok';
+        }
+      }
+      return this.snapshot();
+    },
+  };
+}
+
+function buildTaskAccumulatorFromOutput(stdout) {
+  const acc = createGenTaskAccumulator();
+  const lines = String(stdout || '').split(/\r?\n/);
+  for (const line of lines) acc.onStdoutLine(line);
+  return acc;
 }
 
 // Run a one-off shell command with base env (for list topics / list users)
@@ -1204,8 +1366,19 @@ function getSitesForRequest(req) {
     const entry = st.list.find((e) => e.id === id) || st.list.find((e) => e.id === st.defaultId) || st.list[0];
     const sites = sitesFromEnvironmentEntry(entry);
     if (sites && sites.length) return sites;
+    // Critical: do not fall back to all gen.sites — that merges every cluster/namespace (e.g. DEV+UAT)
+    // while the header still shows the selected portal environment, so OCP status would look "wrong".
+    console.warn(
+      `[environments] Portal env "${id}" has no resolvable sites (check sites[] or namespace/ocContext on this entry). Not using legacy gen.sites.`
+    );
+    return [];
   }
-  return getSitesFromConfig();
+  const all = getSitesFromConfig();
+  if (req && req.session && typeof req.session.legacySiteIndex === 'number' && all && all.length) {
+    const idx = req.session.legacySiteIndex;
+    if (idx >= 0 && idx < all.length) return [all[idx]];
+  }
+  return all;
 }
 
 function getOcLoginSitesUnion() {
@@ -2113,16 +2286,29 @@ app.post('/api/add-user', (req, res) => {
     res.setHeader('Content-Type', 'application/x-ndjson');
     res.setHeader('Cache-Control', 'no-store');
     let percent = 0;
+    const taskAcc = createGenTaskAccumulator();
+    const emitTasklog = () => {
+      try {
+        res.write(JSON.stringify({ type: 'tasklog', tasks: taskAcc.snapshot() }) + '\n');
+      } catch (_) {}
+    };
     const writeProgress = (step) => {
       if (percent < 90) percent = Math.min(90, percent + 10);
       try { res.write(JSON.stringify({ type: 'progress', step, percent }) + '\n'); } catch (_) {}
     };
     runGenStream(env, (line) => {
+      taskAcc.onStdoutLine(line);
+      emitTasklog();
       const step = parseProgressLine(line);
       if (step) writeProgress(step);
-    }, req)
+    }, req, (errLine) => {
+      taskAcc.onStderrLine(errLine);
+      emitTasklog();
+    })
       .then(({ code, stdout, stderr }) => {
         if (res.writableEnded || !res.writable) return;
+        const tasks = taskAcc.finalize(code, stderr);
+        try { res.write(JSON.stringify({ type: 'tasklog', tasks }) + '\n'); } catch (_) {}
         if (code !== 0) {
           res.write(JSON.stringify({
             type: 'result',
@@ -2133,6 +2319,7 @@ app.post('/api/add-user', (req, res) => {
             exitCode: code,
             stderr: (stderr || '').slice(-2000),
             stdout: (stdout || '').slice(-1500),
+            tasks,
           }) + '\n');
         } else {
           const payload = buildAddUserPayload(stdout);
@@ -2157,8 +2344,9 @@ app.post('/api/add-user', (req, res) => {
   runGen(env, req)
     .then(({ code, stdout, stderr }) => {
       if (code !== 0) {
+        const tasks = buildTaskAccumulatorFromOutput(stdout).finalize(code, stderr);
         apiError(res, 'add-user', new Error(`gen.sh exited ${code}`), {
-          status: 500, step: 'add-user', phase: 'gen', code, stderr, stdout,
+          status: 500, step: 'add-user', phase: 'gen', code, stderr, stdout, tasks,
         });
         return;
       }

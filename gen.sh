@@ -458,6 +458,9 @@ echo -e "+-------------------------------------------------------+${NC}"
 
 # OCP CONNECTIVITY CHECK (fail fast before any work)
 echo -e "\n${CYAN}[PRE-CHECK] Verifying OCP connectivity...${NC}"
+if [ -n "${GEN_ACTIVE_ENV_ID:-}" ]; then
+    echo -e " ${CYAN}[TARGET] Portal environment id: ${GEN_ACTIVE_ENV_ID} (${NUM_SITES} OCP site(s) this run)${NC}"
+fi
 for ((i=0;i<NUM_SITES;i++)); do
     status_msg "OCP site ${SITE_CTX[$i]} (${SITE_NS[$i]})"
     oc_out=$(timeout $OCP_CHECK_TIMEOUT oc get nodes --context "${SITE_CTX[$i]}" 2>&1) || {
