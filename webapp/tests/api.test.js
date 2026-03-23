@@ -263,6 +263,16 @@ describe('API', () => {
     assert.strictEqual(res.body.ok, true);
     assert.ok(res.body.gen);
   });
+
+  it('GET /api/users/check without username returns 400', async () => {
+    const res = await request(app).get('/api/users/check').expect(400);
+    assert.strictEqual(res.body.ok, false);
+  });
+
+  it('GET /api/users/check with invalid username returns 400', async () => {
+    const res = await request(app).get('/api/users/check?username=' + encodeURIComponent('bad name')).expect(400);
+    assert.strictEqual(res.body.ok, false);
+  });
 });
 
 // ---- Security / vulnerability tests ----

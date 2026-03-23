@@ -1083,6 +1083,14 @@
           </div>
           <div id="api-result" class="form-group" style="display:none; margin-top:1rem;"></div>
           <div id="api-download-block" class="form-group" style="display:none; margin-top:1rem;"></div>
+          <div id="provision-verify-wrap" class="form-group" style="margin-top:14px; padding:12px 14px; border:1px solid var(--border); border-radius:8px; background:var(--code-bg);">
+            <p style="margin:0 0 6px; font-weight:600; font-size:14px;">ถ้ารันแล้วแต่ไม่ขึ้นดาวน์โหลด / หน้าจอหลุดที่ ~90%</p>
+            <p class="hint" style="margin:0 0 10px; line-height:1.5;">กดตรวจสอบว่า username ถูกเขียนใน <code>plain-users</code> Secret แล้วหรือยัง (ตาม env ที่เลือกบน header) — ถ้า<strong>มีใน Secret</strong>แต่ไม่มีไฟล์ .enc ให้ดู <a href="#download-history">Download History</a> / <a href="#audit-log">Audit log</a> หรือใช้ <strong>Change password</strong> เพื่อออก pack ใหม่ (portal ไม่เก็บรหัสผ่าน plaintext)</p>
+            <div style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+              <button type="button" id="btn-check-user-secret" class="btn btn-secondary">ตรวจสอบ user ใน Secret</button>
+              <span id="provision-verify-result" class="hint" style="margin:0; flex:1; min-width:12rem;"></span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -3158,7 +3166,7 @@
                 renderAddUserError(resultEl, formatApiError(j), getPlainErrorFromApi(j), j);
               }
             } else {
-              renderAddUserError(resultEl, 'ไม่ได้รับผลลัพธ์จาก server (connection หลุดได้ระหว่าง Consume test หรือ proxy timeout — ตรวจ Audit log ว่ามี add-user หรือไม่ แล้วลอง Test user)', 'No result from server', null);
+              renderAddUserError(resultEl, 'ไม่ได้รับผลลัพธ์จาก server (connection หลุดได้ระหว่าง Consume test หรือ proxy timeout) — ลองกด <strong>ตรวจสอบ user ใน Secret</strong> ด้านล่าง, ดู <a href="#audit-log" style="color:var(--link);">Audit log</a>, หรือใช้ Test user ถ้ามีรหัส', 'No result from server', null);
             }
           } else {
             var j = await res.json();
@@ -3204,6 +3212,38 @@
       });
       document.getElementById('btn-cancel-add').addEventListener('click', function () {
         if (typeof currentAbort.add === 'function') currentAbort.add();
+      });
+
+      document.getElementById('btn-check-user-secret').addEventListener('click', async function () {
+        var u = ((document.getElementById('username') || {}).value || '').trim();
+        var out = document.getElementById('provision-verify-result');
+        if (!out) return;
+        if (!u) {
+          out.innerHTML = '<span style="color:var(--danger)">กรอก Username ในขั้นก่อน หรือพิมพ์ในช่อง Username แล้วกดอีกครั้ง</span>';
+          return;
+        }
+        out.textContent = 'กำลังตรวจสอบ...';
+        try {
+          var res = await fetch('/api/users/check?' + new URLSearchParams({ username: u }), { credentials: 'same-origin' });
+          var j = await res.json();
+          if (!j.ok) {
+            out.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(j.error || j.detail || 'failed') + '</span>';
+            return;
+          }
+          if (j.exists) {
+            var presentSites = (j.bySite || []).filter(function (x) { return x.present; }).map(function (x) { return x.site; });
+            var line = '<span style="color:var(--success)">พบ <strong>' + escapeHtml(u) + '</strong> ใน Secret แล้ว</span>';
+            if (presentSites.length) line += ' <span class="hint">(site: ' + escapeHtml(presentSites.join(', ')) + ')</span>';
+            if (j.sitesFailed && j.sitesFailed.length) {
+              line += ' <span style="color:var(--warning, #b8860b);">บาง site ดึงไม่ครบ — ดู response ใน DevTools</span>';
+            }
+            out.innerHTML = line;
+          } else {
+            out.innerHTML = '<span style="color:var(--warning, #b8860b)">ยัง<strong>ไม่พบ</strong> <code>' + escapeHtml(u) + '</code> ในรายการที่ดึงได้ — ตรวจสะกด / env บน header / หรือรอ sync แล้วลองใหม่</span>';
+          }
+        } catch (e) {
+          out.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(e.message || String(e)) + '</span>';
+        }
       });
 
       function renderAddUserError(resultEl, htmlMsg, plainMsg, detail, actionLabel) {

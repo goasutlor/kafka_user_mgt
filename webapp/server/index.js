@@ -2057,29 +2057,23 @@ function ensureOcContext(kubeconfigPath, contextName, envOverrides) {
   });
 }
 
-app.get('/api/users', (req, res) => {
-  try {
-    if (!config) loadConfig();
-  } catch (e) {
-    return res.status(500).json({ ok: false, error: e.message });
-  }
+/**
+ * Read plain-users.json from kafka secret on every OCP site for the active env session.
+ * @returns {Promise<{ merged: string[], results: { site: string, error: string|null, users: string[] }[], failed: string[], siteNames: string[] }>}
+ */
+function fetchKafkaUsersBySites(req) {
+  if (!config) loadConfig();
   const g = config.gen || {};
   const secret = g.k8sSecretName || 'kafka-server-side-credentials';
   const sites = getSitesForRequest(req);
   const kubeconfig = g.kubeconfigPath || process.env.KUBECONFIG;
   if (!kubeconfig) {
-    return res.status(500).json({
-      ok: false,
-      error: 'ไม่ได้ตั้ง gen.kubeconfigPath ใน web.config.json',
-      detail: 'ให้ตั้ง kubeconfigPath ให้ชี้ไปที่ไฟล์ kubeconfig ใน container (ปกติ /opt/kafka-usermgmt/.kube/config หลัง oc login) — ทุกอย่างอยู่ใต้ ROOT เดียว; ถ้า .kube อยู่ภายนอก ROOT ให้ mount เป็น ROOT/.kube-external แล้ว restart container'
-    });
+    const e = new Error('ไม่ได้ตั้ง gen.kubeconfigPath ใน web.config.json');
+    e.code = 'KUBECONFIG';
+    e.detail = 'ให้ตั้ง kubeconfigPath ให้ชี้ไปที่ไฟล์ kubeconfig ใน container (ปกติ /opt/kafka-usermgmt/.kube/config หลัง oc login) — ทุกอย่างอยู่ใต้ ROOT เดียว; ถ้า .kube อยู่ภายนอก ROOT ให้ mount เป็น ROOT/.kube-external แล้ว restart container';
+    return Promise.reject(e);
   }
   const envOverrides = { KUBECONFIG: kubeconfig };
-
-  // Ensure OC sessions are valid before listing (re-login if expired) so user does not see credentials error.
-  ensureOcSessions()
-    .then(() => {
-  // Fetch secret from each site; merge users from sites that succeed. If one site fails (e.g. credentials), still return users from the rest.
   const fetchSite = (site) => {
     const script = `oc get secret ${secret} -n ${site.namespace} --context ${site.ocContext} -o jsonpath='{.data.plain-users\\.json}' 2>&1`;
     return runShell(script, envOverrides, req).then(({ code, stdout, stderr }) => {
@@ -2092,23 +2086,36 @@ app.get('/api/users', (req, res) => {
       let raw;
       try {
         raw = Buffer.from(b64, 'base64').toString('utf8');
-      } catch (e) {
-        return { site: site.name, error: e.message, users: [] };
+      } catch (err) {
+        return { site: site.name, error: err.message, users: [] };
       }
       if (!raw || (!raw.startsWith('{') && !raw.startsWith('['))) {
         return { site: site.name, error: 'secret value is not JSON', users: [] };
       }
       try {
         return { site: site.name, error: null, users: parseUsersFromJson(raw) };
-      } catch (e) {
-        return { site: site.name, error: e.message, users: [] };
+      } catch (err) {
+        return { site: site.name, error: err.message, users: [] };
       }
     });
   };
-  return Promise.all(sites.map(fetchSite))
+  return ensureOcSessions()
+    .then(() => Promise.all(sites.map(fetchSite)))
     .then((results) => {
       const merged = [...new Set(results.flatMap((r) => r.users))].sort();
       const failed = results.filter((r) => r.error).map((r) => `${r.site}: ${r.error}`);
+      return { merged, results, failed, siteNames: sites.map((s) => s.name) };
+    });
+}
+
+app.get('/api/users', (req, res) => {
+  try {
+    if (!config) loadConfig();
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+  fetchKafkaUsersBySites(req)
+    .then(({ merged, failed, siteNames }) => {
       if (merged.length === 0 && failed.length > 0) {
         const allFailed = failed.join('; ');
         const isCredentials = /provide credentials|Unauthorized|token.*expired/i.test(allFailed);
@@ -2118,24 +2125,63 @@ app.get('/api/users', (req, res) => {
         return res.status(500).json({
           ok: false,
           error: 'List users failed' + hint,
-          detail: allFailed || 'All sites failed'
+          detail: allFailed || 'All sites failed',
         });
       }
-      const payload = { ok: true, users: merged, sites: sites.map((s) => s.name) };
+      const payload = { ok: true, users: merged, sites: siteNames };
       if (failed.length > 0) payload.sitesFailed = failed;
       res.json(payload);
     })
     .catch((err) => {
       console.error('[users]', err.message);
       if (!res.headersSent) {
-        res.status(500).json({ ok: false, error: err.message, detail: err.message });
+        if (err.code === 'KUBECONFIG') {
+          res.status(500).json({ ok: false, error: err.message, detail: err.detail });
+        } else {
+          res.status(500).json({ ok: false, error: err.message, detail: err.message });
+        }
       }
     });
-  })
+});
+
+// GET /api/users/check?username= — verify a username exists in plain-users secret (per active environment)
+app.get('/api/users/check', (req, res) => {
+  try {
+    if (!config) loadConfig();
+  } catch (e) {
+    return res.status(500).json({ ok: false, error: e.message });
+  }
+  const username = String(req.query.username || '').trim();
+  const verr = validateSafeName(username, 'username', MAX_USERNAME_LEN);
+  if (verr) return res.status(400).json({ ok: false, error: verr });
+  if (!username) return res.status(400).json({ ok: false, error: 'Query username is required' });
+
+  fetchKafkaUsersBySites(req)
+    .then(({ merged, results, failed, siteNames }) => {
+      const exists = merged.includes(username);
+      const bySite = results.map((r) => ({
+        site: r.site,
+        present: !!(r.users && r.users.includes(username)),
+        error: r.error,
+      }));
+      res.json({
+        ok: true,
+        username,
+        exists,
+        sites: siteNames,
+        bySite,
+        partialList: failed.length > 0 && merged.length > 0,
+        sitesFailed: failed.length ? failed : undefined,
+      });
+    })
     .catch((err) => {
-      console.error('[users] ensureOcSessions:', err.message);
+      console.error('[users/check]', err.message);
       if (!res.headersSent) {
-        res.status(500).json({ ok: false, error: err.message });
+        if (err.code === 'KUBECONFIG') {
+          res.status(500).json({ ok: false, error: err.message, detail: err.detail });
+        } else {
+          res.status(500).json({ ok: false, error: err.message });
+        }
       }
     });
 });
@@ -2424,9 +2470,16 @@ app.post('/api/add-user', (req, res) => {
           }) + '\n');
         } else {
           const payload = buildAddUserPayload(stdout);
+          appendAuditLog(req, 'add-user', {
+            username: String(username || '').trim(),
+            systemName: String(systemName || '').trim(),
+            topic: String(topic || '').trim(),
+            packReady: !!(payload.ok && payload.packFile),
+            packFile: payload.packFile || null,
+            packFileMissing: !!payload.packFileMissing,
+          });
           if (payload.ok && payload.packFile) {
             appendDownloadHistory(req, payload.packFile, payload.packName);
-            appendAuditLog(req, 'add-user', { username: String(username || '').trim(), systemName: String(systemName || '').trim(), topic: String(topic || '').trim() });
           }
           res.write(JSON.stringify({ type: 'result', ...payload }) + '\n');
         }
@@ -2452,12 +2505,19 @@ app.post('/api/add-user', (req, res) => {
         return;
       }
       const payload = buildAddUserPayload(stdout);
+      appendAuditLog(req, 'add-user', {
+        username: String(username || '').trim(),
+        systemName: String(systemName || '').trim(),
+        topic: String(topic || '').trim(),
+        packReady: !!(payload.ok && payload.packFile),
+        packFile: payload.packFile || null,
+        packFileMissing: !!payload.packFileMissing,
+      });
       if (payload.packFileMissing) {
         return res.status(500).json({ ok: false, error: payload.message, packFileMissing: true, packFile: payload.packFile });
       }
       if (payload.ok && payload.packFile) {
         appendDownloadHistory(req, payload.packFile, payload.packName);
-        appendAuditLog(req, 'add-user', { username: String(username || '').trim(), systemName: String(systemName || '').trim(), topic: String(topic || '').trim() });
       }
       res.json(payload);
     })
