@@ -8,15 +8,15 @@
   <!-- Font: use system stack to avoid ERR_NAME_NOT_RESOLVED on networks without internet -->
   <style>
     :root {
-      /* Enterprise modern — single cohesive shell */
-      --header-bg: #0f172a;
-      --header-bg-elevated: #111c33;
+      /* Confluent wordmark + flat black bar */
+      --header-bg: #000000;
+      --header-bg-elevated: #0a0a0a;
       --header-text: #f8fafc;
-      --header-muted: rgba(248, 250, 252, 0.72);
+      --header-muted: rgba(248, 250, 252, 0.7);
       --header-accent: #38bdf8;
       --header-accent-solid: #0ea5e9;
-      --app-header-h: 56px;
-      --body-bg: #f1f5f9;
+      --app-header-h: 58px;
+      --body-bg: #eef2f7;
       --sidebar-bg: #ffffff;
       --content-bg: #ffffff;
       --border: #e2e8f0;
@@ -39,7 +39,7 @@
       font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, Roboto, 'Helvetica Neue', sans-serif;
       margin: 0;
       min-height: 100vh;
-      background: var(--body-bg);
+      background: linear-gradient(180deg, #e2e8f0 0%, #eef2f7 22%, #f8fafc 55%, #f1f5f9 100%);
       color: var(--text);
       font-size: 14px;
       line-height: 1.55;
@@ -86,24 +86,47 @@
       display: block;
       object-fit: contain;
       border-radius: 0;
-      filter: brightness(1.06) contrast(1.02) saturate(1.05);
+    }
+    .header-logo--wordmark {
+      width: auto;
+      height: 26px;
+      max-width: min(200px, 28vw);
+      object-fit: contain;
+      object-position: left center;
+    }
+    .header-brand-text {
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      min-width: 0;
+      justify-content: center;
     }
     .header-title {
       font-weight: 600;
-      font-size: 15px;
+      font-size: 14px;
       letter-spacing: -0.01em;
-      line-height: 1.25;
+      line-height: 1.2;
       color: var(--header-text);
       white-space: nowrap;
     }
     .header-env-wrap {
       display: none;
       align-items: center;
-      gap: 10px;
-      margin-left: 16px;
+      gap: 8px;
       flex-wrap: wrap;
+      margin: 0;
     }
     .header-env-wrap.visible { display: flex; }
+    .header-env-detail {
+      font-size: 11px;
+      font-weight: 500;
+      color: rgba(255, 255, 255, 0.78);
+      line-height: 1.35;
+      max-width: min(360px, 42vw);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
     .env-badge {
       display: inline-flex;
       align-items: center;
@@ -116,16 +139,15 @@
       text-transform: uppercase;
       box-shadow: 0 1px 2px rgba(0,0,0,0.2);
     }
-    .header-env-select {
-      font-size: 13px;
-      padding: 6px 10px;
-      border-radius: 8px;
-      border: 1px solid rgba(255, 255, 255, 0.14);
-      background: rgba(255, 255, 255, 0.08);
-      color: #fff;
-      max-width: 220px;
+    .header-nav .nav-sep {
+      display: inline-block;
+      width: 1px;
+      height: 14px;
+      margin: 0 4px;
+      background: rgba(255, 255, 255, 0.22);
+      flex-shrink: 0;
+      align-self: center;
     }
-    .header-env-select option { color: #24292f; background: #fff; }
     .sr-only {
       position: absolute;
       width: 1px;
@@ -261,15 +283,20 @@
     }
     .sidebar-left nav { padding: 0 12px; }
     .sidebar-left .nav-section {
-      font-size: 11px;
-      font-weight: 600;
+      font-size: 10px;
+      font-weight: 700;
       text-transform: uppercase;
-      letter-spacing: 0.05em;
+      letter-spacing: 0.11em;
       color: var(--text-muted);
-      padding: 8px 8px 4px;
-      margin-top: 12px;
+      padding: 10px 12px 6px;
+      margin-top: 14px;
+      border-top: 1px solid var(--border);
     }
-    .sidebar-left .nav-section:first-child { margin-top: 0; }
+    .sidebar-left .nav-section:first-child {
+      margin-top: 0;
+      border-top: none;
+      padding-top: 4px;
+    }
     .sidebar-left a {
       display: block;
       padding: 9px 12px;
@@ -324,7 +351,7 @@
       width: 100%;
       max-width: 100%;
       padding: 32px 40px 48px;
-      background: var(--body-bg);
+      background: transparent;
     }
     .main h1 {
       font-size: 28px;
@@ -651,31 +678,41 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      background: linear-gradient(145deg, #0f172a 0%, #1e293b 45%, #334155 100%);
+      background: linear-gradient(165deg, #000000 0%, #0c0c0c 35%, #1a1a1a 70%, #0f1419 100%);
       padding: 24px;
     }
     .login-card {
       width: 100%;
       max-width: 420px;
       background: #ffffff;
-      border: 1px solid var(--border);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 16px;
-      padding: 40px;
-      box-shadow: 0 24px 48px rgba(0,0,0,0.2), 0 0 0 1px rgba(255,255,255,0.05);
+      padding: 0;
+      overflow: hidden;
+      box-shadow: 0 24px 56px rgba(0,0,0,0.45), 0 0 0 1px rgba(255,255,255,0.06);
     }
-    .login-card .login-logo {
-      width: 64px;
-      height: 64px;
-      margin: 0 auto 20px;
+    .login-brand-bar {
+      background: #000000;
+      padding: 28px 32px 24px;
+      text-align: center;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .login-wordmark {
       display: block;
-      border-radius: 12px;
+      width: 100%;
+      max-width: 260px;
+      height: auto;
+      margin: 0 auto;
+    }
+    .login-card-body {
+      padding: 28px 36px 36px;
     }
     .login-card h1 {
       margin: 0 0 8px;
-      font-size: 22px;
+      font-size: 20px;
       font-weight: 600;
       text-align: center;
-      color: var(--header-bg);
+      color: var(--text);
     }
     .login-card .lead {
       color: var(--text-muted);
@@ -741,7 +778,7 @@
       font-size: 28px;
       font-weight: 700;
       letter-spacing: 6px;
-      color: var(--header-bg);
+      color: var(--text);
     }
     .login-card .btn { width: 100%; padding: 12px; margin-top: 8px; font-size: 15px; font-weight: 600; border-radius: 8px; }
     .login-card .login-error { color: var(--danger); font-size: 13px; margin-top: 12px; }
@@ -789,8 +826,11 @@
 <body>
   <div id="login-wrap" class="login-screen">
     <div class="login-card">
-      <img src="Confluent-Emblem.png" alt="" class="login-logo" />
-      <h1>Confluent Kafka User Management</h1>
+      <div class="login-brand-bar">
+        <img src="confluent-wordmark.png" alt="Confluent" class="login-wordmark" width="260" height="48" />
+      </div>
+      <div class="login-card-body">
+      <h1>Kafka User Management</h1>
       <p class="lead">Sign in to manage Kafka users and ACLs.</p>
       <form id="login-form" method="post" action="#" onsubmit="return false;">
         <div class="form-group" id="login-environment-group" style="display:block;">
@@ -822,6 +862,7 @@
         <button type="submit" id="login-submit" class="btn btn-primary">Sign in</button>
         <p id="login-error" class="login-error"></p>
       </form>
+      </div>
     </div>
   </div>
 
@@ -830,28 +871,32 @@
   <header class="header">
     <div class="header-brand">
       <div class="header-logo-wrap" aria-hidden="true">
-        <img src="Confluent-Emblem.png" alt="" class="header-logo" />
+        <img src="confluent-wordmark.png" alt="" class="header-logo header-logo--wordmark" width="200" height="28" />
       </div>
-      <span class="header-title">Confluent Kafka User Management</span>
-      <div id="header-env-wrap" class="header-env-wrap" aria-live="polite">
-        <span id="header-env-badge" class="env-badge" style="background:#238636;" title="Active environment"></span>
-        <label class="sr-only" for="header-environment">Switch environment</label>
-        <select id="header-environment" class="header-env-select"></select>
+      <div class="header-brand-text">
+        <span class="header-title">Kafka User Management</span>
+        <div id="header-env-wrap" class="header-env-wrap" aria-live="polite" title="Locked for this session — change only after logout">
+          <span id="header-env-badge" class="env-badge" style="background:#238636;">—</span>
+          <span id="header-env-detail" class="header-env-detail"></span>
+        </div>
       </div>
     </div>
-    <nav class="header-nav">
-      <a href="#create-topic-onboard">Create Topic &amp; Onboard</a>
-      <a href="#add">Add User</a>
-      <a href="#add-acl-existing">Add ACL (existing)</a>
-      <a href="#test">Test User</a>
-      <a href="#remove">Remove User</a>
-      <a href="#change-password">Change Password</a>
-      <a href="#cleanup">Cleanup ACLs</a>
-      <a href="#audit-log">Audit Log</a>
-      <a href="#download-history">Download History</a>
+    <nav class="header-nav" aria-label="Quick links">
+      <a href="#create-topic-onboard">Create topic</a>
+      <a href="#add">Add user</a>
+      <a href="#add-acl-existing">Add ACL</a>
+      <a href="#test">Test</a>
+      <span class="nav-sep" aria-hidden="true"></span>
+      <a href="#remove">Remove</a>
+      <a href="#change-password">Password</a>
+      <a href="#cleanup">Cleanup</a>
+      <span class="nav-sep" aria-hidden="true"></span>
+      <a href="#audit-log">Audit</a>
+      <a href="#download-history">Downloads</a>
+      <span class="nav-sep" aria-hidden="true"></span>
       <a href="setup.html" class="header-cta header-cta--primary" id="header-setup-link" title="First-time setup or reconfigure (when ALLOW_SETUP_RECONFIGURE=1)">Setup</a>
-      <a href="reset-config.html" class="header-cta header-cta--danger" id="header-reset-link" title="Wipe saved portal configuration (Portal username/password required) — image upgrades do not do this">Reset config</a>
-      <a href="docs.html" class="header-cta" target="_blank" rel="noopener noreferrer">Documentation</a>
+      <a href="reset-config.html" class="header-cta header-cta--danger" id="header-reset-link" title="Wipe saved portal configuration (Portal username/password required) — image upgrades do not do this">Reset</a>
+      <a href="docs.html" class="header-cta" target="_blank" rel="noopener noreferrer">Docs</a>
     </nav>
   </header>
 
@@ -1432,7 +1477,7 @@
                       hint.appendChild(a);
                       hint.appendChild(document.createTextNode(' แล้วล็อกอินใหม่'));
                     } else {
-                      hint.textContent = 'Single target only. To switch Dev / SIT / UAT on login, add multiple environments in Setup (master.config). After login, use the header dropdown when multi-environment is enabled.';
+                      hint.textContent = 'Single target only. To use Dev / SIT / UAT, add multiple environments in Setup (master.config).';
                     }
                   }
                 } else {
@@ -1443,8 +1488,8 @@
                   sel.required = loginEnvSelectionRequired;
                   if (hint) {
                     hint.textContent = loginEnvLegacyNamespacePick
-                      ? 'เลือก namespace ที่จะใช้กับ portal รอบนี้ — มาจากหลายแถวใน config (gen.sites). หลังล็อกอินเปลี่ยนได้ที่แถบด้านบน / Pick the OpenShift namespace for this session; switch anytime from the header.'
-                      : 'Choose Dev, SIT, or UAT before signing in. The bar at the top shows the active environment after login.';
+                      ? 'เลือก namespace ที่จะใช้กับ portal รอบนี้ (gen.sites) — ล็อกจนกว่าจะ Logout / Pick once per login; locked until you sign out.'
+                      : 'Choose Dev, SIT, or UAT before signing in. Locked for this session until logout.';
                   }
                 }
               } else {
@@ -1457,10 +1502,6 @@
                   hint.textContent = 'Environment list unavailable. You can still sign in if your administrator enabled access.';
                 }
               }
-            }
-            var hsel = document.getElementById('header-environment');
-            if (hsel && loginEnvironmentsList.length && !loginEnvSingleDeployment) {
-              fillEnvironmentSelect(hsel, loginEnvironmentsList, loginDefaultEnvironmentId);
             }
             if (typeof cb === 'function') cb();
           })
@@ -1489,32 +1530,34 @@
       function applyHeaderEnvironmentFromMe(me) {
         var wrap = document.getElementById('header-env-wrap');
         var badge = document.getElementById('header-env-badge');
-        var hsel = document.getElementById('header-environment');
+        var detailEl = document.getElementById('header-env-detail');
         var ctxBar = document.getElementById('env-context-bar');
-        if (!wrap || !badge || !hsel) return;
+        if (!wrap || !badge || !detailEl) return;
         if (!me || !me.environment) {
           wrap.classList.remove('visible');
+          detailEl.textContent = '';
+          detailEl.removeAttribute('title');
           if (ctxBar) { ctxBar.style.display = 'none'; ctxBar.textContent = ''; }
           return;
         }
         var env = me.environment;
+        var nsLine = (env.namespaces && env.namespaces.length) ? env.namespaces.join(', ') : '';
+        var ctxLine = env.contextSummary ? String(env.contextSummary) : '';
+        var detailParts = [];
+        if (nsLine) detailParts.push(nsLine);
+        if (ctxLine) detailParts.push(ctxLine);
+        var detailText = detailParts.join(' · ');
         if (env.singleDeployment) {
           badge.textContent = env.namespaces && env.namespaces.length === 1
             ? env.namespaces[0]
             : (env.shortLabel || 'TARGET');
-          badge.title = (env.namespaces && env.namespaces.length ? env.namespaces.join(', ') : '') +
-            (env.contextSummary ? ' · context: ' + env.contextSummary : '');
-          hsel.style.display = 'none';
+          badge.title = 'Session target (change only after logout) — ' + (detailText || (env.label || ''));
         } else {
-          var label = env.shortLabel || env.label || env.id || 'ENV';
-          badge.textContent = label;
-          badge.title = (env.label || env.id) + (env.namespaces && env.namespaces.length ? ' · ' + env.namespaces.join(', ') : '');
-          hsel.style.display = '';
-          if (loginEnvironmentsList.length) {
-            fillEnvironmentSelect(hsel, loginEnvironmentsList, env.id);
-            hsel.value = env.id;
-          }
+          badge.textContent = env.shortLabel || env.label || env.id || 'ENV';
+          badge.title = 'Session environment (change only after logout) — ' + (env.label || env.id);
         }
+        detailEl.textContent = detailText;
+        detailEl.title = detailText || badge.title;
         if (env.badgeColor) badge.style.background = env.badgeColor;
         wrap.classList.add('visible');
         if (ctxBar) {
@@ -1527,24 +1570,6 @@
           ctxBar.textContent = bits.join(' · ');
           ctxBar.style.display = 'block';
         }
-      }
-
-      function postSessionEnvironment(environmentId, cb) {
-        fetchAuth('/api/session/environment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ environmentId: environmentId })
-        })
-          .then(function (r) { return r.json().then(function (j) { return { status: r.status, body: j }; }); })
-          .then(function (x) {
-            if (x.status === 200 && x.body.ok) {
-              fetchAuth('/api/me')
-                .then(function (r) { return r.json(); })
-                .then(function (m) { applyHeaderEnvironmentFromMe(m); });
-            }
-            if (typeof cb === 'function') cb(x);
-          })
-          .catch(function () { if (typeof cb === 'function') cb(null); });
       }
       function showApp() {
         document.getElementById('login-wrap').style.display = 'none';
@@ -1728,15 +1753,6 @@
         if (ev.persisted) checkAuth();
       });
 
-      (function () {
-        var hsel = document.getElementById('header-environment');
-        if (!hsel) return;
-        hsel.addEventListener('change', function () {
-          var v = hsel.value;
-          if (!v) return;
-          postSessionEnvironment(v);
-        });
-      })();
       function escapeHtml(s) { var d = document.createElement('div'); if (s == null) return ''; d.textContent = s; return d.innerHTML; }
       // fetch with timeout (AbortController). Returns { promise, abort } so caller can Cancel.
       function fetchWithTimeout(url, options, timeoutMs) {
