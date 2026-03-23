@@ -1,5 +1,7 @@
-.cursor/
-node_modules/
+# Cursor: ignore local IDE state; allow committed shared rules under .cursor/rules/
+.cursor/*
+!.cursor/rules/
+!.cursor/rules/**node_modules/
 webapp/node_modules/
 .env
 .env.*

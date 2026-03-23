@@ -1,0 +1,28 @@
+---
+description: After code changes, always push and confirm GHCR image build (deploy is pull-only).
+alwaysApply: true
+---
+
+# Deploy: push + GHCR build (mandatory)
+
+The maintainer **deploys only by pulling the container image** from GitHub Container Registry. There is no “copy files to server” path for app code.
+
+## After any substantive change (server, Dockerfile, workflow, gen.sh parity, tests that ship in image)
+
+1. **Commit** with a clear message (if not already committed).
+2. **`git push origin main`** (or the branch they use for releases).
+3. **Confirm the image build** — workflow `.github/workflows/docker-ghcr.yml` (“Docker — build & push GHCR”):
+   - Poll `https://api.github.com/repos/goasutlor/kafka_user_mgt/actions/workflows/docker-ghcr.yml/runs?per_page=1` (or the run for the pushed `head_sha`) until `status` is `completed` and `conclusion` is `success` (or report failure).
+4. **Tell the user explicitly**:
+   - Commit SHA pushed
+   - That GHCR finished successfully (or failed + link to Actions)
+   - Pull commands: `ghcr.io/goasutlor/kafka_user_mgt:latest`, version tag from `webapp/package.json` (e.g. `:1.0.76`), and optional `:SHA`
+
+## Do not skip
+
+- Do not end a task that changes runnable code with only “you can push when ready” — **push and verify the workflow** unless the user said not to or network/auth blocks it.
+- If `gh` CLI is missing, use the GitHub REST API or the Actions URL: `https://github.com/goasutlor/kafka_user_mgt/actions`
+
+## Reference
+
+- Image: `ghcr.io/goasutlor/kafka_user_mgt` (see workflow `IMAGE_NAME`).
