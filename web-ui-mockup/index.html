@@ -1066,6 +1066,18 @@
           <h3>Execute</h3>
           <p class="step-desc">Review and create. Backend will call the shell script (path in config) with your inputs.</p>
           <div id="wizard-summary" class="wizard-summary"></div>
+          <div id="add-user-validate-options" class="form-group" style="margin-top:12px; padding:12px 14px; border:1px solid var(--border); border-radius:8px; background:var(--code-bg);">
+            <p style="margin:0 0 8px; font-weight:600; font-size:13px;">Kafka validation (speed)</p>
+            <p class="hint" style="margin:0 0 10px; font-size:12px; line-height:1.45;">Default: auth + consume test after user creation — can take minutes while brokers reload credentials. Narrow or skip below for a faster run.</p>
+            <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; margin-bottom:8px;">
+              <input type="checkbox" id="add-skip-validation" style="margin-top:3px;" />
+              <span>Skip all broker tests (fastest — no auth/consume)</span>
+            </label>
+            <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="add-auth-only" style="margin-top:3px;" />
+              <span>Auth only (describe topic) — no consume</span>
+            </label>
+          </div>
           <div class="wizard-actions">
             <button type="button" id="wizard-back-5" class="btn btn-secondary">Back</button>
             <button type="button" id="btn-create" class="btn btn-primary">Create user + ACL and download pack</button>
@@ -1211,6 +1223,18 @@
           <h3>Execute</h3>
           <p class="step-desc">Review and create user + ACL. Backend will call the shell script with your inputs.</p>
           <div id="ct-wizard-summary" class="wizard-summary"></div>
+          <div class="form-group" style="margin-top:12px; padding:12px 14px; border:1px solid var(--border); border-radius:8px; background:var(--code-bg);">
+            <p style="margin:0 0 8px; font-weight:600; font-size:13px;">Kafka validation (speed)</p>
+            <p class="hint" style="margin:0 0 10px; font-size:12px; line-height:1.45;">Same options as Add user — default is full verify (slower).</p>
+            <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer; margin-bottom:8px;">
+              <input type="checkbox" id="ct-skip-validation" style="margin-top:3px;" />
+              <span>Skip all broker tests (fastest)</span>
+            </label>
+            <label style="display:flex; align-items:flex-start; gap:8px; cursor:pointer;">
+              <input type="checkbox" id="ct-auth-only" style="margin-top:3px;" />
+              <span>Auth only — no consume</span>
+            </label>
+          </div>
           <div class="wizard-actions">
             <button type="button" id="ct-wizard-back-6" class="btn btn-secondary">Back</button>
             <button type="button" id="btn-ct-execute" class="btn btn-primary">Create user + ACL and download pack</button>
@@ -2104,6 +2128,8 @@
             var el = document.getElementById('system');
             var desc = document.getElementById('acl-group-describe');
             var del = document.getElementById('acl-group-delete');
+            var skipB = document.getElementById('add-skip-validation');
+            var authB = document.getElementById('add-auth-only');
             var data = {
               system: el ? el.value.trim() : '',
               topic: (document.getElementById('topic') || {}).value.trim() || '',
@@ -2111,6 +2137,8 @@
               acl: (document.getElementById('acl') || {}).value || 'client',
               aclGroupDescribe: desc ? desc.checked : false,
               aclGroupDelete: del ? del.checked : false,
+              addSkipValidation: skipB ? skipB.checked : false,
+              addAuthOnly: authB ? authB.checked : false,
               step: currentStep
             };
             localStorage.setItem(WIZARD_STORAGE_KEY, JSON.stringify(data));
@@ -2133,6 +2161,15 @@
             var del = document.getElementById('acl-group-delete');
             if (desc) desc.checked = !!s.aclGroupDescribe;
             if (del) del.checked = !!s.aclGroupDelete;
+            var skipB = document.getElementById('add-skip-validation');
+            var authB = document.getElementById('add-auth-only');
+            if (skipB && authB) {
+              skipB.checked = !!s.addSkipValidation;
+              authB.checked = !!s.addAuthOnly;
+              if (skipB.checked) { authB.checked = false; authB.disabled = true; }
+              else { authB.disabled = false; }
+              if (authB.checked) skipB.checked = false;
+            }
             var step = parseInt(s.step, 10);
             if (step >= 1 && step <= 5) { currentStep = step; showStep(step); if (step === 5) renderSummary(); }
           } catch (_) {}
@@ -2150,6 +2187,10 @@
             var aclEl = document.getElementById('acl'); if (aclEl) aclEl.value = 'client';
             var desc = document.getElementById('acl-group-describe'); if (desc) desc.checked = false;
             var del = document.getElementById('acl-group-delete'); if (del) del.checked = false;
+            var skipB = document.getElementById('add-skip-validation');
+            var authB = document.getElementById('add-auth-only');
+            if (skipB) skipB.checked = false;
+            if (authB) { authB.checked = false; authB.disabled = false; }
             document.getElementById('passphrase').value = '';
             document.getElementById('passphrase-confirm').value = '';
             document.getElementById('filter-topics').value = '';
@@ -2227,9 +2268,19 @@
           var el = document.getElementById(id);
           if (el) el.addEventListener('input', saveWizardState);
         });
-        ['acl-group-describe', 'acl-group-delete'].forEach(function (id) {
+        ['acl-group-describe', 'acl-group-delete', 'add-skip-validation', 'add-auth-only'].forEach(function (id) {
           var el = document.getElementById(id);
-          if (el) el.addEventListener('change', function () { saveWizardState(); if (currentStep === 5) renderSummary(); });
+          if (el) el.addEventListener('change', function () {
+            var skip = document.getElementById('add-skip-validation');
+            var auth = document.getElementById('add-auth-only');
+            if (skip && auth) {
+              if (skip.checked) { auth.checked = false; auth.disabled = true; }
+              else { auth.disabled = false; }
+              if (auth.checked) skip.checked = false;
+            }
+            saveWizardState();
+            if (currentStep === 5) renderSummary();
+          });
         });
         (function () {
           var aclSel = document.getElementById('acl');
@@ -2282,10 +2333,22 @@
           html += '<strong>Client System:</strong> ' + escapeHtml(system) + ' &nbsp;|&nbsp; <strong>Topic:</strong> ' + escapeHtml(topic) + ' &nbsp;|&nbsp; <strong>Username:</strong> ' + escapeHtml(username) + '</div>';
           html += '<div class="wizard-summary-block" style="margin-bottom:12px;"><strong style="color:var(--text-muted); font-size:12px; text-transform:uppercase;">ACL ที่จะถูก assign</strong> <span style="color:var(--text-muted);font-size:12px;">(✓ = ได้รับสิทธิ์ · — = ไม่ได้รับ)</span>';
           html += buildAclCapabilityMatrixHtml(acl, gDesc, gDel);
+          var skipV = document.getElementById('add-skip-validation') && document.getElementById('add-skip-validation').checked;
+          var authO = document.getElementById('add-auth-only') && document.getElementById('add-auth-only').checked;
+          var valLabel = skipV ? 'Skipped (no broker test)' : (authO ? 'Auth only (no consume)' : 'Auth + consume (default)');
+          html += '<p class="hint" style="margin:10px 0 0; font-size:12px;"><strong>Post-create validation:</strong> ' + escapeHtml(valLabel) + '</p>';
           html += '<p class="hint" style="margin:12px 0 0; font-size:12px;">กด <strong>Create user + ACL and download pack</strong> เพื่อรัน gen.sh ตามสรุปนี้</p></div>';
           document.getElementById('wizard-summary').innerHTML = html;
         }
         function escapeHtml(s) { var d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+        function verificationMessageHtmlForAddUser(j) {
+          if (!j || !j.verificationMessage) return '';
+          var color; var prefix;
+          if (j.verificationPassed) { color = 'var(--success)'; prefix = '✓ Verification: '; }
+          else if (j.verificationSkipped) { color = 'var(--text-muted)'; prefix = ''; }
+          else { color = 'var(--warning, #b8860b)'; prefix = ''; }
+          return '<p style="margin-top:8px;font-size:14px;"><span style="color:' + color + '">' + prefix + escapeHtml(j.verificationMessage) + '</span></p>';
+        }
 
         function filterMatches(item, q) {
           if (!q || !q.trim()) return true;
@@ -2407,7 +2470,7 @@
           box.innerHTML = 'Loading...';
           cachedTestTopicsList = [];
           try {
-            var res = await fetch('/api/topics');
+            var res = await fetch('/api/topics', { credentials: 'same-origin' });
             var j = await res.json();
             if (!j.ok && res.status === 503 && j.setupPageUrl) {
               box.innerHTML = '<span class="hint">ต้องตั้งค่าก่อน: <a href="' + escapeHtml(j.setupPageUrl) + '">' + escapeHtml(j.setupPageUrl) + '</a></span>';
@@ -2469,7 +2532,7 @@
           box.innerHTML = 'Loading...';
           cachedTopicsList = [];
           try {
-            var res = await fetch('/api/topics');
+            var res = await fetch('/api/topics', { credentials: 'same-origin' });
             var j = await res.json();
             if (!j.ok && res.status === 503 && j.setupPageUrl) {
               box.innerHTML = '<span class="hint">ต้องตั้งค่าก่อน: <a href="' + escapeHtml(j.setupPageUrl) + '">' + escapeHtml(j.setupPageUrl) + '</a></span>';
@@ -2675,6 +2738,18 @@
         }
         document.getElementById('btn-ct-load-users').addEventListener('click', loadCTUsers);
         document.getElementById('ct-filter-users').addEventListener('input', renderCTUsersFiltered);
+        (function wireCtValidateOptions() {
+          var skip = document.getElementById('ct-skip-validation');
+          var auth = document.getElementById('ct-auth-only');
+          if (!skip || !auth) return;
+          skip.addEventListener('change', function () {
+            if (skip.checked) { auth.checked = false; auth.disabled = true; }
+            else { auth.disabled = false; }
+          });
+          auth.addEventListener('change', function () {
+            if (auth.checked) skip.checked = false;
+          });
+        })();
         document.getElementById('btn-ct-execute').addEventListener('click', async function () {
           var system = document.getElementById('ct-system').value.trim();
           var topic = document.getElementById('ct-topic').value.trim();
@@ -2714,7 +2789,11 @@
             var f = fetchWithTimeout('/api/add-user?stream=1', {
               method: 'POST',
               headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
-              body: JSON.stringify({ systemName: system, topic: topic, username: username, acl: acl, aclGroupExtra: aclGroupExtra, passphrase: passphrase, confirmPassphrase: passphraseConfirm })
+              body: JSON.stringify({
+                systemName: system, topic: topic, username: username, acl: acl, aclGroupExtra: aclGroupExtra, passphrase: passphrase, confirmPassphrase: passphraseConfirm,
+                skipKafkaValidation: !!(document.getElementById('ct-skip-validation') && document.getElementById('ct-skip-validation').checked),
+                validateConsume: !(document.getElementById('ct-auth-only') && document.getElementById('ct-auth-only').checked),
+              })
             }, ADD_USER_TIMEOUT_MS);
             currentAbort.add = f.abort;
             var res = await f.promise;
@@ -2772,7 +2851,13 @@
               progressWrap.classList.remove('visible');
             }
             if (j && j.ok) {
-              resultEl.innerHTML = '<span style="color:var(--success)">' + (j.message || 'Done.') + '</span>';
+              var ctVerHtml = '';
+              if (j.verificationMessage) {
+                var ctColor = j.verificationPassed ? 'var(--success)' : (j.verificationSkipped ? 'var(--text-muted)' : 'var(--warning, #b8860b)');
+                var ctPref = j.verificationPassed ? '✓ Verification: ' : '';
+                ctVerHtml = '<p style="margin-top:8px;font-size:14px;"><span style="color:' + ctColor + '">' + ctPref + escapeHtmlCt(j.verificationMessage) + '</span></p>';
+              }
+              resultEl.innerHTML = '<span style="color:var(--success)">' + (j.message || 'Done.') + '</span>' + ctVerHtml;
               if (j.downloadPath && j.decryptInstructions) {
                 var html = '<p><strong>Download:</strong></p><p><button type="button" class="btn btn-primary btn-ct-dl" data-path="' + escapeHtmlCt(j.downloadPath) + '" data-filename="' + escapeHtmlCt(j.packFile || 'pack.enc') + '">ดาวน์โหลดไฟล์ .enc</button></p>';
                 html += '<pre class="decrypt-pre">' + (j.decryptInstructions || []).join('\n') + '</pre>';
@@ -2874,7 +2959,7 @@
           box.innerHTML = 'Loading...';
           cachedAclExistingTopicsList = [];
           try {
-            var res = await fetch('/api/topics');
+            var res = await fetch('/api/topics', { credentials: 'same-origin' });
             var j = await res.json();
             if (!j.ok && res.status === 503 && j.setupPageUrl) {
               box.innerHTML = '<span class="hint">ต้องตั้งค่าก่อน: <a href="' + escapeHtml(j.setupPageUrl) + '">' + escapeHtml(j.setupPageUrl) + '</a></span>';
@@ -3087,7 +3172,11 @@
           var f = fetchWithTimeout('/api/add-user?stream=1', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Accept': 'application/x-ndjson' },
-            body: JSON.stringify({ systemName: system, topic: topic, username: username, acl: acl, aclGroupExtra: aclGroupExtra, passphrase: passphrase, confirmPassphrase: passphraseConfirm })
+            body: JSON.stringify({
+              systemName: system, topic: topic, username: username, acl: acl, aclGroupExtra: aclGroupExtra, passphrase: passphrase, confirmPassphrase: passphraseConfirm,
+              skipKafkaValidation: !!(document.getElementById('add-skip-validation') && document.getElementById('add-skip-validation').checked),
+              validateConsume: !(document.getElementById('add-auth-only') && document.getElementById('add-auth-only').checked),
+            })
           }, ADD_USER_TIMEOUT_MS);
           currentAbort.add = f.abort;
           var res = await f.promise;
@@ -3155,8 +3244,7 @@
             }
             if (j) {
               if (j.ok) {
-                resultEl.innerHTML = '<span style="color:var(--success)">' + (j.message || 'Done.') + '</span>' +
-                  (j.verificationMessage ? '<p style="margin-top:8px;font-size:14px;">' + (j.verificationPassed ? '<span style="color:var(--success)">✓ Verification: ' : '<span style="color:var(--warning, #b8860b)">') + escapeHtml(j.verificationMessage) + '</span></p>' : '');
+                resultEl.innerHTML = '<span style="color:var(--success)">' + (j.message || 'Done.') + '</span>' + verificationMessageHtmlForAddUser(j);
                 if (j.downloadPath && j.decryptInstructions) {
                   renderDownloadBlock(j);
                   try { document.getElementById('api-download-block').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_) {}
@@ -3182,8 +3270,7 @@
               progressWrap.classList.remove('visible');
             }
             if (j.ok) {
-              resultEl.innerHTML = '<span style="color:var(--success)">' + (j.message || 'Done.') + '</span>' +
-                (j.verificationMessage ? '<p style="margin-top:8px;font-size:14px;">' + (j.verificationPassed ? '<span style="color:var(--success)">✓ Verification: ' : '<span style="color:var(--warning, #b8860b)">') + escapeHtml(j.verificationMessage) + '</span></p>' : '');
+              resultEl.innerHTML = '<span style="color:var(--success)">' + (j.message || 'Done.') + '</span>' + verificationMessageHtmlForAddUser(j);
               if (j.downloadPath && j.decryptInstructions) {
                 renderDownloadBlock(j);
                 try { document.getElementById('api-download-block').scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } catch (_) {}

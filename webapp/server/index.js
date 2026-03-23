@@ -1482,22 +1482,35 @@ function resolveKafkaCommandConfigPaths(req) {
 
 function getBootstrapServersForRequest(req) {
   if (!config) loadConfig();
+  const g = config.gen || {};
+  const readBootstrapFromResolvedAdmin = () => {
+    const { adminConfig } = resolveKafkaCommandConfigPaths(req);
+    try {
+      const content = fs.readFileSync(adminConfig, 'utf8');
+      const m = content.match(/bootstrap\.servers\s*=\s*(.+)/);
+      if (m) return m[1].trim();
+    } catch (_) { /* missing file */ }
+    return null;
+  };
+
   const st = getEnvironmentsState();
+  // Multi-env: never let global gen.bootstrapServers override the active env's client props —
+  // otherwise the header shows SIT/UAT but list topics / create topic / GEN_KAFKA_BOOTSTRAP still hit DEV.
   if (st.active && req && req.session) {
     const id = req.session.activeEnvironmentId || st.defaultId;
     const entry = st.list.find((e) => e.id === id) || st.list[0];
     if (entry && typeof entry.bootstrapServers === 'string' && entry.bootstrapServers.trim()) {
       return entry.bootstrapServers.trim();
     }
+    const fromEnvFile = readBootstrapFromResolvedAdmin();
+    if (fromEnvFile) return fromEnvFile;
+    if (g.bootstrapServers) return g.bootstrapServers;
+    return process.env.GEN_BOOTSTRAP || 'localhost:9092';
   }
-  const g = config.gen || {};
+
   if (g.bootstrapServers) return g.bootstrapServers;
-  const { adminConfig } = resolveKafkaCommandConfigPaths(req);
-  try {
-    const content = fs.readFileSync(adminConfig, 'utf8');
-    const m = content.match(/bootstrap\.servers\s*=\s*(.+)/);
-    if (m) return m[1].trim();
-  } catch (_) { /* missing file */ }
+  const fromFile = readBootstrapFromResolvedAdmin();
+  if (fromFile) return fromFile;
   return process.env.GEN_BOOTSTRAP || 'localhost:9092';
 }
 
@@ -2307,7 +2320,8 @@ function parsePackFromStdout(stdout) {
   let packFile = '';
   let packName = '';
   let packDir = '';
-  let verificationPassed = null;
+  /** @type {null | 'pass' | 'fail' | 'skipped'} */
+  let verificationOutcome = null;
   const lines = (stdout || '').split('\n');
   for (const line of lines) {
     const d = line.match(/^GEN_PACK_DIR=(.+)$/);
@@ -2316,12 +2330,15 @@ function parsePackFromStdout(stdout) {
     if (m) packFile = m[1].trim();
     const n = line.match(/^GEN_PACK_NAME=(.+)$/);
     if (n) packName = n[1].trim();
-    const v = line.match(/^GEN_VALIDATE_PASSED=(true|false)$/);
-    if (v) verificationPassed = v[1] === 'true';
+    const v = line.match(/^GEN_VALIDATE_PASSED=(true|false|skipped)$/);
+    if (v) {
+      if (v[1] === 'skipped') verificationOutcome = 'skipped';
+      else verificationOutcome = v[1] === 'true' ? 'pass' : 'fail';
+    }
   }
   if (!packName && packFile) packName = packFile.replace(/\.enc$/, '');
   if (packDir) lastPackDir = path.resolve(packDir);
-  return { packFile, packName, verificationPassed };
+  return { packFile, packName, verificationOutcome };
 }
 
 // Decrypt/unpack instructions (same text as gen.sh)
@@ -2363,9 +2380,11 @@ function resolvePackFilePath(packFile) {
 }
 
 function buildAddUserPayload(stdout) {
-  const { packFile, packName, verificationPassed } = parsePackFromStdout(stdout);
+  const { packFile, packName, verificationOutcome } = parsePackFromStdout(stdout);
   const exists = packFile ? resolvePackFilePath(packFile) : null;
   const ok = !!exists;
+  const verificationPassed = verificationOutcome === 'pass';
+  const verificationSkipped = verificationOutcome === 'skipped';
   return {
     ok,
     message: ok
@@ -2375,12 +2394,15 @@ function buildAddUserPayload(stdout) {
     packName: packName || null,
     downloadPath: packFile && ok ? `/api/download/${encodeURIComponent(packFile)}` : null,
     decryptInstructions: buildDecryptInstructions(packFile, packName),
-    verificationPassed: verificationPassed === true,
-    verificationMessage: verificationPassed === true
+    verificationPassed,
+    verificationSkipped,
+    verificationMessage: verificationOutcome === 'pass'
       ? 'User verified (auth test passed).'
-      : verificationPassed === false
+      : verificationOutcome === 'fail'
         ? 'User created but auth test did not pass (e.g. broker reload delay). You can test again under "Test existing user".'
-        : null,
+        : verificationOutcome === 'skipped'
+          ? 'Broker validation was skipped for a faster run. Use "Test existing user" to confirm auth when ready.'
+          : null,
     packFileMissing: !ok && !!packFile,
   };
 }
@@ -2392,7 +2414,10 @@ app.post('/api/add-user', (req, res) => {
   } catch (e) {
     return apiError(res, 'add-user', e, { status: 500 });
   }
-  const { systemName, topic, username, acl, aclGroupExtra, passphrase, confirmPassphrase } = req.body || {};
+  const {
+    systemName, topic, username, acl, aclGroupExtra, passphrase, confirmPassphrase,
+    skipKafkaValidation, validateConsume,
+  } = req.body || {};
   const errors = [];
   const e1 = validateSafeName(systemName, 'systemName', MAX_SYSTEM_NAME_LEN);
   if (e1) errors.push(e1);
@@ -2407,6 +2432,14 @@ app.post('/api/add-user', (req, res) => {
   const allowedGroupOps = ['Describe', 'Delete'];
   const extraList = Array.isArray(aclGroupExtra) ? aclGroupExtra.filter((o) => allowedGroupOps.includes(String(o))) : [];
   if (aclGroupExtra != null && !Array.isArray(aclGroupExtra)) errors.push('aclGroupExtra must be an array');
+  const skipVal = skipKafkaValidation === true || skipKafkaValidation === 'true' || skipKafkaValidation === 1 || skipKafkaValidation === '1';
+  const consumeOff = validateConsume === false || validateConsume === 'false' || validateConsume === 0 || validateConsume === '0';
+  if (skipKafkaValidation != null && typeof skipKafkaValidation !== 'boolean' && skipKafkaValidation !== 'true' && skipKafkaValidation !== 'false' && skipKafkaValidation !== 1 && skipKafkaValidation !== 0 && skipKafkaValidation !== '1' && skipKafkaValidation !== '0') {
+    errors.push('skipKafkaValidation must be a boolean');
+  }
+  if (validateConsume != null && typeof validateConsume !== 'boolean' && validateConsume !== 'true' && validateConsume !== 'false' && validateConsume !== 1 && validateConsume !== 0 && validateConsume !== '1' && validateConsume !== '0') {
+    errors.push('validateConsume must be a boolean');
+  }
   if (errors.length) return res.status(400).json({ ok: false, errors });
 
   const env = {
@@ -2417,8 +2450,12 @@ app.post('/api/add-user', (req, res) => {
     GEN_KAFKA_USER: String(username).trim(),
     GEN_ACL: (acl === 'read' || acl === '1') ? '1' : (acl === 'client') ? '2' : '3',
     GEN_PASSPHRASE: String(passphrase),
-    GEN_VALIDATE_CONSUME: '1', // run Auth + Consume test so user sees consume works
   };
+  if (skipVal) {
+    env.GEN_VALIDATE_SKIP = '1';
+  } else {
+    env.GEN_VALIDATE_CONSUME = consumeOff ? '0' : '1';
+  }
   if (extraList.length) env.GEN_ACL_GROUP_EXTRA = extraList.join(',');
 
   const wantStream = req.query.stream === '1' || (req.headers.accept || '').includes('application/x-ndjson');
@@ -2773,4 +2810,12 @@ if (require.main === module) {
   createServer();
 }
 
-module.exports = { app, loadConfig, runGen, parsePackFromStdout, buildDecryptInstructions, createServer };
+module.exports = {
+  app,
+  loadConfig,
+  runGen,
+  parsePackFromStdout,
+  buildDecryptInstructions,
+  createServer,
+  getBootstrapServersForRequest,
+};

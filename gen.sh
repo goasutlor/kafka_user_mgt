@@ -32,6 +32,7 @@
 #
 # CHANGELOG
 # ---------
+# 2026-03-23  Non-interactive add-user: GEN_VALIDATE_SKIP=1 skips broker auth/consume (faster); else GEN_VALIDATE_CONSUME=1|0 for Auth+Consume vs auth-only. Echo GEN_VALIDATE_PASSED=skipped when validation skipped.
 # 2026-03-22  Setup wizard: truststore can stay on runtime mount only — Web verifies path + keytool -list; GEN_MODE unchanged.
 # 2026-03-23  With GEN_ACTIVE_ENV_ID + environments.json: if admin/client not set in JSON and GEN_ADMIN_CONFIG unset, use kafka-client-master-{id}.properties and kafka-client-{id}.properties (no unsuffixed fallback).
 # 2026-03-23  Per-environment adminPropertiesFile / clientPropertiesFile (or adminConfig / clientConfig) in environments.json — Web sets GEN_ADMIN_CONFIG from session env; CLI can omit GEN_* to resolve from JSON (same truststore/SASL as that cluster).
@@ -49,6 +50,7 @@
 # 2026-02-xx  All script output files (.enc packs) go to user_output in the same path as the script (USER_OUTPUT_DIR=$SCRIPT_DIR/user_output). Override with GEN_USER_OUTPUT_DIR. GEN_PACK_DIR echoes this so Web/download can find files.
 # 2026-02-19  Non-interactive Add user / Change password: GEN_PASSPHRASE for .enc file; script echoes GEN_PACK_FILE= and GEN_PACK_NAME= for Web download and decrypt instructions.
 # 2026-02-19  Non-interactive (Web): GEN_MODE=2 (Test user), GEN_MODE=3 with GEN_ACTION=1|2|3 (Remove, Change password, Cleanup ACL). Env: GEN_KAFKA_USER, GEN_TEST_PASS, GEN_TOPIC_NAME; GEN_USERS; GEN_CHANGE_USER, GEN_NEW_PASSWORD.
+#            Add user (GEN_MODE=1): optional GEN_VALIDATE_SKIP=1 (skip broker tests) or GEN_VALIDATE_CONSUME=0|1 (auth-only vs auth+consume); Web/API sends same via skipKafkaValidation / validateConsume.
 # 2026-02-19  Add new user: check username already exists (block duplicate to avoid human error). Lock remains file-based in /tmp.
 # 2026-02-19  Phase 1 Production Readiness (PRODUCTION_READINESS_AUDIT.md)
 #             - Lock file: prevent concurrent runs (gen_kafka_user.lock)
@@ -2262,8 +2264,13 @@ echo "   [1] Auth only (kafka-topics --describe) - zero message impact"
 echo "   [2] Auth + Consume 5 msgs - minimal impact, unique group"
 echo "   [3] Skip validation"
 if [ "${GEN_NONINTERACTIVE}" = "1" ]; then
-    # Web: GEN_VALIDATE_CONSUME=1 = Auth + Consume (2), else Auth only (1)
-    [ "${GEN_VALIDATE_CONSUME}" = "1" ] && VAL_CHOICE=2 || VAL_CHOICE=1
+    # Web/CLI non-interactive: GEN_VALIDATE_SKIP=1 → skip (3); else GEN_VALIDATE_CONSUME=1 → Auth+Consume (2), else Auth only (1)
+    if [ "${GEN_VALIDATE_SKIP:-}" = "1" ]; then
+        VAL_CHOICE=3
+        echo -e "   ${CYAN}Non-interactive: skipping credential validation (GEN_VALIDATE_SKIP=1).${NC}"
+    else
+        [ "${GEN_VALIDATE_CONSUME}" = "1" ] && VAL_CHOICE=2 || VAL_CHOICE=1
+    fi
 else
     read -p "   Validate credential? [1-3]: " VAL_CHOICE
 fi
@@ -2386,6 +2393,8 @@ if [[ "$VAL_CHOICE" =~ ^[12]$ ]]; then
         fi
     fi
     VALIDATE_PASSED=true
+elif [[ "$VAL_CHOICE" == "3" ]]; then
+    echo -e "   ${YELLOW}Credential validation skipped (no broker auth/consume test).${NC}"
 fi
 
 # 5. SECURE OUTPUT (Passphrase Validation)
@@ -2524,7 +2533,11 @@ echo -e "\n${RED}SECURITY NOTE: User injected into plain-users.json.${NC}\n"
 
     # Ask if user wants to continue or go back to menu (skip when non-interactive)
     if [ "${GEN_NONINTERACTIVE}" = "1" ]; then
-        echo "GEN_VALIDATE_PASSED=$VALIDATE_PASSED"
+        if [[ "$VAL_CHOICE" == "3" ]]; then
+            echo "GEN_VALIDATE_PASSED=skipped"
+        else
+            echo "GEN_VALIDATE_PASSED=$VALIDATE_PASSED"
+        fi
         echo "GEN_PACK_DIR=$USER_OUTPUT_DIR"
         echo "GEN_PACK_FILE=$(basename "$ENC_FILE")"
         echo "GEN_PACK_NAME=$PACK_NAME"

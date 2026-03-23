@@ -194,6 +194,21 @@ describe('API', () => {
     }
   });
 
+  it('POST /api/add-user rejects invalid skipKafkaValidation / validateConsume types', async () => {
+    const base = {
+      systemName: 'TestSystem',
+      topic: 'test-topic',
+      username: 'testuser',
+      acl: 'all',
+      passphrase: 'secret123',
+      confirmPassphrase: 'secret123',
+    };
+    let res = await request(app).post('/api/add-user').send({ ...base, skipKafkaValidation: 'maybe' }).expect(400);
+    assert.ok(res.body.errors.some((e) => /skipKafkaValidation/i.test(e)));
+    res = await request(app).post('/api/add-user').send({ ...base, validateConsume: [] }).expect(400);
+    assert.ok(res.body.errors.some((e) => /validateConsume/i.test(e)));
+  });
+
   // ---- Helpers: parsePackFromStdout / buildDecryptInstructions ----
   it('parsePackFromStdout extracts GEN_PACK_FILE and GEN_PACK_NAME', () => {
     const out = 'some log\nGEN_PACK_FILE=MySystem_20260219_1234.enc\nGEN_PACK_NAME=MySystem_20260219_1234\n';
@@ -207,6 +222,12 @@ describe('API', () => {
     const { packFile, packName } = parsePackFromStdout(out);
     assert.strictEqual(packFile, 'Other_20260219_5678.enc');
     assert.strictEqual(packName, 'Other_20260219_5678');
+  });
+
+  it('parsePackFromStdout maps GEN_VALIDATE_PASSED to verificationOutcome', () => {
+    assert.strictEqual(parsePackFromStdout('GEN_VALIDATE_PASSED=skipped\n').verificationOutcome, 'skipped');
+    assert.strictEqual(parsePackFromStdout('GEN_VALIDATE_PASSED=true\n').verificationOutcome, 'pass');
+    assert.strictEqual(parsePackFromStdout('GEN_VALIDATE_PASSED=false\n').verificationOutcome, 'fail');
   });
 
   it('buildDecryptInstructions returns same format as gen.sh', () => {
