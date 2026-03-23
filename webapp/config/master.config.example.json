@@ -14,7 +14,7 @@
     "_comment": "The portal never creates OpenShift contexts. Mount a kubeconfig that already lists every context you reference in sites/environments (oc config get-contexts NAME). Per-namespace contexts on one cluster are normal.",
     "ocPath": "/host/usr/bin",
     "kubeconfig": "{runtimeRoot}/.kube/config",
-    "_comment_kubeconfig": "Use config-both if you merge multiple clusters into one file; otherwise oc login creates config. App picks the file that exists if one is missing.",
+    "_comment_kubeconfig": "Portal never creates kubeconfig files. Single cluster: oc login -> config. Multi-cluster merged file: optional path e.g. .../config-both. If both files exist, app prefers more contexts; on a tie, prefers config.",
     "autoLogin": false,
     "_comment_loginServers": "Keys must match each site ocContext. Use the same cluster: server URL as in kubeconfig (clusters[].cluster.server) for every context on that cluster.",
     "loginServers": {

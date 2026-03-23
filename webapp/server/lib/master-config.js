@@ -51,6 +51,8 @@ function countKubeconfigNamedContexts(filePath) {
  * - If the primary file is missing, use the other common name when present.
  * - If BOTH `config` and `config-both` exist, prefer the file with MORE named contexts
  *   (fixes stale `config-both` left from an old merge while `oc login` updated `config`).
+ * - If counts tie, prefer `config` (default `oc login` file). Use `config-both` only when you
+ *   intentionally merge multiple clusters into one file (multi-region / multi-context).
  */
 function resolveRuntimeKubeconfigPath(expandedAbs, runtimeRoot) {
   const norm = path.normalize(expandedAbs);
@@ -71,6 +73,8 @@ function resolveRuntimeKubeconfigPath(expandedAbs, runtimeRoot) {
       const nS = countKubeconfigNamedContexts(secondary);
       if (nS > nP) return secondary;
       if (nP > nS) return primary;
+      if (path.basename(primary) === 'config') return primary;
+      if (path.basename(secondary) === 'config') return secondary;
       return primary;
     } catch (_) {
       return primary;

@@ -516,4 +516,18 @@ describe('master.config', () => {
     assert.strictEqual(path.basename(chosen), 'config');
     fs.rmSync(d, { recursive: true, force: true });
   });
+
+  it('resolveRuntimeKubeconfigPath prefers config when context counts tie with config-both', () => {
+    const d = fs.mkdtempSync(path.join(os.tmpdir(), 'kube-'));
+    const kc = path.join(d, '.kube');
+    fs.mkdirSync(kc, { recursive: true });
+    const oneCtx = 'apiVersion: v1\nkind: Config\ncontexts:\n- name: only-one\n  context:\n    cluster: x\n    user: y\n';
+    fs.writeFileSync(path.join(kc, 'config-both'), oneCtx);
+    fs.writeFileSync(path.join(kc, 'config'), oneCtx.replace('only-one', 'other-name'));
+    const chosenBoth = resolveRuntimeKubeconfigPath(path.join(kc, 'config-both'), d);
+    assert.strictEqual(path.basename(chosenBoth), 'config');
+    const chosenConfig = resolveRuntimeKubeconfigPath(path.join(kc, 'config'), d);
+    assert.strictEqual(path.basename(chosenConfig), 'config');
+    fs.rmSync(d, { recursive: true, force: true });
+  });
 });

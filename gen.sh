@@ -184,12 +184,12 @@ NUM_SITES=${#SITE_CTX[@]}
 [ "$NUM_SITES" -lt 1 ] && { echo "ERROR: At least one OCP site (context:namespace) required. Set GEN_OCP_SITES or OCP_CTX_/NS_ vars." >&2; exit 1; }
 
 # Dual-OCP / cross-region Confluent: same logical cluster, two OpenShift clusters — set GEN_OCP_SITES="ctx1:ns1,ctx2:ns2"
-# and a kubeconfig with both contexts (e.g. config-both). Web first-time setup: /setup.html (OCP clusters/namespaces first, then Kafka bootstrap, portal, verify).
+# and one kubeconfig listing every context (often ~/.kube/config; optional merged file e.g. config-both). Web: /setup.html.
 
-# Kubeconfig: use one that has BOTH cwdc and tls2 contexts (required for multi-site)
+# Kubeconfig: single-region default is `config` from `oc login` — try that before optional `config-both` (merged multi-cluster file).
 # - If KUBECONFIG is set to old path (/app/user2) or single-cluster file, prefer BASE_DIR/.kube (single source of truth)
-# - If unset, try BASE_DIR/SCRIPT_DIR .kube/config-both then config
-# - If still fails for cwdc, try ~/.kube/config (so "oc get node" working in shell => gen.sh can use it)
+# - If unset, try BASE_DIR/SCRIPT_DIR .kube/config then config-both
+# - If still fails for first site context, try ~/.kube/config (so "oc get node" working in shell => gen.sh can use it)
 if [ -n "${KUBECONFIG:-}" ] && [ -f "${KUBECONFIG}" ]; then
   case "${KUBECONFIG}" in
     *config-cwdc|*config-tls2)
@@ -200,7 +200,7 @@ if [ -n "${KUBECONFIG:-}" ] && [ -f "${KUBECONFIG}" ]; then
       ;;
     */app/user2/*)
       # Old path: prefer kubeconfig under BASE_DIR (single source of truth, e.g. /opt/kafka-usermgmt)
-      for candidate in "$BASE_DIR/.kube/config-both" "$BASE_DIR/.kube/config" "$SCRIPT_DIR/.kube/config-both" "$SCRIPT_DIR/.kube/config"; do
+      for candidate in "$BASE_DIR/.kube/config" "$BASE_DIR/.kube/config-both" "$SCRIPT_DIR/.kube/config" "$SCRIPT_DIR/.kube/config-both"; do
         if [ -f "$candidate" ]; then
           export KUBECONFIG="$candidate"
           break
@@ -209,7 +209,7 @@ if [ -n "${KUBECONFIG:-}" ] && [ -f "${KUBECONFIG}" ]; then
       ;;
   esac
 elif [ -z "${KUBECONFIG:-}" ]; then
-  for candidate in "$BASE_DIR/.kube/config-both" "$BASE_DIR/.kube/config" "$SCRIPT_DIR/.kube/config-both" "$SCRIPT_DIR/.kube/config"; do
+  for candidate in "$BASE_DIR/.kube/config" "$BASE_DIR/.kube/config-both" "$SCRIPT_DIR/.kube/config" "$SCRIPT_DIR/.kube/config-both"; do
     if [ -f "$candidate" ]; then
       export KUBECONFIG="$candidate"
       break
@@ -219,7 +219,7 @@ fi
 # If KUBECONFIG is set but fails for cwdc, try BASE_DIR/.kube then default ~/.kube/config
 if [ -n "${KUBECONFIG:-}" ]; then
   if ! timeout 5 oc get nodes --context "${SITE_CTX[0]}" &>/dev/null; then
-    for fallback in "$BASE_DIR/.kube/config-both" "$BASE_DIR/.kube/config" "${HOME:-/tmp}/.kube/config"; do
+    for fallback in "$BASE_DIR/.kube/config" "$BASE_DIR/.kube/config-both" "${HOME:-/tmp}/.kube/config"; do
       [ -f "$fallback" ] || continue
       if timeout 5 env KUBECONFIG="$fallback" oc get nodes --context "${SITE_CTX[0]}" &>/dev/null; then
         export KUBECONFIG="$fallback"

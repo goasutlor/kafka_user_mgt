@@ -21,8 +21,8 @@
 # Custom kubeconfig directory on host:
 #   KUBE_HOST=/path/to/.kube ./container-run-config.sh
 #
-# master.config / Setup: oc.kubeconfig is usually {runtimeRoot}/.kube/config-both
-#   -> in container: /opt/kafka-usermgmt/.kube/config-both (or config)
+# master.config / Setup: oc.kubeconfig is usually {runtimeRoot}/.kube/config (oc login default).
+#   Use config-both only for a merged multi-cluster kubeconfig -> /opt/kafka-usermgmt/.kube/config-both
 #   Must be the same file tree you mount above.
 # =============================================================================
 #
@@ -353,7 +353,7 @@ run_container_start() {
   if [[ ${#https_args[@]} -gt 0 ]]; then
     echo "  https    | $SSL_DIR/server.{key,crt} -> /app/ssl | in-container TLS"
   fi
-  echo "=== Set oc.kubeconfig / gen.kubeconfigPath to a file under /opt/kafka-usermgmt/.kube (e.g. config or config-both) ==="
+  echo "=== Set oc.kubeconfig / gen.kubeconfigPath under /opt/kafka-usermgmt/.kube (prefer config; config-both only if merged multi-cluster) ==="
   echo ""
 }
 

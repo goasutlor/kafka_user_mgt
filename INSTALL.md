@@ -117,7 +117,7 @@ CONFIG_PATH=config/web.config.json STATIC_DIR=../web-ui-mockup node server/index
     "adminConfig": "/opt/kafka-usermgmt/configs/kafka-client-master.properties",
     "logFile": "/opt/kafka-usermgmt/provisioning.log",
     "k8sSecretName": "kafka-server-side-credentials",
-    "kubeconfigPath": "/opt/kafka-usermgmt/.kube/config-both"
+    "kubeconfigPath": "/opt/kafka-usermgmt/.kube/config"
   },
   "server": {
     "port": 3000
