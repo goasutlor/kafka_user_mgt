@@ -2,7 +2,8 @@
 # Pull: docker pull ghcr.io/goasutlor/kafka_user_mgt:latest
 # If the package is private, use a PAT with read:packages when pulling.
 
-name: Docker — build & push GHCR
+name: Backup Version
+run-name: Backup Version • ${{ github.ref_name }} • ${{ github.sha }}
 
 on:
   push:
