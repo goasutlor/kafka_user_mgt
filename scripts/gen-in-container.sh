@@ -14,7 +14,7 @@
 #
 # Optional:
 #   CONTAINER_NAME=kafka-user-mgmt   # default
-#   CTR_ENGINE=podman|docker           # auto-detect if unset
+#   CTR_ENGINE=podman|docker         # auto-detect if unset
 #   KUBECONFIG=/opt/kafka-usermgmt/.kube/config-both   # inside-container path (default: .../config)
 
 set -euo pipefail
@@ -22,7 +22,7 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
-if [[ ! -v CTR_ENGINE ]]; then
+if [[ -z "${CTR_ENGINE:-}" ]]; then
   if command -v podman &>/dev/null; then
     CTR_ENGINE=podman
   elif command -v docker &>/dev/null; then
@@ -54,7 +54,8 @@ Kube_in_container="${KUBECONFIG:-/opt/kafka-usermgmt/.kube/config}"
 Base_dir="${GEN_BASE_DIR:-/opt/kafka-usermgmt}"
 
 exec_args=(
-  -e "PATH=/host/usr/bin:/usr/local/bin:/usr/bin:/bin"
+  -e "PATH=/usr/local/bin:/usr/bin:/bin:/host/usr/bin"
+  -e "GEN_OC_PATH=/host/usr/bin/oc"
   -e "KUBECONFIG=${Kube_in_container}"
   -e "GEN_BASE_DIR=${Base_dir}"
 )
@@ -63,10 +64,9 @@ exec_args=(
 while IFS= read -r name; do
   [[ -n "${name:-}" ]] || continue
   [[ "$name" == GEN_* ]] || continue
-  # shellcheck disable=SC2086
   v="${!name}"
   [[ -n "$v" ]] || continue
-  exec_args+=( -e "${name}=${v}" )
+  exec_args+=(-e "${name}=${v}")
 done < <(compgen -e | grep '^GEN_' || true)
 
 exec "$CTR_ENGINE" exec -it "${exec_args[@]}" "$CONTAINER_NAME" /app/bundled-gen/gen.sh "$@"

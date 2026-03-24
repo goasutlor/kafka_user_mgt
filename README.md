@@ -12,6 +12,11 @@ docker pull ghcr.io/goasutlor/kafka_user_mgt:latest
 
 Run with Compose (mount `runtime` + `deploy/config`). First start: open `http://<host>:3443/setup.html` to write config into the mounted volume. **Upgrading the image keeps that config** (no re-setup). To wipe and run setup again: **`/reset-config.html`** (Portal user/password + confirmation phrase), or see [UPGRADE-AND-PERSISTENCE.md](UPGRADE-AND-PERSISTENCE.md).
 
+### CLI (Portal-parity wrappers)
+
+- `./scripts/gen-in-container.sh` — runs bundled `gen.sh` in the running container with Portal-compatible baseline env (`PATH`, `GEN_OC_PATH`, `KUBECONFIG`, `GEN_BASE_DIR`).
+- `./scripts/gen-cli.sh` — guided menu wrapper for common non-interactive flows (preflight, test user, add ACL existing, guided add user) and environment profile selection from `master.config`.
+
 **Upgrades / full reset:** Pulling a newer image does not wipe bind-mounted host config. For a clean reinstall (drop old `master.config` / kubeconfig paths), see [UPGRADE-AND-PERSISTENCE.md](UPGRADE-AND-PERSISTENCE.md) — section *รีเซ็ตเริ่มใหม่ทั้งหมด* (Thai + English).
 
 **Topology:** Dual DC / dual OpenShift with **one** Confluent Kafka cluster — production fit and “universal portal” limits — see [PRODUCTION-TOPOLOGY-2DC-1-KAFKA.md](PRODUCTION-TOPOLOGY-2DC-1-KAFKA.md).
