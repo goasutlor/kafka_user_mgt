@@ -10,7 +10,7 @@ RUN npm install --omit=dev --ignore-scripts
 
 FROM node:20-bookworm-slim
 # Semantic app version (shown in UI). Optional GIT_COMMIT for /api/version short hash.
-ARG VERSION=1.0.80
+ARG VERSION=1.0.83
 ARG GIT_COMMIT=
 ENV APP_VERSION=${VERSION}
 ENV GIT_COMMIT=${GIT_COMMIT}

@@ -2302,6 +2302,34 @@ else
 fi
 [ $? -ne 0 ] && { echo -e "\n   ${RED}❌ ACL add failed:${NC}"; echo "$acl_out" | sed 's/^/   /'; error_exit "Check admin credentials in $ADMIN_CONFIG."; }
 done_msg
+# Kafka 3.x+: producer idempotence defaults on; many clusters require CLUSTER IdempotentWrite for principals that produce.
+idem_needed=false
+if [ "$ACL_OPS" = "All" ]; then
+    idem_needed=true
+else
+    _ops_lc=$(echo "$ACL_OPS" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+    case ",${_ops_lc}," in
+        *,write,*) idem_needed=true ;;
+    esac
+fi
+if [ "$idem_needed" = "true" ]; then
+    status_msg "Adding CLUSTER IdempotentWrite (Kafka 3.x+ idempotent producer)"
+    idem_out=$($KAFKA_BIN/kafka-acls.sh \
+      --bootstrap-server "$BOOTSTRAP_CWDC" \
+      --command-config "$ADMIN_CONFIG" \
+      --add \
+      --allow-principal "User:$KAFKA_USER" \
+      --operation IdempotentWrite \
+      --cluster </dev/null 2>&1)
+    idem_rc=$?
+    done_msg
+    if [ $idem_rc -ne 0 ]; then
+        echo -e "   ${YELLOW}⚠️  CLUSTER IdempotentWrite add failed (produce may fail if the cluster enforces this ACL)${NC}"
+        echo "$idem_out" | sed 's/^/   /'
+    else
+        echo -e "   ${GREEN}✓ CLUSTER IdempotentWrite added.${NC}"
+    fi
+fi
 fi
 
 # 4b-2. Consumer Group ACL — Required for running a real consumer (e.g. commit offset).

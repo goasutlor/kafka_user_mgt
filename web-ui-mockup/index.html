@@ -609,7 +609,6 @@
     .acl-designer-col-detail .acl-resources-list-slot {
       min-height: 120px;
     }
-    .acl-designer-col-detail .acl-add-resource-btn { margin-top: 10px; }
     .acl-designer-col-detail .acl-resource-name-input {
       max-width: 100%;
       flex: 1;
@@ -631,11 +630,11 @@
       transition: border-color .15s, background .15s, box-shadow .15s;
       text-align: left;
     }
-    .acl-role-card:hover { border-color: #93c5fd; background: #f0f9ff; }
+    .acl-role-card:hover { border-color: #cbd5e1; background: #f8fafc; }
     .acl-role-card.active {
-      border-color: var(--btn-primary);
-      background: rgba(14, 165, 233, .10);
-      box-shadow: 0 0 0 3px rgba(14, 165, 233, .12);
+      border-color: #3b82f6;
+      background: #f8fafc;
+      box-shadow: none;
     }
     .acl-role-card .acl-role-title { font-weight: 700; font-size: 14px; margin-bottom: 4px; color: var(--text); }
     .acl-role-card .acl-role-desc { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; line-height: 1.45; }
@@ -647,13 +646,11 @@
       border-radius: 12px;
       line-height: 1.5;
     }
-    .acl-badge-write  { background: #dcfce7; color: #166534; }
-    .acl-badge-read   { background: #dbeafe; color: #1e40af; }
-    .acl-badge-rw     { background: #e0e7ff; color: #3730a3; }
-    .acl-badge-txn    { background: #fef3c7; color: #92400e; }
-    .acl-badge-meta   { background: #f1f5f9; color: #475569; }
-    .acl-badge-int    { background: #cffafe; color: #0e7490; }
-    .acl-badge-admin  { background: #fee2e2; color: #991b1b; }
+    .acl-badge-write  { background: #e8f0e8; color: #3d5340; }
+    .acl-badge-read   { background: #e8eef5; color: #3d4d60; }
+    .acl-badge-meta   { background: #eceef1; color: #4a5568; }
+    .acl-badge-int    { background: #e8eef0; color: #3d5058; }
+    .acl-badge-admin  { background: #f0e8e8; color: #6b3d3d; }
 
     /* Resource cards */
     .acl-resource-card {
@@ -676,16 +673,6 @@
       gap: 10px;
       flex-wrap: wrap;
     }
-    .acl-resource-type-select {
-      font-weight: 700;
-      font-size: 13px;
-      text-transform: uppercase;
-      padding: 6px 10px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: #f8fafc;
-      cursor: pointer;
-    }
     .acl-resource-name-input {
       font-family: ui-monospace, 'SF Mono', 'Consolas', monospace;
       font-size: 13px;
@@ -699,9 +686,10 @@
       font-family: ui-monospace, 'SF Mono', 'Consolas', monospace;
       font-size: 13px;
       padding: 6px 10px;
-      background: #f1f5f9;
+      background: #eef1f5;
       border-radius: 6px;
-      color: var(--text-muted);
+      color: #334155;
+      border: 1px solid #e2e8f0;
     }
     .acl-resource-pattern-select {
       font-size: 12px;
@@ -714,18 +702,45 @@
       border: 1px solid var(--border);
     }
     .acl-resource-sep { color: var(--text-muted); font-size: 14px; }
-    .acl-resource-remove {
-      font-size: 20px;
-      line-height: 1;
-      padding: 4px 10px;
-      border-radius: 6px;
-      color: var(--text-muted);
-      background: none;
-      border: 1px solid transparent;
-      cursor: pointer;
-      transition: color .15s, border-color .15s;
+    .acl-resource-pattern-fixed {
+      font-size: 12px;
+      font-weight: 600;
+      color: #64748b;
+      margin-left: 4px;
     }
-    .acl-resource-remove:hover { color: var(--danger); border-color: var(--danger); }
+
+    /* Fixed 3-layer stack: TOPIC → GROUP → CLUSTER (order ไม่เปลี่ยนตามเทมเพลต) */
+    .acl-layer-section {
+      margin-bottom: 22px;
+      padding-bottom: 4px;
+      border-bottom: 1px solid #e8ecf0;
+    }
+    .acl-layer-section:last-child {
+      margin-bottom: 0;
+      padding-bottom: 0;
+      border-bottom: none;
+    }
+    .acl-layer-title {
+      font-size: 11px;
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 12px;
+      padding-bottom: 6px;
+      border-bottom: 1px solid #e2e8f0;
+    }
+    .acl-layer-empty {
+      font-size: 12px;
+      color: #94a3b8;
+      padding: 12px 14px;
+      background: #f8fafc;
+      border: 1px dashed #e2e8f0;
+      border-radius: 8px;
+      line-height: 1.45;
+    }
+    .acl-layer-section .acl-resource-card { margin-bottom: 12px; }
+    .acl-layer-section .acl-resource-card:last-child { margin-bottom: 0; }
 
     /* Operation tiles */
     .acl-ops-grid {
@@ -734,18 +749,18 @@
       gap: 10px;
     }
     .acl-op-tile {
-      border: 2px solid var(--border);
-      border-radius: 10px;
-      padding: 12px 14px;
+      border: 1px solid #e2e8f0;
+      border-radius: 8px;
+      padding: 10px 12px;
       cursor: pointer;
       transition: border-color .15s, background .15s;
       display: flex;
       align-items: flex-start;
       gap: 10px;
       user-select: none;
-      background: #f8fafc;
+      background: #fafafa;
     }
-    .acl-op-tile:hover { border-color: #93c5fd; }
+    .acl-op-tile:hover { border-color: #cbd5e1; }
     .acl-op-check {
       width: 22px;
       height: 22px;
@@ -762,38 +777,19 @@
       margin-top: 1px;
     }
     .acl-op-info { flex: 1; min-width: 0; }
-    .acl-op-name { font-weight: 700; font-size: 13px; margin-bottom: 2px; color: #64748b; }
+    .acl-op-name { font-weight: 700; font-size: 12px; margin-bottom: 2px; color: #64748b; }
     .acl-op-desc { font-size: 11px; color: #94a3b8; line-height: 1.35; }
 
-    .acl-op-tile.op-active-blue   { background: #eff6ff; border-color: #93c5fd; }
-    .acl-op-tile.op-active-blue   .acl-op-check { background: #3b82f6; border-color: #3b82f6; }
-    .acl-op-tile.op-active-blue   .acl-op-name  { color: #1e40af; }
-    .acl-op-tile.op-active-blue   .acl-op-desc  { color: #3b82f6; }
-
-    .acl-op-tile.op-active-green  { background: #f0fdf4; border-color: #86efac; }
-    .acl-op-tile.op-active-green  .acl-op-check { background: #22c55e; border-color: #22c55e; }
-    .acl-op-tile.op-active-green  .acl-op-name  { color: #166534; }
-    .acl-op-tile.op-active-green  .acl-op-desc  { color: #16a34a; }
-
-    .acl-op-tile.op-active-purple { background: #f5f3ff; border-color: #c4b5fd; }
-    .acl-op-tile.op-active-purple .acl-op-check { background: #8b5cf6; border-color: #8b5cf6; }
-    .acl-op-tile.op-active-purple .acl-op-name  { color: #5b21b6; }
-    .acl-op-tile.op-active-purple .acl-op-desc  { color: #7c3aed; }
-
-    .acl-op-tile.op-active-amber  { background: #fffbeb; border-color: #fcd34d; }
-    .acl-op-tile.op-active-amber  .acl-op-check { background: #f59e0b; border-color: #f59e0b; }
-    .acl-op-tile.op-active-amber  .acl-op-name  { color: #92400e; }
-    .acl-op-tile.op-active-amber  .acl-op-desc  { color: #d97706; }
-
-    .acl-op-tile.op-active-red    { background: #fef2f2; border-color: #fca5a5; }
-    .acl-op-tile.op-active-red    .acl-op-check { background: #ef4444; border-color: #ef4444; }
-    .acl-op-tile.op-active-red    .acl-op-name  { color: #991b1b; }
-    .acl-op-tile.op-active-red    .acl-op-desc  { color: #dc2626; }
-
-    .acl-op-tile.op-active-teal   { background: #f0fdfa; border-color: #5eead4; }
-    .acl-op-tile.op-active-teal   .acl-op-check { background: #14b8a6; border-color: #14b8a6; }
-    .acl-op-tile.op-active-teal   .acl-op-name  { color: #115e59; }
-    .acl-op-tile.op-active-teal   .acl-op-desc  { color: #0d9488; }
+    .acl-op-tile.op-on {
+      background: #eff6ff;
+      border-color: #93c5fd;
+    }
+    .acl-op-tile.op-on .acl-op-check {
+      background: #64748b;
+      border-color: #64748b;
+    }
+    .acl-op-tile.op-on .acl-op-name { color: #1e293b; }
+    .acl-op-tile.op-on .acl-op-desc { color: #64748b; }
 
     .progress-wrap {
       margin-top: 1rem;
@@ -1208,7 +1204,7 @@
 
         <div class="wizard-panel" id="wizard-panel-3" data-step="3">
           <h3>Permission (ACL)</h3>
-          <p class="step-desc">Role template + Resource + Operation — <strong>ชุดเดียวกับ</strong> Add ACL to existing user. Topic จากขั้นก่อนจะถูก sync เข้า topic ตัวแรกเมื่อเข้าขั้นนี้ (แก้ไขได้). การรัน ACL จริงใช้ bootstrap และ client properties จาก server ตาม environment ที่เลือก — ไม่ต้องกรอกซ้ำที่นี่.</p>
+          <p class="step-desc">เลือก Role ด้านซ้าย — ด้านขวาเป็น <strong>3 ชั้นคงที่</strong> เรียงลงเสมอ: <strong>TOPIC → GROUP → CLUSTER</strong> (ไม่มี dropdown เลือกประเภท resource). แต่ละเทมเพลตจะใช้บางชั้นเท่านั้น — ชั้นที่ไม่ใช้จะแสดงข้อความว่าง. <strong>โฟกัสหนึ่ง topic หลักต่อรอบ</strong> — หลาย topic ใช้ Add ACL ภายหลัง. Topic จากขั้นก่อน sync เข้าชื่อ topic หลัก. LITERAL / PREFIXED ปรับได้ตามแถวที่แก้ชื่อได้. การรัน ACL จริงใช้ bootstrap จาก server ตาม environment.</p>
           <div class="form-group acl-designer-form-group">
             <div class="acl-designer-split">
               <div class="acl-designer-col acl-designer-col-roles">
@@ -1218,7 +1214,6 @@
               <div class="acl-designer-col acl-designer-col-detail">
                 <label class="acl-designer-section-label">ACL Detail</label>
                 <div id="acl-resources-list-add" class="acl-resources-list-slot"></div>
-                <button type="button" id="btn-acl-add-resource-add" class="btn btn-secondary acl-add-resource-btn">+ Add resource</button>
               </div>
             </div>
             <input type="hidden" id="acl-bootstrap-add" value="" />
@@ -1226,6 +1221,7 @@
             <input type="hidden" id="acl-permission-type-add" value="ALLOW" />
           </div>
           <div class="form-group" id="acl-warning-box-add" style="display:none;"></div>
+          <div class="form-group" id="acl-admin-risk-add" style="display:none;"></div>
           <div class="form-group">
             <label>Generated command preview</label>
             <button type="button" id="btn-acl-copy-command-add" class="btn btn-secondary">Copy command</button>
@@ -1242,7 +1238,7 @@
                 <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">DescribeConfigs</td><td style="padding:4px 8px;">View topic configuration.</td></tr>
                 <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">Create, Alter, AlterConfigs, Delete</td><td style="padding:4px 8px;">Admin-level: create/alter/delete topics. Do not grant to normal clients.</td></tr>
                 <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">All</td><td style="padding:4px 8px;">All of the above.</td></tr>
-                <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">Consumer Group</td><td style="padding:4px 8px;">Read</td><td style="padding:4px 8px;">Join group and consume. Add via designer when needed (e.g. Consumer / Prosumer templates).</td></tr>
+                <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;">Consumer Group</td><td style="padding:4px 8px;">Read</td><td style="padding:4px 8px;">Join group and consume. Included in Consumer template.</td></tr>
                 <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;"></td><td style="padding:4px 8px;">Describe</td><td style="padding:4px 8px;">View group metadata (members, offsets). Optional.</td></tr>
                 <tr style="border-bottom:1px solid var(--border);"><td style="padding:4px 8px;"></td><td style="padding:4px 8px;">Delete</td><td style="padding:4px 8px;">Delete the consumer group. Optional; grant only if needed.</td></tr>
               </tbody>
@@ -1388,7 +1384,7 @@
         </div>
         <div class="wizard-panel" id="ct-wizard-panel-4" data-step="4">
           <h3>Permission (ACL)</h3>
-          <p class="step-desc">Role template + Resource + Operation — <strong>ชุดเดียวกับ</strong> Add new user / Add ACL to existing user. Topic จากขั้นก่อนจะ sync เข้า topic ตัวแรก. การรัน ACL จริงใช้ config จาก server ตาม environment — ไม่ต้องกรอก bootstrap/host ที่นี่.</p>
+          <p class="step-desc">เลือก Role ด้านซ้าย — รายละเอียด ACL ด้านขวา fix ตามเทมเพลต (หนึ่ง topic หลักต่อรอบ onboarding). Topic จากขั้นก่อนจะ sync เข้าชื่อ topic หลัก. การรัน ACL จริงใช้ config จาก server ตาม environment.</p>
           <div class="form-group acl-designer-form-group">
             <div class="acl-designer-split">
               <div class="acl-designer-col acl-designer-col-roles">
@@ -1398,7 +1394,6 @@
               <div class="acl-designer-col acl-designer-col-detail">
                 <label class="acl-designer-section-label">ACL Detail</label>
                 <div id="acl-resources-list-ct" class="acl-resources-list-slot"></div>
-                <button type="button" id="btn-acl-add-resource-ct" class="btn btn-secondary acl-add-resource-btn">+ Add resource</button>
               </div>
             </div>
             <input type="hidden" id="acl-bootstrap-ct" value="" />
@@ -1406,6 +1401,7 @@
             <input type="hidden" id="acl-permission-type-ct" value="ALLOW" />
           </div>
           <div class="form-group" id="acl-warning-box-ct" style="display:none;"></div>
+          <div class="form-group" id="acl-admin-risk-ct" style="display:none;"></div>
           <div class="form-group">
             <label>Generated command preview</label>
             <button type="button" id="btn-acl-copy-command-ct" class="btn btn-secondary">Copy command</button>
@@ -1491,7 +1487,7 @@
         <div id="topics-list-box-acl-existing" class="topics-list" style="display:block; margin-top:6px;"></div>
       </div>
       <div class="form-group acl-designer-form-group">
-        <p class="hint" style="margin:0 0 12px; font-size:13px;">เลือก template ซ้าย · แก้ resource/operation ขวา — การรัน ACL จริงใช้ bootstrap จาก server ตาม environment (host เริ่มต้น <code>*</code>, ALLOW).</p>
+        <p class="hint" style="margin:0 0 12px; font-size:13px;">เลือก Role ซ้าย — ขวาแสดง resource ตามเทมเพลต (หนึ่ง topic หลัก; หลาย topic ใช้ Add ACL ทีหลัง). รัน ACL จริงใช้ bootstrap จาก server (host <code>*</code>, ALLOW).</p>
         <div class="acl-designer-split">
           <div class="acl-designer-col acl-designer-col-roles">
             <label class="acl-designer-section-label">เลือก Role Template (Production-grade)</label>
@@ -1500,7 +1496,6 @@
           <div class="acl-designer-col acl-designer-col-detail">
             <label class="acl-designer-section-label">ACL Detail</label>
             <div id="acl-resources-list-exist" class="acl-resources-list-slot"></div>
-            <button type="button" id="btn-acl-add-resource-exist" class="btn btn-secondary acl-add-resource-btn">+ Add resource</button>
           </div>
         </div>
         <input type="hidden" id="acl-bootstrap-exist" value="" />
@@ -1508,6 +1503,7 @@
         <input type="hidden" id="acl-permission-type-exist" value="ALLOW" />
       </div>
       <div class="form-group" id="acl-warning-box-exist" style="display:none;"></div>
+      <div class="form-group" id="acl-admin-risk-exist" style="display:none;"></div>
       <div class="form-group">
         <label>Generated command preview</label>
         <button type="button" id="btn-acl-copy-command-exist" class="btn btn-secondary">Copy command</button>
@@ -2363,7 +2359,7 @@
               system: el ? el.value.trim() : '',
               topic: (document.getElementById('topic') || {}).value.trim() || '',
               username: (document.getElementById('username') || {}).value.trim() || '',
-              aclDesignerAdd: typeof aclDesignerStates !== 'undefined' && aclDesignerStates.add ? JSON.stringify({ role: aclDesignerStates.add.selectedRole, resources: aclDesignerStates.add.resources }) : '',
+              aclDesignerAdd: typeof aclDesignerStates !== 'undefined' && aclDesignerStates.add ? JSON.stringify({ role: aclDesignerStates.add.selectedRole, resources: aclDesignerStates.add.resources, adminRiskAck: !!aclDesignerStates.add.adminRiskAck }) : '',
               addSkipValidation: skipB ? skipB.checked : false,
               addAuthOnly: authB ? authB.checked : false,
               step: currentStep
@@ -2386,8 +2382,15 @@
               try {
                 var ad = JSON.parse(s.aclDesignerAdd);
                 if (ad && ad.resources && ad.resources.length) {
-                  aclDesignerStates.add.selectedRole = ad.role || 'consumer';
-                  aclDesignerStates.add.resources = ad.resources;
+                  var rawRole = ad.role || 'consumer';
+                  var wantRole = normalizeAclDesignerRole(rawRole);
+                  aclDesignerStates.add.selectedRole = wantRole;
+                  if (rawRole === 'prosumer' || rawRole === 'idempotent' || !ACL_ROLE_DEFAULTS[rawRole]) {
+                    aclDesignerStates.add.resources = JSON.parse(JSON.stringify(ACL_ROLE_DEFAULTS[wantRole]));
+                  } else {
+                    aclDesignerStates.add.resources = ad.resources;
+                  }
+                  aclDesignerStates.add.adminRiskAck = ad.adminRiskAck === true;
                   if (typeof renderAclDesigner === 'function') renderAclDesigner('add');
                 }
               } catch (_) {}
@@ -2976,6 +2979,11 @@
             resultEl.innerHTML = '<span style="color:var(--danger)">Username already exists. Pick a different one, or <a href="#add-acl-existing" style="color:var(--link);">add this topic to this user</a>.</span>';
             return;
           }
+          var vAclCt = typeof validateAclDesignerStep === 'function' ? validateAclDesignerStep('ct') : '';
+          if (vAclCt) {
+            resultEl.innerHTML = '<span style="color:var(--danger)">' + escapeHtmlCt(vAclCt) + '</span>';
+            return;
+          }
           progressWrap.classList.remove('progress-success');
           progressWrap.classList.add('visible');
           progressBar.style.width = '0%';
@@ -3123,90 +3131,94 @@
           'transactional-id': ['WRITE', 'DESCRIBE']
         };
         var ACL_ROLE_DEFAULTS = {
-          producer: [{ type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['WRITE', 'DESCRIBE'] }],
+          producer: [
+            { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['WRITE', 'DESCRIBE'] },
+            { type: 'cluster', name: 'kafka-cluster', pattern: 'LITERAL', ops: ['IDEMPOTENT_WRITE'] }
+          ],
           consumer: [
             { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['READ', 'DESCRIBE'] },
             { type: 'group', name: 'your-consumer-group', pattern: 'LITERAL', ops: ['READ', 'DESCRIBE'] }
           ],
-          prosumer: [
-            { type: 'topic', name: 'input-topic', pattern: 'LITERAL', ops: ['READ', 'DESCRIBE'] },
-            { type: 'topic', name: 'output-topic', pattern: 'LITERAL', ops: ['WRITE', 'DESCRIBE'] },
-            { type: 'group', name: 'svc-processor-cg', pattern: 'LITERAL', ops: ['READ', 'DESCRIBE'] }
-          ],
-          idempotent: [
-            { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['WRITE', 'DESCRIBE'] },
-            { type: 'cluster', name: 'kafka-cluster', pattern: 'LITERAL', ops: ['IDEMPOTENT_WRITE'] }
-          ],
           monitor: [
-            { type: 'topic', name: '*', pattern: 'LITERAL', ops: ['DESCRIBE', 'DESCRIBE_CONFIGS'] },
-            { type: 'group', name: '*', pattern: 'LITERAL', ops: ['DESCRIBE'] },
+            { type: 'topic', name: '*', pattern: 'LITERAL', ops: ['DESCRIBE', 'DESCRIBE_CONFIGS'], readOnlyName: true },
+            { type: 'group', name: '*', pattern: 'LITERAL', ops: ['DESCRIBE'], readOnlyName: true },
             { type: 'cluster', name: 'kafka-cluster', pattern: 'LITERAL', ops: ['DESCRIBE', 'DESCRIBE_CONFIGS'] }
           ],
           connector: [
             { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['READ', 'WRITE', 'DESCRIBE'] },
-            { type: 'topic', name: 'connect-', pattern: 'PREFIXED', ops: ['READ', 'WRITE', 'CREATE', 'DESCRIBE'] },
+            { type: 'topic', name: 'connect-', pattern: 'PREFIXED', ops: ['READ', 'WRITE', 'CREATE', 'DESCRIBE'], readOnlyName: true },
             { type: 'group', name: 'connect-cluster', pattern: 'LITERAL', ops: ['READ', 'DESCRIBE'] },
-            { type: 'cluster', name: 'kafka-cluster', pattern: 'LITERAL', ops: ['DESCRIBE', 'CREATE'] }
+            { type: 'cluster', name: 'kafka-cluster', pattern: 'LITERAL', ops: ['DESCRIBE', 'CREATE', 'IDEMPOTENT_WRITE'] }
           ],
           streams: [
-            { type: 'topic', name: 'input-topic', pattern: 'LITERAL', ops: ['READ', 'DESCRIBE'] },
-            { type: 'topic', name: 'output-topic', pattern: 'LITERAL', ops: ['WRITE', 'DESCRIBE'] },
-            { type: 'topic', name: 'app-id-', pattern: 'PREFIXED', ops: ['READ', 'WRITE', 'CREATE', 'DELETE', 'DESCRIBE'] },
-            { type: 'group', name: 'app-id-', pattern: 'PREFIXED', ops: ['READ', 'DESCRIBE'] }
+            { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['READ', 'WRITE', 'CREATE', 'DELETE', 'DESCRIBE'] },
+            { type: 'topic', name: 'app-id-', pattern: 'PREFIXED', ops: ['READ', 'WRITE', 'CREATE', 'DELETE', 'DESCRIBE'], readOnlyName: true },
+            { type: 'group', name: 'app-id-', pattern: 'PREFIXED', ops: ['READ', 'DESCRIBE'], readOnlyName: true },
+            { type: 'cluster', name: 'kafka-cluster', pattern: 'LITERAL', ops: ['IDEMPOTENT_WRITE'] }
           ],
           admin: [
             { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['CREATE', 'DELETE', 'ALTER', 'ALTER_CONFIGS', 'DESCRIBE', 'DESCRIBE_CONFIGS'] },
-            { type: 'group', name: '*', pattern: 'LITERAL', ops: ['DELETE', 'DESCRIBE'] },
+            { type: 'group', name: '*', pattern: 'LITERAL', ops: ['DELETE', 'DESCRIBE'], readOnlyName: true },
             { type: 'cluster', name: 'kafka-cluster', pattern: 'LITERAL', ops: ['DESCRIBE', 'DESCRIBE_CONFIGS'] }
           ]
         };
         var ACL_ROLE_CARDS = [
-          { key: 'producer', title: 'Producer', badge: 'Write only', bc: 'acl-badge-write', desc: 'Service ที่ส่งข้อมูลเข้า topic เท่านั้น ไม่ต้องอ่าน' },
-          { key: 'consumer', title: 'Consumer', badge: 'Read only', bc: 'acl-badge-read', desc: 'Service ที่อ่านข้อมูลผ่าน consumer group' },
-          { key: 'prosumer', title: 'Prosumer', badge: 'Read + Write', bc: 'acl-badge-rw', desc: 'อ่านและเขียน เช่น Stream processor (Kafka Streams, Flink)' },
-          { key: 'idempotent', title: 'Idempotent Producer', badge: 'Write + Txn', bc: 'acl-badge-txn', desc: 'Producer ที่ต้องการ exactly-once หรือ transactional' },
-          { key: 'monitor', title: 'Monitor / Audit', badge: 'Read-meta only', bc: 'acl-badge-meta', desc: 'Observability tools, Kafka UI, audit logging เท่านั้น' },
-          { key: 'connector', title: 'Kafka Connect', badge: 'Read + Write + Internal', bc: 'acl-badge-int', desc: 'Source/Sink connector ต้องการ internal topics ด้วย' },
-          { key: 'streams', title: 'Kafka Streams App', badge: 'Write + Create + Group', bc: 'acl-badge-int', desc: 'ต้องการสร้าง internal changelog + repartition topics' },
-          { key: 'admin', title: 'Topic Admin', badge: 'Full topic admin', bc: 'acl-badge-admin', desc: 'DevOps/Platform team สร้าง/ลบ/แก้ config topic' }
+          { key: 'producer', title: 'Producer', badge: 'Write only', bc: 'acl-badge-write', desc: 'ส่งเข้า topic เท่านั้น — CLUSTER:IDEMPOTENT_WRITE มากับเทมเพลต (Kafka 3.x+)' },
+          { key: 'consumer', title: 'Consumer', badge: 'Read only', bc: 'acl-badge-read', desc: 'อ่านผ่าน consumer group' },
+          { key: 'monitor', title: 'Monitor / Audit', badge: 'Read-meta only', bc: 'acl-badge-meta', desc: 'Observability, Kafka UI, audit — metadata เท่านั้น' },
+          { key: 'connector', title: 'Kafka Connect', badge: 'Read + Write + Internal', bc: 'acl-badge-int', desc: 'Connector + internal topics (prefix connect- แยกบรรทัดตามเทมเพลต)' },
+          { key: 'streams', title: 'Kafka Streams App', badge: 'Write + Create + Group', bc: 'acl-badge-int', desc: 'Streams + prefix app-id- สำหรับ internal topics / group' },
+          { key: 'admin', title: 'Topic Admin', badge: 'Full topic admin', bc: 'acl-badge-admin', desc: 'Platform/DevOps — สร้าง/ลบ/แก้ config (มี DELETE)' }
         ];
         var ACL_OP_META = {
           topic: {
-            READ: { d: 'อ่าน/consume messages', c: 'blue' },
-            WRITE: { d: 'เขียน/produce messages', c: 'green' },
-            DESCRIBE: { d: 'ดู partition metadata', c: 'purple' },
-            DESCRIBE_CONFIGS: { d: 'ดู config ของ topic', c: 'purple' },
-            CREATE: { d: 'สร้าง topic', c: 'amber' },
-            DELETE: { d: 'ลบ topic', c: 'red' },
-            ALTER: { d: 'แก้ไข topic', c: 'amber' },
-            ALTER_CONFIGS: { d: 'แก้ config', c: 'amber' }
+            READ: { d: 'อ่าน/consume messages' },
+            WRITE: { d: 'เขียน/produce messages' },
+            DESCRIBE: { d: 'ดู partition metadata' },
+            DESCRIBE_CONFIGS: { d: 'ดู config ของ topic' },
+            CREATE: { d: 'สร้าง topic' },
+            DELETE: { d: 'ลบ topic' },
+            ALTER: { d: 'แก้ไข topic' },
+            ALTER_CONFIGS: { d: 'แก้ config' }
           },
           group: {
-            READ: { d: 'Join consumer group', c: 'blue' },
-            DESCRIBE: { d: 'Monitor lag', c: 'purple' },
-            DELETE: { d: 'ลบ consumer group', c: 'red' }
+            READ: { d: 'Join consumer group' },
+            DESCRIBE: { d: 'Monitor lag' },
+            DELETE: { d: 'ลบ consumer group' }
           },
           cluster: {
-            DESCRIBE: { d: 'ดู cluster info', c: 'purple' },
-            IDEMPOTENT_WRITE: { d: 'exactly-once write', c: 'teal' },
-            CREATE: { d: 'สร้าง topic (cluster)', c: 'amber' },
-            ALTER: { d: 'แก้ไข cluster', c: 'amber' },
-            CLUSTER_ACTION: { d: 'internal replication', c: 'purple' },
-            DESCRIBE_CONFIGS: { d: 'ดู broker config', c: 'purple' }
+            DESCRIBE: { d: 'ดู cluster info' },
+            IDEMPOTENT_WRITE: { d: 'idempotent produce (Kafka 3.x+)' },
+            CREATE: { d: 'สร้าง topic (cluster)' },
+            ALTER: { d: 'แก้ไข cluster' },
+            CLUSTER_ACTION: { d: 'internal replication' },
+            DESCRIBE_CONFIGS: { d: 'ดู broker config' }
           },
           'transactional-id': {
-            WRITE: { d: 'เขียน transactional', c: 'green' },
-            DESCRIBE: { d: 'ดู txn metadata', c: 'purple' }
+            WRITE: { d: 'เขียน transactional' },
+            DESCRIBE: { d: 'ดู txn metadata' }
           }
         };
+        function aclResourceTypeLabel(type) {
+          var M = { topic: 'TOPIC', group: 'GROUP', cluster: 'CLUSTER', 'transactional-id': 'TRANSACTIONAL_ID' };
+          return M[type] || String(type || '');
+        }
+        function normalizeAclDesignerRole(role) {
+          var r = String(role || '').trim();
+          if (r === 'prosumer' || r === 'idempotent') return 'consumer';
+          if (ACL_ROLE_DEFAULTS[r]) return r;
+          return 'consumer';
+        }
         var ACL_DESIGNER_SUFFIXES = ['add', 'ct', 'exist'];
+        /** ลำดับชั้นคงที่ใน UI — ไม่มี dropdown เลือกประเภท resource */
+        var ACL_LAYER_ORDER = ['topic', 'group', 'cluster'];
         var ACL_PAGE_META = {
           add: { usernameId: 'username', topicId: 'topic' },
           ct: { usernameId: 'ct-username', topicId: 'ct-topic' },
           exist: { usernameId: 'acl-existing-username', topicId: 'acl-existing-topic' }
         };
         function defaultAclDesignerState() {
-          return { selectedRole: 'consumer', resources: JSON.parse(JSON.stringify(ACL_ROLE_DEFAULTS.consumer)) };
+          return { selectedRole: 'consumer', resources: JSON.parse(JSON.stringify(ACL_ROLE_DEFAULTS.consumer)), adminRiskAck: false };
         }
         var aclDesignerStates = { add: defaultAclDesignerState(), ct: defaultAclDesignerState(), exist: defaultAclDesignerState() };
         function syncAclTopicFromFirstTopicResource(suffix) {
@@ -3215,7 +3227,7 @@
           var t = '';
           for (var i = 0; i < st.resources.length; i += 1) {
             var r = st.resources[i];
-            if (r.type === 'topic' && r.name && r.name !== '*') { t = r.name; break; }
+            if (r.type === 'topic' && r.name && r.name !== '*' && !r.readOnlyName) { t = r.name; break; }
           }
           var meta = ACL_PAGE_META[suffix];
           if (t && meta && meta.topicId) {
@@ -3230,7 +3242,8 @@
           if (!tv) return;
           var st = aclDesignerStates[suffix];
           for (var i = 0; i < st.resources.length; i += 1) {
-            if (st.resources[i].type === 'topic') { st.resources[i].name = tv; break; }
+            var tr = st.resources[i];
+            if (tr.type === 'topic' && !tr.readOnlyName) { st.resources[i].name = tv; break; }
           }
         }
         function renderAclRoleCards(suffix) {
@@ -3251,6 +3264,7 @@
               if (!ACL_ROLE_DEFAULTS[role]) return;
               aclDesignerStates[suffix].selectedRole = role;
               aclDesignerStates[suffix].resources = JSON.parse(JSON.stringify(ACL_ROLE_DEFAULTS[role]));
+              aclDesignerStates[suffix].adminRiskAck = false;
               if (suffix !== 'exist') syncWizardTopicIntoAclDesigner(suffix);
               syncAclTopicFromFirstTopicResource(suffix);
               renderAclDesigner(suffix);
@@ -3300,18 +3314,54 @@
         function collectAclWarnings(suffix) {
           var warnings = [];
           var st = aclDesignerStates[suffix];
-          if (st.selectedRole === 'admin') warnings.push('Admin ACL ควรให้เฉพาะ platform/devops team เท่านั้น');
-          if (st.selectedRole === 'idempotent') {
-            var hasIdem = st.resources.some(function (r) { return r.type === 'cluster' && (r.ops || []).map(normalizeAclOperation).indexOf('IDEMPOTENT_WRITE') !== -1; });
-            if (!hasIdem) warnings.push('Idempotent producer ต้องมี CLUSTER:IDEMPOTENT_WRITE');
+          if (st.selectedRole === 'admin') warnings.push('Topic Admin มีสิทธิ์ลบ topic และ consumer group — ใช้เฉพาะทีม platform/devops และต้องติ๊กยืนยันความเสี่ยงก่อนดำเนินการต่อ');
+          var hasTopicWrite = st.resources.some(function (r) {
+            return r.type === 'topic' && (r.ops || []).map(normalizeAclOperation).indexOf('WRITE') !== -1;
+          });
+          var hasIdemCluster = st.resources.some(function (r) {
+            return r.type === 'cluster' && (r.ops || []).map(normalizeAclOperation).indexOf('IDEMPOTENT_WRITE') !== -1;
+          });
+          if (hasTopicWrite && !hasIdemCluster && st.selectedRole !== 'monitor') {
+            warnings.push('มี Topic WRITE แต่ไม่มี CLUSTER:IDEMPOTENT_WRITE — Kafka 3.x+ มักต้องการสิทธิ์นี้เมื่อ produce');
           }
           st.resources.forEach(function (r) {
             if ((r.type === 'group') && r.name === '*' && st.selectedRole !== 'monitor' && st.selectedRole !== 'admin') {
               warnings.push('ควรระบุชื่อ consumer group จริงๆ แทน * เพื่อป้องกัน rogue consumer');
             }
-            if (r.type === 'topic' && !String(r.name || '').trim()) warnings.push('กรุณาระบุชื่อ topic');
+            if (r.type === 'topic' && !r.readOnlyName && !String(r.name || '').trim()) warnings.push('กรุณาระบุชื่อ topic');
           });
           return warnings;
+        }
+        function renderAclResourceRowHtml(suffix, r, idx) {
+          var ops = ACL_OPS_BY_TYPE[r.type] || [];
+          var activeOps = (r.ops || []).map(normalizeAclOperation);
+          var nameEl;
+          if (r.type === 'cluster') {
+            nameEl = '<code class="acl-resource-name-fixed">kafka-cluster</code>';
+          } else if (r.readOnlyName) {
+            nameEl = '<code class="acl-resource-name-fixed">' + escapeHtml(r.name || '') + '</code>';
+          } else {
+            nameEl = '<input type="text" class="acl-resource-name-input" data-acl-suf="' + suffix + '" data-acl-name="' + idx + '" value="' + escapeHtml(r.name || '') + '" placeholder="ชื่อ resource" />';
+          }
+          var pat = (r.pattern || 'LITERAL') === 'PREFIXED' ? 'PREFIXED' : 'LITERAL';
+          var patEl = r.readOnlyName
+            ? '<span class="acl-resource-pattern-fixed">(' + pat + ')</span>'
+            : '<select class="acl-resource-pattern-select" data-acl-suf="' + suffix + '" data-acl-pattern="' + idx + '">'
+              + '<option value="LITERAL"' + (pat === 'LITERAL' ? ' selected' : '') + '>LITERAL</option>'
+              + '<option value="PREFIXED"' + (pat === 'PREFIXED' ? ' selected' : '') + '>PREFIXED</option></select>';
+          var opTiles = ops.map(function (op) {
+            var on = activeOps.indexOf(op) !== -1;
+            var m = (ACL_OP_META[r.type] || {})[op] || { d: op };
+            return '<div class="acl-op-tile' + (on ? ' op-on' : '') + '" data-acl-suf="' + suffix + '" data-acl-idx="' + idx + '" data-acl-op="' + op + '">'
+              + '<div class="acl-op-check">' + (on ? '✓' : '') + '</div>'
+              + '<div class="acl-op-info"><div class="acl-op-name">' + op + '</div>'
+              + '<div class="acl-op-desc">' + escapeHtml(on ? m.d : 'ไม่ได้ใช้') + '</div></div></div>';
+          }).join('');
+          return '<div class="acl-resource-card">'
+            + '<div class="acl-resource-header"><div class="acl-resource-header-left">'
+            + nameEl + patEl
+            + '</div></div>'
+            + '<div class="acl-ops-grid">' + opTiles + '</div></div>';
         }
         function renderAclDesigner(suffix) {
           renderAclRoleCards(suffix);
@@ -3319,35 +3369,33 @@
           var preview = document.getElementById('acl-command-preview-' + suffix);
           if (!wrap || !preview) return;
           var st = aclDesignerStates[suffix];
-          var typeOpts = [
-            { v: 'topic', l: 'TOPIC' }, { v: 'group', l: 'GROUP' },
-            { v: 'cluster', l: 'CLUSTER' }, { v: 'transactional-id', l: 'TRANSACTIONAL_ID' }
-          ];
-          wrap.innerHTML = st.resources.map(function (r, idx) {
-            var ops = ACL_OPS_BY_TYPE[r.type] || [];
-            var activeOps = (r.ops || []).map(normalizeAclOperation);
-            var tSel = '<select class="acl-resource-type-select" data-acl-suf="' + suffix + '" data-acl-type="' + idx + '">'
-              + typeOpts.map(function (t) { return '<option value="' + t.v + '"' + (r.type === t.v ? ' selected' : '') + '>' + t.l + '</option>'; }).join('') + '</select>';
-            var nameEl = r.type === 'cluster'
-              ? '<code class="acl-resource-name-fixed">kafka-cluster</code>'
-              : '<input type="text" class="acl-resource-name-input" data-acl-suf="' + suffix + '" data-acl-name="' + idx + '" value="' + escapeHtml(r.name || '') + '" placeholder="Resource name" />';
-            var pSel = '<select class="acl-resource-pattern-select" data-acl-suf="' + suffix + '" data-acl-pattern="' + idx + '">'
-              + '<option value="LITERAL"' + ((r.pattern || 'LITERAL') === 'LITERAL' ? ' selected' : '') + '>LITERAL</option>'
-              + '<option value="PREFIXED"' + ((r.pattern || '') === 'PREFIXED' ? ' selected' : '') + '>PREFIXED</option></select>';
-            var opTiles = ops.map(function (op) {
-              var on = activeOps.indexOf(op) !== -1;
-              var m = (ACL_OP_META[r.type] || {})[op] || { d: op, c: 'blue' };
-              return '<div class="acl-op-tile' + (on ? ' op-active-' + m.c : '') + '" data-acl-suf="' + suffix + '" data-acl-idx="' + idx + '" data-acl-op="' + op + '">'
-                + '<div class="acl-op-check">' + (on ? '✓' : '') + '</div>'
-                + '<div class="acl-op-info"><div class="acl-op-name">' + op + '</div>'
-                + '<div class="acl-op-desc">' + escapeHtml(on ? m.d : 'ไม่ได้ใช้') + '</div></div></div>';
-            }).join('');
-            return '<div class="acl-resource-card">'
-              + '<div class="acl-resource-header"><div class="acl-resource-header-left">'
-              + tSel + '<span class="acl-resource-sep">—</span>' + nameEl + pSel
-              + '</div><button type="button" class="acl-resource-remove" data-acl-suf="' + suffix + '" data-acl-remove="' + idx + '" title="Remove resource">×</button></div>'
-              + '<div class="acl-ops-grid">' + opTiles + '</div></div>';
+          wrap.innerHTML = ACL_LAYER_ORDER.map(function (layerType) {
+            var indices = [];
+            for (var i = 0; i < st.resources.length; i += 1) {
+              if (st.resources[i].type === layerType) indices.push(i);
+            }
+            var title = aclResourceTypeLabel(layerType);
+            var inner = indices.length === 0
+              ? '<div class="acl-layer-empty">ไม่มีสิทธิ์ระดับนี้ในเทมเพลตที่เลือก — ข้ามชั้นนี้ได้</div>'
+              : indices.map(function (ri) {
+                return renderAclResourceRowHtml(suffix, st.resources[ri], ri);
+              }).join('');
+            return '<div class="acl-layer-section" data-acl-layer="' + layerType + '">'
+              + '<div class="acl-layer-title">' + title + '</div>'
+              + inner
+              + '</div>';
           }).join('');
+          var extraLayers = '';
+          for (var ex = 0; ex < st.resources.length; ex += 1) {
+            var rx = st.resources[ex];
+            if (ACL_LAYER_ORDER.indexOf(rx.type) === -1) {
+              extraLayers += '<div class="acl-layer-section" data-acl-layer="extra">'
+                + '<div class="acl-layer-title">' + escapeHtml(aclResourceTypeLabel(rx.type)) + '</div>'
+                + renderAclResourceRowHtml(suffix, rx, ex)
+                + '</div>';
+            }
+          }
+          wrap.innerHTML = wrap.innerHTML + extraLayers;
           preview.textContent = buildAclCommandsPreview(suffix) || '# No ACL command generated yet';
           var warningBox = document.getElementById('acl-warning-box-' + suffix);
           var ws = collectAclWarnings(suffix);
@@ -3355,24 +3403,31 @@
             if (!ws.length) { warningBox.style.display = 'none'; warningBox.innerHTML = ''; }
             else { warningBox.style.display = 'block'; warningBox.innerHTML = '<div style="border:1px solid #d2a100; border-radius:8px; background:rgba(210,161,0,.08); padding:10px;">⚠ ' + ws.map(escapeHtml).join('<br>⚠ ') + '</div>'; }
           }
-          wrap.querySelectorAll('.acl-resource-remove').forEach(function (el) {
-            el.addEventListener('click', function () {
-              var suf = el.getAttribute('data-acl-suf');
-              aclDesignerStates[suf].resources.splice(parseInt(el.getAttribute('data-acl-remove'), 10), 1);
-              renderAclDesigner(suf);
-            });
-          });
-          wrap.querySelectorAll('[data-acl-type]').forEach(function (el) {
-            el.addEventListener('change', function () {
-              var suf = el.getAttribute('data-acl-suf');
-              var i = parseInt(el.getAttribute('data-acl-type'), 10);
-              aclDesignerStates[suf].resources[i].type = el.value;
-              if (el.value === 'cluster') aclDesignerStates[suf].resources[i].name = 'kafka-cluster';
-              var allowed = ACL_OPS_BY_TYPE[el.value] || [];
-              aclDesignerStates[suf].resources[i].ops = (aclDesignerStates[suf].resources[i].ops || []).map(normalizeAclOperation).filter(function (op) { return allowed.indexOf(op) !== -1; });
-              renderAclDesigner(suf);
-            });
-          });
+          var adminRiskEl = document.getElementById('acl-admin-risk-' + suffix);
+          if (adminRiskEl) {
+            if (st.selectedRole === 'admin') {
+              adminRiskEl.style.display = 'block';
+              var ack = !!st.adminRiskAck;
+              adminRiskEl.innerHTML = '<div style="border:2px solid #b91c1c; border-radius:8px; background:rgba(185,28,28,.08); padding:12px 14px; font-size:13px; line-height:1.5;">'
+                + '<strong style="color:#991b1b;">ความเสี่ยงสูง — Topic Admin</strong><br/>'
+                + 'เทมเพลตนี้รวมสิทธิ์ <strong>DELETE</strong> topic และ consumer group รวมถึง ALTER / CREATE — ไม่ควรให้ทีมแอปทั่วไป'
+                + '</div>'
+                + '<label style="display:flex; align-items:flex-start; gap:10px; margin-top:12px; cursor:pointer; font-size:13px; line-height:1.45;">'
+                + '<input type="checkbox" id="acl-admin-risk-chk-' + suffix + '" style="margin-top:3px;"' + (ack ? ' checked' : '') + ' />'
+                + '<span>ยืนยันว่าเข้าใจแล้วว่าเป็นการมอบสิทธิ์ระดับผู้ดูแล topic และยอมรับความเสี่ยงจากการลบ/แก้ไข resource</span>'
+                + '</label>';
+              var chk = document.getElementById('acl-admin-risk-chk-' + suffix);
+              if (chk) {
+                chk.addEventListener('change', function () {
+                  aclDesignerStates[suffix].adminRiskAck = chk.checked;
+                  if (suffix === 'add' && typeof saveWizardState === 'function') saveWizardState();
+                });
+              }
+            } else {
+              adminRiskEl.style.display = 'none';
+              adminRiskEl.innerHTML = '';
+            }
+          }
           wrap.querySelectorAll('[data-acl-name]').forEach(function (el) {
             el.addEventListener('input', function () {
               var suf = el.getAttribute('data-acl-suf');
@@ -3407,10 +3462,13 @@
           if (!st.resources.length) return 'กรุณาเพิ่มอย่างน้อย 1 ACL resource';
           var invalid = st.resources.some(function (r) {
             if (!r || !r.type) return true;
-            if (r.type !== 'cluster' && !(r.name || '').trim()) return true;
+            if (r.type !== 'cluster' && !r.readOnlyName && !(r.name || '').trim()) return true;
             return !(r.ops && r.ops.length);
           });
           if (invalid) return 'กรอก resource name (ยกเว้น cluster) และเลือก operation ให้ครบ';
+          if (st.selectedRole === 'admin' && !st.adminRiskAck) {
+            return 'เทมเพลต Topic Admin: ติ๊กยืนยันความเสี่ยง (รวมสิทธิ์ลบ topic / consumer group) ก่อนดำเนินการต่อ';
+          }
           return '';
         }
         window.validateAclDesignerStep = validateAclDesignerStep;
@@ -3513,11 +3571,6 @@
         var filterTopicsAclExisting = document.getElementById('filter-topics-acl-existing');
         if (filterTopicsAclExisting) filterTopicsAclExisting.addEventListener('input', renderTopicsFilteredAclExisting);
         ACL_DESIGNER_SUFFIXES.forEach(function (suf) {
-          var btnAdd = document.getElementById('btn-acl-add-resource-' + suf);
-          if (btnAdd) btnAdd.addEventListener('click', function () {
-            aclDesignerStates[suf].resources.push({ type: 'topic', name: '', pattern: 'LITERAL', ops: ['READ'] });
-            renderAclDesigner(suf);
-          });
           var btnCopy = document.getElementById('btn-acl-copy-command-' + suf);
           if (btnCopy) btnCopy.addEventListener('click', function () {
             var txt = buildAclCommandsPreview(suf);
@@ -3573,13 +3626,8 @@
           var resultEl = document.getElementById('acl-existing-result');
           if (resultEl) resultEl.style.display = 'none';
           if (!username) { if (msgEl) msgEl.textContent = 'กรุณาใส่ username'; if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } return; }
-          if (!aclDesignerStates.exist.resources.length) { if (msgEl) msgEl.textContent = 'กรุณาเพิ่มอย่างน้อย 1 resource'; if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } return; }
-          var invalid = aclDesignerStates.exist.resources.some(function (r) {
-            if (!r || !r.type) return true;
-            if (r.type !== 'cluster' && !(r.name || '').trim()) return true;
-            return !(r.ops && r.ops.length);
-          });
-          if (invalid) { if (msgEl) msgEl.textContent = 'กรอก resource name (ยกเว้น cluster) และเลือก operation ให้ครบ'; if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } return; }
+          var verr = typeof validateAclDesignerStep === 'function' ? validateAclDesignerStep('exist') : '';
+          if (verr) { if (msgEl) msgEl.textContent = verr; if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); } return; }
           if (msgEl) msgEl.textContent = 'คุณจะเพิ่ม ACL แบบละเอียดให้ user \u201c' + username + '\u201d ทั้งหมด ' + aclDesignerStates.exist.resources.length + ' resource item(s). ยืนยันหรือไม่?';
           if (wrap) { wrap.style.display = 'block'; wrap.scrollIntoView({ behavior: 'smooth', block: 'nearest' }); }
         });
@@ -3591,10 +3639,16 @@
         document.getElementById('btn-acl-existing-confirm').addEventListener('click', async function () {
           var username = (document.getElementById('acl-existing-username').value || '').trim();
           var topic = (document.getElementById('acl-existing-topic').value || '').trim();
-          var side = buildAclApiSidecar('exist');
           var resultEl = document.getElementById('acl-existing-result');
           var wrap = document.getElementById('acl-existing-confirm-wrap');
           var btn = document.getElementById('btn-acl-existing-confirm');
+          var verr = typeof validateAclDesignerStep === 'function' ? validateAclDesignerStep('exist') : '';
+          if (verr) {
+            resultEl.style.display = 'block';
+            resultEl.innerHTML = '<span style="color:var(--danger)">' + escapeHtml(verr) + '</span>';
+            return;
+          }
+          var side = buildAclApiSidecar('exist');
           resultEl.style.display = 'block';
           resultEl.innerHTML = 'กำลังเพิ่มสิทธิ์...';
           if (btn) btn.disabled = true;
