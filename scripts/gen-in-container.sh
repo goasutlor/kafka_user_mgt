@@ -16,6 +16,7 @@
 #   CONTAINER_NAME=kafka-user-mgmt   # default
 #   CTR_ENGINE=podman|docker         # auto-detect if unset
 #   KUBECONFIG=/opt/kafka-usermgmt/.kube/config-both   # inside-container path (default: .../config)
+#   GEN_SKIP_PORTAL_PARITY=1         # skip auto default env / sites (use gen.sh defaults or your GEN_* only)
 
 set -euo pipefail
 
@@ -69,4 +70,7 @@ while IFS= read -r name; do
   exec_args+=(-e "${name}=${v}")
 done < <(compgen -e | grep '^GEN_' || true)
 
-exec "$CTR_ENGINE" exec -it "${exec_args[@]}" "$CONTAINER_NAME" /app/bundled-gen/gen.sh "$@"
+# Source portal-parity-env.sh inside container so CLI matches Portal default environment (dev/sit/uat)
+# when GEN_OCP_SITES is unset — same core as Web (environments.json + master.config).
+exec "$CTR_ENGINE" exec -it "${exec_args[@]}" "$CONTAINER_NAME" \
+  bash -c 'source /app/host-cli/portal-parity-env.sh 2>/dev/null || true; exec /app/bundled-gen/gen.sh "$@"' _ "$@"

@@ -14,7 +14,7 @@ Run with Compose (mount `runtime` + `deploy/config`). First start: open `http://
 
 ### CLI (Portal-parity wrappers)
 
-- `./scripts/gen-in-container.sh` — runs bundled `gen.sh` in the running container with Portal-compatible baseline env (`PATH`, `GEN_OC_PATH`, `KUBECONFIG`, `GEN_BASE_DIR`).
+- `./scripts/gen-in-container.sh` — runs bundled `gen.sh` in the running container with Portal-compatible baseline env (`PATH`, `GEN_OC_PATH`, `KUBECONFIG`, `GEN_BASE_DIR`). Before `gen.sh`, it sources **`portal-parity-env.sh`** inside the container so **default OCP sites / active environment** match the Portal when you have not set `GEN_OCP_SITES` (uses `environments.json` under the runtime mount, else `master.config.json`).
 - `./scripts/gen-cli.sh` — guided menu wrapper for common non-interactive flows (preflight, test user, add ACL existing, guided add user) and environment profile selection from `master.config`.
 
 **VM / host without a git checkout:** the same two scripts ship in the image under `/app/host-cli/`. Copy both to the same directory on the host, then run from there (example: container name `kafka-user-mgmt`):
