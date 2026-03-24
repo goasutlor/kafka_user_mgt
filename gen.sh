@@ -39,6 +39,7 @@
 # 2026-03-22  Setup wizard: truststore can stay on runtime mount only — Web verifies path + keytool -list; GEN_MODE unchanged.
 # 2026-03-23  With GEN_ACTIVE_ENV_ID + environments.json: if admin/client not set in JSON and GEN_ADMIN_CONFIG unset, use kafka-client-master-{id}.properties and kafka-client-{id}.properties (no unsuffixed fallback).
 # 2026-03-23  Per-environment adminPropertiesFile / clientPropertiesFile (or adminConfig / clientConfig) in environments.json — Web sets GEN_ADMIN_CONFIG from session env; CLI can omit GEN_* to resolve from JSON (same truststore/SASL as that cluster).
+# 2026-03-24  credentials.txt [BOOTSTRAP]: pack_bootstrap_note() — single cluster vs multi-site wording (no misleading "use both" when one URL).
 # 2026-03-24  Universal deploy: no vendor-specific bootstrap/OCP defaults; fill bootstrap from master.config (Setup) when unset; OCP sites only from GEN_OCP_SITES / environments / explicit OCP_CTX_+NS_ or portal-parity. Optional GEN_KUBECONFIG_MERGE_BOTH=1 uses sibling config-both (replaces old *config-cwdc path hack).
 # 2026-03-21  Web getBaseEnv sets GEN_KAFKA_BOOTSTRAP (same as /api/create-topic); gen.sh applies after env json so add-user topic validation matches portal when environments.json omits bootstrapServers.
 # 2026-03-22  Per-environment Kafka bootstrap: with GEN_ACTIVE_ENV_ID + environments.json, if the active env object has bootstrapServers, override BOOTSTRAP_CWDC/BOTH (parity with Web portal env switch).
@@ -537,6 +538,27 @@ error_exit() {
     # Correlate portal/API logs with gen.sh stderr when GEN_REQUEST_ID is set (webapp passes from X-Request-Id)
     [ -n "${GEN_REQUEST_ID:-}" ] && echo "GEN_REQUEST_ID=${GEN_REQUEST_ID}" >&2
     exit $EXIT_ERROR
+}
+
+# One-line note for credentials.txt [BOOTSTRAP] — single cluster vs multi-site (two distinct URLs)
+pack_bootstrap_note() {
+    local both="${1:-}"
+    both=$(echo "$both" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    [ -z "$both" ] && return 0
+    if ! echo "$both" | grep -q ','; then
+        echo "Note: Single cluster — use the bootstrap value above in bootstrap.servers."
+        return 0
+    fi
+    local p1 p2
+    p1="${both%%,*}"
+    p2="${both#*,}"
+    p1=$(echo "$p1" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    p2=$(echo "$p2" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+    if [ -z "$p2" ] || [ "$p1" = "$p2" ]; then
+        echo "Note: Single cluster — use the bootstrap value above in bootstrap.servers."
+    else
+        echo "Note: Same logical cluster — two (or more) bootstrap URLs (e.g. multi-site). Use comma-separated bootstrap.servers for resilience where supported."
+    fi
 }
 
 # Structured log: [timestamp] action= | operator= | host= | ... (easy to grep/tag)
@@ -1940,8 +1962,10 @@ User        : $CHANGE_USER
 New Password: $NEW_PASS
 Mechanism   : SASL_PLAIN
 
-[BOOTSTRAP] (use both for resilience)
+[BOOTSTRAP]
 $BOOTSTRAP_BOTH
+
+$(pack_bootstrap_note "$BOOTSTRAP_BOTH")
 
 EOF
             if [ -n "$TOPIC_NAME" ] && [ -n "$ACL_DESC" ]; then
@@ -2701,8 +2725,10 @@ Kafka User  : $KAFKA_USER
 Credential  : $NEW_PASS
 Mechanism   : SASL_PLAIN
 
-[BOOTSTRAP] (use both for resilience)
+[BOOTSTRAP]
 $BOOTSTRAP_BOTH
+
+$(pack_bootstrap_note "$BOOTSTRAP_BOTH")
 
 Topic       : $TOPIC_NAME
 ACL         : $ACL_DESC — $ACL_WHAT
