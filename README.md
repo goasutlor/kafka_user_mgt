@@ -17,6 +17,16 @@ Run with Compose (mount `runtime` + `deploy/config`). First start: open `http://
 - `./scripts/gen-in-container.sh` — runs bundled `gen.sh` in the running container with Portal-compatible baseline env (`PATH`, `GEN_OC_PATH`, `KUBECONFIG`, `GEN_BASE_DIR`).
 - `./scripts/gen-cli.sh` — guided menu wrapper for common non-interactive flows (preflight, test user, add ACL existing, guided add user) and environment profile selection from `master.config`.
 
+**VM / host without a git checkout:** the same two scripts ship in the image under `/app/host-cli/`. Copy both to the same directory on the host, then run from there (example: container name `kafka-user-mgmt`):
+
+```bash
+podman cp kafka-user-mgmt:/app/host-cli/gen-in-container.sh ~/kafka-cli/
+podman cp kafka-user-mgmt:/app/host-cli/gen-cli.sh ~/kafka-cli/
+chmod +x ~/kafka-cli/gen-in-container.sh ~/kafka-cli/gen-cli.sh
+export CTR_ENGINE=podman CONTAINER_NAME=kafka-user-mgmt
+~/kafka-cli/gen-cli.sh
+```
+
 **Upgrades / full reset:** Pulling a newer image does not wipe bind-mounted host config. For a clean reinstall (drop old `master.config` / kubeconfig paths), see [UPGRADE-AND-PERSISTENCE.md](UPGRADE-AND-PERSISTENCE.md) — section *รีเซ็ตเริ่มใหม่ทั้งหมด* (Thai + English).
 
 **Topology:** Dual DC / dual OpenShift with **one** Confluent Kafka cluster — production fit and “universal portal” limits — see [PRODUCTION-TOPOLOGY-2DC-1-KAFKA.md](PRODUCTION-TOPOLOGY-2DC-1-KAFKA.md).

@@ -33,6 +33,8 @@
 # After the container is up, CLI gen.sh (same oc + KUBECONFIG baseline as Web):
 #   ./scripts/gen-in-container.sh
 #   export GEN_NONINTERACTIVE=1 GEN_MODE=2 GEN_KAFKA_USER=... ; ./scripts/gen-in-container.sh
+# No repo on host: podman cp $CTR:/app/host-cli/gen-in-container.sh . && podman cp $CTR:/app/host-cli/gen-cli.sh .
+#   (same directory, chmod +x both; export CTR_ENGINE + CONTAINER_NAME) — see README.md
 #
 # Usage:
 #   ./container-run-config.sh
