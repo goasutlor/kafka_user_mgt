@@ -769,6 +769,23 @@
       border-radius: 6px;
       color: #334155;
     }
+    .acl-resource-name-input {
+      font-family: ui-monospace, 'SF Mono', 'Consolas', monospace;
+      font-size: 13px;
+      min-width: 160px;
+      flex: 1;
+      max-width: 100%;
+      padding: 5px 10px;
+      border: 1px solid #cbd5e1;
+      border-radius: 6px;
+      background: #fff;
+      color: #334155;
+    }
+    .acl-resource-name-input:focus {
+      outline: none;
+      border-color: #94a3b8;
+      box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.25);
+    }
     .acl-resource-card--tiles-only {
       padding-top: 4px;
     }
@@ -1249,7 +1266,7 @@
 
         <div class="wizard-panel" id="wizard-panel-3" data-step="3">
           <h3>Permission (ACL)</h3>
-          <p class="step-desc">เลือก Role ด้านซ้าย — ด้านขวาเป็น <strong>3 ชั้นคงที่</strong> เรียงลงเสมอ: <strong>TOPIC → GROUP → CLUSTER</strong> (ไม่มี dropdown เลือกประเภท resource). แต่ละเทมเพลตจะใช้บางชั้นเท่านั้น — ชั้นที่ไม่ใช้จะแสดงข้อความว่าง. <strong>โฟกัสหนึ่ง topic หลักต่อรอบ</strong> — หลาย topic ใช้ Add ACL ภายหลัง. Topic จากขั้นก่อน sync เข้าชื่อ topic หลัก. LITERAL / PREFIXED ปรับได้ตามแถวที่แก้ชื่อได้. การรัน ACL จริงใช้ bootstrap จาก server ตาม environment.</p>
+          <p class="step-desc">เลือก Role ด้านซ้าย — ด้านขวาเป็น <strong>3 ชั้นคงที่</strong> เรียงลงเสมอ: <strong>TOPIC → GROUP → CLUSTER</strong> (ไม่มี dropdown เลือกประเภท resource). แต่ละเทมเพลตจะใช้บางชั้นเท่านั้น — ชั้นที่ไม่ใช้จะแสดงข้อความว่าง. <strong>โฟกัสหนึ่ง topic หลักต่อรอบ</strong> — หลาย topic ใช้ Add ACL ภายหลัง. <strong>Topic</strong> จากขั้นก่อนถูก fix ตามที่เลือกแล้ว. <strong>Consumer group</strong> เริ่มต้นเป็น ชื่อผู้ใช้ + <code>-cg</code> แต่แก้ในช่อง GROUP ได้ถ้าแอปใช้ <code>group.id</code> อื่น. LITERAL / PREFIXED ปรับได้ตามแถว. การรัน ACL จริงใช้ bootstrap จาก server ตาม environment.</p>
           <div class="form-group acl-designer-form-group">
             <div class="acl-designer-split">
               <div class="acl-designer-col acl-designer-col-roles">
@@ -1259,7 +1276,7 @@
               </div>
               <div class="acl-designer-col acl-designer-col-detail">
                 <label class="acl-designer-section-label">ACL Detail</label>
-                <p class="acl-designer-subhint">ชื่อ topic และ consumer group (รูปแบบ ชื่อผู้ใช้ + -cg) มาจากขั้นก่อนหน้า — ปรับ LITERAL / PREFIXED และคลิก operation ได้ที่นี่</p>
+                <p class="acl-designer-subhint">ชื่อ topic จากขั้นก่อนหน้า (fix). Consumer group เริ่มต้น <strong>ชื่อผู้ใช้-cg</strong> — แก้ในช่อง GROUP ได้ให้ตรง <code>group.id</code> จริง · LITERAL / PREFIXED · คลิก operation</p>
                 <div id="acl-resources-list-add" class="acl-resources-list-slot"></div>
               </div>
             </div>
@@ -1441,7 +1458,7 @@
               </div>
               <div class="acl-designer-col acl-designer-col-detail">
                 <label class="acl-designer-section-label">ACL Detail</label>
-                <p class="acl-designer-subhint">ชื่อ topic / group ดึงจากขั้นก่อนหน้า · LITERAL / PREFIXED · คลิก operation</p>
+                <p class="acl-designer-subhint">Topic จากขั้นก่อน (fix). GROUP เริ่มต้น username-cg แก้ได้ · LITERAL / PREFIXED · คลิก operation</p>
                 <div id="acl-resources-list-ct" class="acl-resources-list-slot"></div>
               </div>
             </div>
@@ -1545,7 +1562,7 @@
           </div>
           <div class="acl-designer-col acl-designer-col-detail">
             <label class="acl-designer-section-label">ACL Detail</label>
-            <p class="acl-designer-subhint">ชื่อ topic / username ด้านบนกำหนดชื่อ resource · LITERAL / PREFIXED · คลิก operation</p>
+            <p class="acl-designer-subhint">Topic / username ด้านบน — topic fix, GROUP เริ่มต้น username-cg แก้ได้ · LITERAL / PREFIXED · คลิก operation</p>
             <div id="acl-resources-list-exist" class="acl-resources-list-slot"></div>
           </div>
         </div>
@@ -2410,7 +2427,7 @@
               system: el ? el.value.trim() : '',
               topic: (document.getElementById('topic') || {}).value.trim() || '',
               username: (document.getElementById('username') || {}).value.trim() || '',
-              aclDesignerAdd: typeof aclDesignerStates !== 'undefined' && aclDesignerStates.add ? JSON.stringify({ role: aclDesignerStates.add.selectedRole, resources: aclDesignerStates.add.resources, adminRiskAck: !!aclDesignerStates.add.adminRiskAck }) : '',
+              aclDesignerAdd: typeof aclDesignerStates !== 'undefined' && aclDesignerStates.add ? JSON.stringify({ role: aclDesignerStates.add.selectedRole, resources: aclDesignerStates.add.resources, adminRiskAck: !!aclDesignerStates.add.adminRiskAck, consumerGroupUserEdited: !!aclDesignerStates.add.consumerGroupUserEdited }) : '',
               addSkipValidation: skipB ? skipB.checked : false,
               addAuthOnly: authB ? authB.checked : false,
               step: currentStep
@@ -2438,8 +2455,10 @@
                   aclDesignerStates.add.selectedRole = wantRole;
                   if (rawRole === 'prosumer' || rawRole === 'idempotent' || !ACL_ROLE_DEFAULTS[rawRole]) {
                     aclDesignerStates.add.resources = JSON.parse(JSON.stringify(ACL_ROLE_DEFAULTS[wantRole]));
+                    aclDesignerStates.add.consumerGroupUserEdited = false;
                   } else {
                     aclDesignerStates.add.resources = ad.resources;
+                    aclDesignerStates.add.consumerGroupUserEdited = ad.consumerGroupUserEdited === true;
                   }
                   aclDesignerStates.add.adminRiskAck = ad.adminRiskAck === true;
                   if (typeof renderAclDesigner === 'function') renderAclDesigner('add');
@@ -3269,23 +3288,34 @@
           exist: { usernameId: 'acl-existing-username', topicId: 'acl-existing-topic' }
         };
         function defaultAclDesignerState() {
-          return { selectedRole: 'consumer', resources: JSON.parse(JSON.stringify(ACL_ROLE_DEFAULTS.consumer)), adminRiskAck: false };
+          return { selectedRole: 'consumer', resources: JSON.parse(JSON.stringify(ACL_ROLE_DEFAULTS.consumer)), adminRiskAck: false, consumerGroupUserEdited: false };
         }
         var aclDesignerStates = { add: defaultAclDesignerState(), ct: defaultAclDesignerState(), exist: defaultAclDesignerState() };
-        /** ดึง topic / username จากฟอร์มขั้นก่อน — ไม่แก้ชื่อใน ACL Detail */
+        function expectedConsumerGroupFromWizard(suffix) {
+          var meta = ACL_PAGE_META[suffix];
+          if (!meta) return '';
+          var userVal = (document.getElementById(meta.usernameId) || {}).value.trim();
+          return userVal ? (userVal + '-cg') : '';
+        }
+        /** ดึง topic จากฟอร์มขั้นก่อน (fix). Consumer group default = username-cg จนกว่าผู้ใช้จะแก้ในช่อง GROUP */
         function syncWizardFieldsIntoAclDesigner(suffix) {
           var meta = ACL_PAGE_META[suffix];
           if (!meta) return;
           var topicVal = (document.getElementById(meta.topicId) || {}).value.trim();
-          var userVal = (document.getElementById(meta.usernameId) || {}).value.trim();
           var st = aclDesignerStates[suffix];
+          var desiredCg = expectedConsumerGroupFromWizard(suffix);
           for (var i = 0; i < st.resources.length; i += 1) {
             var r = st.resources[i];
             if (r.type === 'topic' && !r.readOnlyName) {
               st.resources[i].name = topicVal || '';
             }
             if (r.type === 'group' && !r.readOnlyName) {
-              st.resources[i].name = userVal ? (userVal + '-cg') : '';
+              if (!st.consumerGroupUserEdited) {
+                st.resources[i].name = desiredCg;
+              } else if (!((st.resources[i].name || '').trim()) && desiredCg) {
+                st.resources[i].name = desiredCg;
+                st.consumerGroupUserEdited = false;
+              }
             }
           }
         }
@@ -3308,6 +3338,7 @@
               aclDesignerStates[suffix].selectedRole = role;
               aclDesignerStates[suffix].resources = JSON.parse(JSON.stringify(ACL_ROLE_DEFAULTS[role]));
               aclDesignerStates[suffix].adminRiskAck = false;
+              aclDesignerStates[suffix].consumerGroupUserEdited = false;
               syncWizardFieldsIntoAclDesigner(suffix);
               renderAclDesigner(suffix);
             });
@@ -3370,12 +3401,15 @@
           var wmeta = ACL_PAGE_META[suffix];
           if (wmeta) {
             var wtopic = (document.getElementById(wmeta.topicId) || {}).value.trim();
-            var wuser = (document.getElementById(wmeta.usernameId) || {}).value.trim();
             if (st.resources.some(function (rg) { return rg.type === 'topic' && !rg.readOnlyName; }) && !wtopic) {
               warnings.push('กรอกชื่อ topic ในขั้นก่อนหน้า (หรือช่อง Topic) — ใช้เป็นชื่อ resource อัตโนมัติ');
             }
-            if (st.resources.some(function (rg) { return rg.type === 'group' && !rg.readOnlyName; }) && !wuser) {
-              warnings.push('กรอก username ในขั้นก่อนหน้า — consumer group จะถูกตั้งเป็น ชื่อผู้ใช้ + -cg');
+            var needCgName = false;
+            st.resources.forEach(function (rg) {
+              if (rg.type === 'group' && !rg.readOnlyName && !(rg.name || '').trim()) needCgName = true;
+            });
+            if (needCgName) {
+              warnings.push('กรอก consumer group id ในช่อง GROUP หรือใส่ username เพื่อใช้ค่าเริ่มต้น (ชื่อผู้ใช้-cg)');
             }
           }
           return warnings;
@@ -3392,6 +3426,9 @@
             : '<select class="acl-resource-pattern-select" data-acl-suf="' + suffix + '" data-acl-pattern="' + idx + '">'
               + '<option value="LITERAL"' + (pat === 'LITERAL' ? ' selected' : '') + '>LITERAL</option>'
               + '<option value="PREFIXED"' + (pat === 'PREFIXED' ? ' selected' : '') + '>PREFIXED</option></select>';
+          if (r.type === 'group' && !r.readOnlyName) {
+            return '<div class="acl-layer-meta-line"><input type="text" class="acl-resource-name-input" autocomplete="off" spellcheck="false" placeholder="เช่น username-cg" data-acl-suf="' + suffix + '" data-acl-group-name="' + idx + '" />' + patEl + '</div>';
+          }
           return '<div class="acl-layer-meta-line">' + nameDisp + patEl + '</div>';
         }
         function renderAclOpCardHtml(suffix, r, idx) {
@@ -3406,6 +3443,16 @@
               + '<div class="acl-op-desc">' + escapeHtml(on ? m.d : 'ไม่ได้ใช้') + '</div></div></div>';
           }).join('');
           return '<div class="acl-resource-card acl-resource-card--tiles-only"><div class="acl-ops-grid">' + opTiles + '</div></div>';
+        }
+        function updateAclDesignerPreviewUi(suffix) {
+          var preview = document.getElementById('acl-command-preview-' + suffix);
+          if (preview) preview.textContent = buildAclCommandsPreview(suffix) || '# No ACL command generated yet';
+          var warningBox = document.getElementById('acl-warning-box-' + suffix);
+          var ws = collectAclWarnings(suffix);
+          if (warningBox) {
+            if (!ws.length) { warningBox.style.display = 'none'; warningBox.innerHTML = ''; }
+            else { warningBox.style.display = 'block'; warningBox.innerHTML = '<div style="border:1px solid #d2a100; border-radius:8px; background:rgba(210,161,0,.08); padding:10px;">⚠ ' + ws.map(escapeHtml).join('<br>⚠ ') + '</div>'; }
+          }
         }
         function renderAclDesigner(suffix) {
           syncWizardFieldsIntoAclDesigner(suffix);
@@ -3446,13 +3493,22 @@
             }
           }
           wrap.innerHTML = wrap.innerHTML + extraLayers;
-          preview.textContent = buildAclCommandsPreview(suffix) || '# No ACL command generated yet';
-          var warningBox = document.getElementById('acl-warning-box-' + suffix);
-          var ws = collectAclWarnings(suffix);
-          if (warningBox) {
-            if (!ws.length) { warningBox.style.display = 'none'; warningBox.innerHTML = ''; }
-            else { warningBox.style.display = 'block'; warningBox.innerHTML = '<div style="border:1px solid #d2a100; border-radius:8px; background:rgba(210,161,0,.08); padding:10px;">⚠ ' + ws.map(escapeHtml).join('<br>⚠ ') + '</div>'; }
-          }
+          updateAclDesignerPreviewUi(suffix);
+          wrap.querySelectorAll('input[data-acl-group-name]').forEach(function (el) {
+            var suf = el.getAttribute('data-acl-suf');
+            var gi = parseInt(el.getAttribute('data-acl-group-name'), 10);
+            var stLocal = aclDesignerStates[suf];
+            if (!stLocal || !stLocal.resources[gi]) return;
+            el.value = stLocal.resources[gi].name || '';
+            el.addEventListener('input', function () {
+              stLocal.resources[gi].name = el.value;
+              var exp = expectedConsumerGroupFromWizard(suf);
+              if (!el.value.trim()) stLocal.consumerGroupUserEdited = false;
+              else stLocal.consumerGroupUserEdited = (el.value.trim() !== exp);
+              if (suf === 'add' && typeof saveWizardState === 'function') saveWizardState();
+              updateAclDesignerPreviewUi(suf);
+            });
+          });
           var adminRiskEl = document.getElementById('acl-admin-risk-' + suffix);
           if (adminRiskEl) {
             if (st.selectedRole === 'admin') {
@@ -3507,7 +3563,7 @@
             if (r.type !== 'cluster' && !r.readOnlyName && !(r.name || '').trim()) return true;
             return !(r.ops && r.ops.length);
           });
-          if (invalid) return 'กรอก topic / username ในขั้นก่อนหน้าให้ครบ (ชื่อ resource ดึงอัตโนมัติ) และเลือก operation ให้ครบ';
+          if (invalid) return 'กรอก topic ในขั้นก่อนหน้า, consumer group (หรือ username เพื่อค่าเริ่มต้น …-cg) และเลือก operation ให้ครบ';
           if (st.selectedRole === 'admin' && !st.adminRiskAck) {
             return 'เทมเพลต Topic Admin: ติ๊กยืนยันความเสี่ยง (รวมสิทธิ์ลบ topic / consumer group) ก่อนดำเนินการต่อ';
           }

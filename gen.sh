@@ -32,6 +32,7 @@
 #
 # CHANGELOG
 # ---------
+# 2026-03-21  Manual CLI in container: append dirname(GEN_OC_PATH) or /host/usr/bin to PATH when oc is there (same order as Web getBaseEnv); fixes podman/docker exec without breaking Portal.
 # 2026-03-23  Non-interactive add-user: GEN_VALIDATE_SKIP=1 skips broker auth/consume (faster); else GEN_VALIDATE_CONSUME=1|0 for Auth+Consume vs auth-only. Echo GEN_VALIDATE_PASSED=skipped when validation skipped.
 # 2026-03-22  Setup wizard: truststore can stay on runtime mount only — Web verifies path + keytool -list; GEN_MODE unchanged.
 # 2026-03-23  With GEN_ACTIVE_ENV_ID + environments.json: if admin/client not set in JSON and GEN_ADMIN_CONFIG unset, use kafka-client-master-{id}.properties and kafka-client-{id}.properties (no unsuffixed fallback).
@@ -583,7 +584,19 @@ fi
 [ ! -f "$CLIENT_CONFIG" ] && error_exit "Config file not found at $CLIENT_CONFIG"
 [ ! -f "$ADMIN_CONFIG" ] && error_exit "Admin config not found at $ADMIN_CONFIG (needed for kafka-acls)"
 command -v jq >/dev/null 2>&1 || error_exit "jq tool is required but not installed."
-command -v oc >/dev/null 2>&1 || error_exit "oc (OpenShift CLI) is required but not installed."
+# Host oc: compose mounts host /usr/bin at /host/usr/bin. Web getBaseEnv appends ocPath to PATH (end) — same here so manual podman exec matches Portal and container PATH order stays first.
+append_path_dir_once() {
+    local d="$1"
+    [ -z "$d" ] && return 0
+    case ":${PATH:-}:" in *":$d:"*) return 0 ;; esac
+    PATH="${PATH:-/usr/bin:/bin}:$d" && export PATH
+}
+if [ -n "${GEN_OC_PATH:-}" ] && [ -x "$GEN_OC_PATH" ]; then
+    append_path_dir_once "$(dirname "$GEN_OC_PATH")"
+elif [ -x "/host/usr/bin/oc" ]; then
+    append_path_dir_once "/host/usr/bin"
+fi
+command -v oc >/dev/null 2>&1 || error_exit "oc (OpenShift CLI) is required but not installed. Mount host oc: -v /usr/bin:/host/usr/bin:ro (see docker-compose) or set GEN_OC_PATH=/path/to/oc"
 
 clear
 echo -e "${YELLOW}+-------------------------------------------------------+" 
