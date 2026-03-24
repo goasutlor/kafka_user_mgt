@@ -2180,6 +2180,12 @@
           if (j.exitCode != null) parts.push('Exit code: ' + j.exitCode);
           msg += '<br><small style="color:var(--text-muted)">' + parts.join(' · ') + '</small>';
         }
+        if (j.requestId || j.errorCode) {
+          var ridParts = [];
+          if (j.requestId) ridParts.push('Request ID: <code style="font-size:11px;">' + escapeHtml(String(j.requestId)) + '</code>');
+          if (j.errorCode) ridParts.push('Code: ' + escapeHtml(String(j.errorCode)));
+          msg += '<br><small style="color:var(--text-muted)">' + ridParts.join(' · ') + ' — ส่งให้ทีม support เพื่อไล่ log</small>';
+        }
         if (j.stderr && j.stderr.trim())
           msg += '<br><details style="margin-top:8px;"><summary style="cursor:pointer;font-size:12px;">Details (stderr)</summary><pre style="margin-top:4px;font-size:11px;white-space:pre-wrap;max-height:200px;overflow:auto;background:var(--code-bg);padding:8px;">' + escapeHtml(stripAnsiDisplay(j.stderr.trim().slice(-2000))) + '</pre></details>';
         else if (j.stdout && j.stdout.trim())
@@ -2230,6 +2236,8 @@
         if (j.step) msg += ' | Step: ' + j.step;
         if (j.phase) msg += ' | Phase: ' + j.phase;
         if (j.exitCode != null) msg += ' | Exit code: ' + j.exitCode;
+        if (j.requestId) msg += ' | Request ID: ' + j.requestId;
+        if (j.errorCode) msg += ' | Code: ' + j.errorCode;
         if (j.tasks && j.tasks.length) {
           var failed = j.tasks.filter(function (t) { return t.status === 'error'; });
           if (failed.length) msg += ' | Failed at: ' + failed.map(function (t) { return t.label; }).join(', ');
@@ -2245,6 +2253,8 @@
           'Error: ' + message
         ];
         if (detail && typeof detail === 'object' && !detail.clientError) {
+          if (detail.requestId) lines.push('Request ID: ' + detail.requestId);
+          if (detail.errorCode) lines.push('Error code: ' + detail.errorCode);
           if (detail.step) lines.push('Step: ' + detail.step);
           if (detail.phase) lines.push('Phase: ' + detail.phase);
           if (detail.exitCode != null) lines.push('Exit code: ' + detail.exitCode);

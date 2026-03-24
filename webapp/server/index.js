@@ -1,5 +1,6 @@
 'use strict';
 
+const crypto = require('crypto');
 const express = require('express');
 const session = require('express-session');
 const path = require('path');
@@ -123,6 +124,25 @@ app.use((req, res, next) => {
   next();
 });
 
+/** Correlation id for support: response header + JSON body on ok:false (see res.json inject below). */
+function generateRequestId() {
+  try {
+    return crypto.randomBytes(9).toString('hex');
+  } catch (_) {
+    return `req-${Date.now()}-${Math.random().toString(36).slice(2, 11)}`;
+  }
+}
+
+app.use((req, res, next) => {
+  const incoming = req.headers['x-request-id'] || req.headers['x-correlation-id'];
+  let rid = '';
+  if (incoming && typeof incoming === 'string') rid = incoming.trim().slice(0, 96);
+  if (!rid) rid = generateRequestId();
+  req.requestId = rid;
+  res.setHeader('X-Request-Id', rid);
+  next();
+});
+
 const jsonBodyLimitDefault = express.json({ limit: '256kb' });
 const jsonBodyLimitSetup = express.json({ limit: '12mb' });
 app.use((req, res, next) => {
@@ -150,6 +170,18 @@ app.use(session({
     sameSite: 'lax',
   },
 }));
+
+// Every JSON error payload gets requestId (for logs, screenshots, copy-to-support)
+app.use((req, res, next) => {
+  const origJson = res.json.bind(res);
+  res.json = function (body) {
+    if (body && typeof body === 'object' && body.ok === false && req.requestId && body.requestId == null) {
+      body.requestId = req.requestId;
+    }
+    return origJson(body);
+  };
+  next();
+});
 
 // Shell for spawn (avoid ENOENT: try host-mounted bash, then container bash, then sh)
 const SHELL_CMD = (function () {
@@ -1108,6 +1140,7 @@ function getBaseEnv(req) {
   } else {
     env.GEN_USER_OUTPUT_DIR = path.join(baseDirAbs, 'user_output');
   }
+  if (req && req.requestId) env.GEN_REQUEST_ID = String(req.requestId);
   return env;
 }
 
@@ -1204,9 +1237,13 @@ function validateGenReady() {
 
 // Consistent error response and logging for API routes (production tracing)
 function apiError(res, route, err, options = {}) {
-  const { status = 500, step, phase, stderr, stdout, code, tasks } = options;
+  const { status = 500, step, phase, stderr, stdout, code, tasks, errorCode } = options;
   const errorMessage = err && (err.message || String(err));
   const payload = { ok: false, error: errorMessage };
+  if (errorCode) payload.errorCode = errorCode;
+  else if (code != null && code !== 0) payload.errorCode = 'GEN_NONZERO_EXIT';
+  else if (status >= 500) payload.errorCode = 'INTERNAL_ERROR';
+  else payload.errorCode = 'REQUEST_ERROR';
   if (step) payload.step = step;
   if (phase) payload.phase = phase;
   if (stderr != null) {
@@ -1219,7 +1256,9 @@ function apiError(res, route, err, options = {}) {
   }
   if (code != null) payload.exitCode = code;
   if (Array.isArray(tasks) && tasks.length) payload.tasks = tasks;
-  const logLine = `[${route}] ${status} ${step || ''} ${phase || ''} code=${code ?? '?'} ${errorMessage || ''}`.trim();
+  const req = res.req;
+  const rid = req && req.requestId ? req.requestId : '';
+  const logLine = `[${route}] requestId=${rid || '—'} ${status} ${step || ''} ${phase || ''} code=${code ?? '?'} ${errorMessage || ''}`.trim();
   console.error(logLine);
   if (stderr && typeof stderr === 'string' && stderr.trim()) console.error('[stderr]', stderr.trim().slice(-500));
   if (!res.headersSent) res.status(status).json(payload);
@@ -2953,6 +2992,20 @@ app.post('/api/cleanup-acl', (req, res) => {
       });
     })
     .catch((err) => apiError(res, 'cleanup-acl', err, { status: 500, step: 'cleanup-acl' }));
+});
+
+// Unknown /api/* after all routes (JSON 404 for operators; requestId added by res.json wrapper)
+app.use((req, res) => {
+  const p = req.path || '';
+  if (p.startsWith('/api')) {
+    return res.status(404).json({
+      ok: false,
+      error: 'API route not found',
+      path: p,
+      errorCode: 'NOT_FOUND',
+    });
+  }
+  res.status(404).send('Not found');
 });
 
 function createServer() {

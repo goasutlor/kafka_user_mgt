@@ -32,6 +32,7 @@
 #
 # CHANGELOG
 # ---------
+# 2026-03-21  Web sets GEN_REQUEST_ID (from X-Request-Id) in getBaseEnv; on error_exit, stderr echoes GEN_REQUEST_ID=... for correlation with portal/server logs.
 # 2026-03-21  Manual CLI in container: append dirname(GEN_OC_PATH) or /host/usr/bin to PATH when oc is there (same order as Web getBaseEnv); fixes podman/docker exec without breaking Portal.
 # 2026-03-23  Non-interactive add-user: GEN_VALIDATE_SKIP=1 skips broker auth/consume (faster); else GEN_VALIDATE_CONSUME=1|0 for Auth+Consume vs auth-only. Echo GEN_VALIDATE_PASSED=skipped when validation skipped.
 # 2026-03-22  Setup wizard: truststore can stay on runtime mount only — Web verifies path + keytool -list; GEN_MODE unchanged.
@@ -441,6 +442,8 @@ error_exit() {
         log_action "ERROR | $msg"
         echo -e "\n ${RED}❌ ERROR: $msg${NC}"
     fi
+    # Correlate portal/API logs with gen.sh stderr when GEN_REQUEST_ID is set (webapp passes from X-Request-Id)
+    [ -n "${GEN_REQUEST_ID:-}" ] && echo "GEN_REQUEST_ID=${GEN_REQUEST_ID}" >&2
     exit $EXIT_ERROR
 }
 
