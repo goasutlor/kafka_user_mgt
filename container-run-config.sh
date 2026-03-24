@@ -30,6 +30,10 @@
 # $HOME (override with KAFKA_USERMGMT_HOME). Folder names under that base are
 # configurable (KAFKA_USERMGMT_REL_*), or set DEPLOY_CONFIG / RUNTIME_HOST / SSL_DIR.
 #
+# After the container is up, CLI gen.sh (same oc + KUBECONFIG baseline as Web):
+#   ./scripts/gen-in-container.sh
+#   export GEN_NONINTERACTIVE=1 GEN_MODE=2 GEN_KAFKA_USER=... ; ./scripts/gen-in-container.sh
+#
 # Usage:
 #   ./container-run-config.sh
 #   ./container-run-config.sh --upgrade-latest

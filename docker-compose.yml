@@ -29,7 +29,9 @@
 # Run:
 #   docker compose up -d --build
 # Production publish on host 443: create .env with APP_PUBLISH_HOST_PORT=443 (Docker/Podman must be allowed to bind 443).
-#   CLI: docker compose exec app bash -lc 'GEN_BASE_DIR=/opt/kafka-usermgmt GEN_ACTIVE_ENV_ID=dev /app/bundled-gen/gen.sh'
+#   CLI (same env baseline as Portal — host oc + KUBECONFIG under runtime):
+#     ./scripts/gen-in-container.sh
+#   Or manual: docker compose exec app bash -lc 'export PATH=/host/usr/bin:$PATH KUBECONFIG=/opt/kafka-usermgmt/.kube/config GEN_BASE_DIR=/opt/kafka-usermgmt; /app/bundled-gen/gen.sh'
 #
 # master.config.json: runtimeRoot / oc.kubeconfig should point kubeconfig under /opt/kafka-usermgmt/.kube/ when using default layout
 # Mount host oc: only works on Linux (path below). On Windows, use WSL2 or add `oc` to the image.
