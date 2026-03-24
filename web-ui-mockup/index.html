@@ -1701,7 +1701,7 @@
 
       <div class="section-card page-card" id="change-password">
       <h1>Change password</h1>
-      <p class="lead">เปลี่ยนรหัสผ่านของ user ที่มีอยู่แล้ว (patch secret ทุก site).</p>
+      <p class="lead">หมุนรหัสผ่านของ user ที่มีอยู่แล้วและออกไฟล์ .enc ใหม่อัตโนมัติ (ACL เดิมไม่เปลี่ยน).</p>
       <div class="form-group">
         <label for="chg-username">Username</label>
         <input type="text" id="chg-username" placeholder="Username (or pick below)" />
@@ -1710,8 +1710,9 @@
         <div id="users-list-box-chg" class="users-list" style="display:block; margin-top:6px;"></div>
       </div>
       <div class="form-group">
-        <label for="chg-password">New password</label>
-        <input type="password" id="chg-password" placeholder="New password" />
+        <label for="chg-password">New password (optional)</label>
+        <input type="password" id="chg-password" placeholder="Leave blank to auto-generate secure password" />
+        <p class="hint" style="margin-top:6px;">แนะนำให้เว้นว่างเพื่อให้ระบบ generate password ที่ปลอดภัยและแนบในไฟล์ .enc ใหม่</p>
       </div>
       <button type="button" id="btn-chg" class="btn btn-primary">Change password</button>
       <button type="button" id="btn-cancel-chg" class="btn btn-secondary" style="display:none;">Cancel</button>
@@ -1724,6 +1725,7 @@
         <div id="progress-steps-list-chg" class="progress-steps-list"></div>
       </div>
       <div id="chg-result" class="form-group" style="display:none; margin-top:1rem;"></div>
+      <div id="chg-download-block" class="form-group" style="display:none; margin-top:1rem;"></div>
       </div>
 
       <div class="section-card page-card" id="cleanup">
@@ -3998,6 +4000,41 @@
           });
         }
       }
+      function renderChangePasswordDownloadBlock(j) {
+        var downloadBlock = document.getElementById('chg-download-block');
+        if (!downloadBlock) return;
+        downloadBlock.style.display = 'block';
+        var html = '<p><strong>Download updated .enc:</strong></p>';
+        if (j.generatedPassword) {
+          html += '<p><strong>Generated password (show once):</strong> <code style="font-size:12px;">' + escapeHtml(j.generatedPassword) + '</code></p>';
+        }
+        html += '<p><button type="button" class="btn btn-primary btn-chg-dl" data-path="' + escapeHtml(j.downloadPath) + '" data-filename="' + escapeHtml(j.packFile || 'password_change.enc') + '">Download .enc</button>';
+        html += ' <a href="' + j.downloadPath + '" download class="btn btn-secondary">Direct link</a></p>';
+        html += '<p><strong>How to decrypt:</strong></p><pre class="decrypt-pre">' + (j.decryptInstructions || []).join('\n') + '</pre>';
+        html += '<p class="hint">Store the generated password securely. ACL remains unchanged.</p>';
+        downloadBlock.innerHTML = html;
+        var fetchBtn = downloadBlock.querySelector('.btn-chg-dl');
+        if (fetchBtn) {
+          fetchBtn.addEventListener('click', function () {
+            var path = this.getAttribute('data-path');
+            var filename = this.getAttribute('data-filename') || 'password_change.enc';
+            if (!path) return;
+            this.disabled = true;
+            this.textContent = 'Loading...';
+            fetch(path).then(function (r) { if (!r.ok) throw new Error(r.status + ' ' + r.statusText); return r.blob(); })
+              .then(function (blob) {
+                var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = filename; a.click();
+                URL.revokeObjectURL(a.href);
+                fetchBtn.textContent = 'Downloaded';
+              })
+              .catch(function (e) {
+                fetchBtn.disabled = false;
+                fetchBtn.textContent = 'Download .enc';
+                alert('Download failed: ' + (e.message || e));
+              });
+          });
+        }
+      }
 
       document.getElementById('btn-create').addEventListener('click', async function () {
         var system = document.getElementById('system').value.trim();
@@ -4339,14 +4376,15 @@
       document.getElementById('btn-cancel-remove').addEventListener('click', function () { if (typeof currentAbort.remove === 'function') currentAbort.remove(); });
       document.getElementById('btn-chg').addEventListener('click', async function () {
         var username = document.getElementById('chg-username').value.trim();
-        var newPass = document.getElementById('chg-password').value;
+        var newPass = (document.getElementById('chg-password').value || '').trim();
         var el = document.getElementById('chg-result');
+        var chgDownloadBlock = document.getElementById('chg-download-block');
         var progressWrap = document.getElementById('progress-wrap-chg');
         var progressBar = document.getElementById('progress-bar-chg');
         var progressText = document.getElementById('progress-step-text-chg');
         var btn = document.getElementById('btn-chg');
-        if (!username || !newPass) {
-          showResult(el, false, 'Enter username and new password.');
+        if (!username) {
+          showResult(el, false, 'Enter username.');
           return;
         }
         if (cachedChgUsersList.length > 0 && cachedChgUsersList.indexOf(username) === -1) {
@@ -4354,6 +4392,7 @@
           return;
         }
         el.style.display = 'none';
+        if (chgDownloadBlock) { chgDownloadBlock.style.display = 'none'; chgDownloadBlock.innerHTML = ''; }
         progressWrap.classList.add('visible', 'indeterminate');
         progressBar.style.width = '0%';
         progressText.innerHTML = '<strong>กำลังเปลี่ยนรหัสผ่าน...</strong>';
@@ -4368,7 +4407,7 @@
           var f = fetchWithTimeout('/api/change-password', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: username, newPassword: newPass })
+            body: JSON.stringify({ username: username, newPassword: newPass || undefined })
           }, 120000);
           currentAbort.chg = f.abort;
           var res = await f.promise;
@@ -4380,6 +4419,7 @@
           if (stepsListChg) stepsListChg.innerHTML = '<div class="step-line"><span class="step-name">Change password</span> <span class="step-done">Done</span></div>';
           el.style.display = 'block';
           showResult(el, j.ok, j.ok ? (j.message || 'Done.') : formatApiError(j), j.ok ? {} : { action: 'Change password', errorDetail: j });
+          if (j.ok && j.downloadPath && j.decryptInstructions) renderChangePasswordDownloadBlock(j);
           if (j.ok) { document.getElementById('chg-username').value = ''; document.getElementById('chg-password').value = ''; }
         } catch (e) {
           var cancelled = e.name === 'AbortError' && (typeof currentAbort.chg === 'function');
