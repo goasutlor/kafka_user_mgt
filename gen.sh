@@ -32,6 +32,7 @@
 #
 # CHANGELOG
 # ---------
+# 2026-03-21  GEN_ACL_CONFIG_JSON: if any topic has Read/All but no group has Read/All, auto-add GROUP * Read (avoid Producer+Read consume failures; parity with preset ACL).
 # 2026-03-21  Web sets GEN_REQUEST_ID (from X-Request-Id) in getBaseEnv; on error_exit, stderr echoes GEN_REQUEST_ID=... for correlation with portal/server logs.
 # 2026-03-21  Manual CLI in container: append dirname(GEN_OC_PATH) or /host/usr/bin to PATH when oc is there (same order as Web getBaseEnv); fixes podman/docker exec without breaking Portal.
 # 2026-03-23  Non-interactive add-user: GEN_VALIDATE_SKIP=1 skips broker auth/consume (faster); else GEN_VALIDATE_CONSUME=1|0 for Auth+Consume vs auth-only. Echo GEN_VALIDATE_PASSED=skipped when validation skipped.
@@ -431,6 +432,66 @@ apply_kafka_acl_bundle_from_json() {
     done < <(echo "$GEN_ACL_CONFIG_JSON" | jq -c '.[]')
 }
 
+# ACL bundle (GEN_ACL_CONFIG_JSON): topic Read/All without any group Read/All cannot consume with a real consumer → add GROUP * Read (parity with preset Read/Client/All path). Skip for DENY bundles.
+acl_bundle_needs_auto_group_read() {
+    local json="$1"
+    [ -z "$json" ] && return 1
+    local _ptype _need
+    _ptype=$(echo "${GEN_ACL_PERMISSION_TYPE:-ALLOW}" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')
+    [ "$_ptype" = "DENY" ] && return 1
+    _need=$(echo "$json" | jq -r '
+      ([ .[] | select((.type|ascii_downcase)=="topic") | .ops[]? | ascii_upcase | select(. == "READ" or . == "ALL") ] | length) as $tn
+      | ([ .[] | select((.type|ascii_downcase)=="group") | .ops[]? | ascii_upcase | select(. == "READ" or . == "ALL") ] | length) as $gn
+      | ($tn > 0) and ($gn == 0)
+    ' 2>/dev/null) || return 1
+    [ "$_need" = "true" ]
+}
+
+# Same default consumer-group Read on * (+ GEN_ACL_GROUP_EXTRA) as interactive preset path.
+add_default_consumer_group_read_acl() {
+    local _user="${1:-}"
+    [ -z "$_user" ] && return 1
+    status_msg "Adding ACL for consumer group * (Read — required for consume / commit offset)"
+    local cg_acl_out cg_rc
+    cg_acl_out=$($KAFKA_BIN/kafka-acls.sh \
+      --bootstrap-server "$BOOTSTRAP_CWDC" \
+      --command-config "$ADMIN_CONFIG" \
+      --add \
+      --allow-principal "User:$_user" \
+      --operation Read \
+      --group '*' 2>&1)
+    cg_rc=$?
+    done_msg
+    if [ $cg_rc -ne 0 ]; then
+        echo -e "   ${YELLOW}⚠️  Consumer group ACL add failed (consume test may fail)${NC}"
+        echo "$cg_acl_out" | sed 's/^/   /'
+    else
+        echo -e "   ${GREEN}✓ Consumer group Read in effect.${NC} User:$_user can join consumer groups (required for consume)."
+    fi
+    if [ -n "${GEN_ACL_GROUP_EXTRA:-}" ]; then
+        local cg_extra_out
+        IFS=',' read -ra CG_EXTRA <<< "$GEN_ACL_GROUP_EXTRA"
+        for cg_op in "${CG_EXTRA[@]}"; do
+            cg_op=$(echo "$cg_op" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            [ -z "$cg_op" ] && continue
+            status_msg "Adding ACL for consumer group * ($cg_op)"
+            cg_extra_out=$($KAFKA_BIN/kafka-acls.sh \
+              --bootstrap-server "$BOOTSTRAP_CWDC" \
+              --command-config "$ADMIN_CONFIG" \
+              --add \
+              --allow-principal "User:$_user" \
+              --operation "$cg_op" \
+              --group '*' 2>&1)
+            if [ $? -ne 0 ]; then
+                echo -e "   ${YELLOW}⚠️  Consumer group $cg_op failed${NC}"
+                echo "$cg_extra_out" | sed 's/^/   /'
+            else
+                echo -e "   ${GREEN}✓ Consumer group $cg_op added.${NC}"
+            fi
+        done
+    fi
+}
+
 # error_exit [step_name] message  — log, print, exit 1 (step_name optional, for tracing)
 error_exit() {
     local step="$1" msg="$2"
@@ -770,6 +831,10 @@ if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "5" ]; then
         done_msg
         status_msg "Applying ACL resources ($_res_count item(s))"
         apply_kafka_acl_bundle_from_json "$KAFKA_USER" "ADD_ACL_EXISTING"
+        if acl_bundle_needs_auto_group_read "$GEN_ACL_CONFIG_JSON"; then
+            echo -e "   ${CYAN}Note: Bundle grants topic Read/All but no group Read — adding consumer group * Read (same as preset ACL).${NC}"
+            add_default_consumer_group_read_acl "$KAFKA_USER"
+        fi
         done_msg
         log_action "ADD_ACL_EXISTING | user=$KAFKA_USER | resources=$_res_count | permission=$_ptype | host=$_acl_host"
         echo -e "   ${GREEN}ACL config applied for User:$KAFKA_USER (${_res_count} resource item(s))${NC}"
@@ -2250,6 +2315,10 @@ if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ -n "${GEN_ACL_CONFIG_JSON:-}" ]; then
     status_msg "Applying ACL from resource bundle (GEN_ACL_CONFIG_JSON)"
     apply_kafka_acl_bundle_from_json "$KAFKA_USER" "ADD_USER_ACL"
     done_msg
+    if acl_bundle_needs_auto_group_read "$GEN_ACL_CONFIG_JSON"; then
+        echo -e "   ${CYAN}Note: Bundle grants topic Read/All but no group Read — adding consumer group * Read (Producer+Read and similar).${NC}"
+        add_default_consumer_group_read_acl "$KAFKA_USER"
+    fi
     echo -e "   ${GREEN}ACL bundle applied for User:$KAFKA_USER${NC}"
     NEED_CONSUMER_GROUP=false
 elif [ "${GEN_NONINTERACTIVE}" != "1" ] || [ -z "$ACL_CHOICE" ]; then
@@ -2351,45 +2420,9 @@ fi
 # 4b-2. Consumer Group ACL — Required for running a real consumer (e.g. commit offset).
 #        Having only Topic READ is not enough; you must have READ on ResourceType=GROUP too, else commit offset fails.
 #        We add Read on group '*' by default (auto-selected). Optional: GEN_ACL_GROUP_EXTRA=Describe,Delete.
+#        (GEN_ACL_CONFIG_JSON path may call add_default_consumer_group_read_acl earlier when topic Read has no group Read.)
 if [ "$NEED_CONSUMER_GROUP" == "true" ]; then
-    status_msg "Adding ACL for consumer group * (Read — required for consume / commit offset)"
-    cg_acl_out=$($KAFKA_BIN/kafka-acls.sh \
-      --bootstrap-server $BOOTSTRAP_CWDC \
-      --command-config "$ADMIN_CONFIG" \
-      --add \
-      --allow-principal "User:$KAFKA_USER" \
-      --operation Read \
-      --group '*' 2>&1)
-    cg_rc=$?
-    done_msg
-    if [ $cg_rc -ne 0 ]; then
-        echo -e "   ${YELLOW}⚠️  Consumer group ACL add failed (consume test may fail)${NC}"
-        echo "$cg_acl_out" | sed 's/^/   /'
-    else
-        echo -e "   ${GREEN}✓ Consumer group Read in effect.${NC} User:$KAFKA_USER can join consumer groups (required for consume)."
-    fi
-    # Optional: add extra consumer group operations (Describe, Delete) when requested via env
-    if [ -n "$GEN_ACL_GROUP_EXTRA" ]; then
-        IFS=',' read -ra CG_EXTRA <<< "$GEN_ACL_GROUP_EXTRA"
-        for cg_op in "${CG_EXTRA[@]}"; do
-            cg_op=$(echo "$cg_op" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
-            [ -z "$cg_op" ] && continue
-            status_msg "Adding ACL for consumer group * ($cg_op)"
-            cg_extra_out=$($KAFKA_BIN/kafka-acls.sh \
-              --bootstrap-server $BOOTSTRAP_CWDC \
-              --command-config "$ADMIN_CONFIG" \
-              --add \
-              --allow-principal "User:$KAFKA_USER" \
-              --operation "$cg_op" \
-              --group '*' 2>&1)
-            if [ $? -ne 0 ]; then
-                echo -e "   ${YELLOW}⚠️  Consumer group $cg_op failed${NC}"
-                echo "$cg_extra_out" | sed 's/^/   /'
-            else
-                echo -e "   ${GREEN}✓ Consumer group $cg_op added.${NC}"
-            fi
-        done
-    fi
+    add_default_consumer_group_read_acl "$KAFKA_USER"
 fi
 
 # 4c. CREDENTIAL VALIDATION - ensure client can use the creds
@@ -2580,6 +2613,52 @@ SAFE_PASS_FILE="${NEW_PASS//\\/\\\\}"
 SAFE_PASS_FILE="${SAFE_PASS_FILE//\"/\\\"}"
 SAFE_PASS_FILE="${SAFE_PASS_FILE//\$/\\$}"
 
+# Consumer-group notes for credential pack (when ACL includes topic Read/All).
+PACK_HAS_CONSUME_ACL=false
+PACK_GROUP_ACL_TARGETS=""
+PACK_GROUP_ID_SUGGESTED="${KAFKA_USER}-cg"
+PACK_ACL_SCOPE_LINES=""
+if [ -n "${GEN_ACL_CONFIG_JSON:-}" ]; then
+    _pack_topic_read_count=$(echo "$GEN_ACL_CONFIG_JSON" | jq -r '[ .[] | select((.type|ascii_downcase)=="topic") | .ops[]? | ascii_upcase | select(.=="READ" or .=="ALL") ] | length' 2>/dev/null)
+    [ -n "$_pack_topic_read_count" ] && [ "$_pack_topic_read_count" -gt 0 ] && PACK_HAS_CONSUME_ACL=true
+    PACK_GROUP_ACL_TARGETS=$(echo "$GEN_ACL_CONFIG_JSON" | jq -r '
+      [
+        .[]
+        | select((.type|ascii_downcase)=="group")
+        | . as $r
+        | [ ($r.ops[]? | ascii_upcase) ] as $ops
+        | select(($ops | index("READ")) != null or ($ops | index("ALL")) != null)
+        | ((($r.name // "*") | tostring) + " (" + ((($r.pattern // "LITERAL") | ascii_upcase)) + ")")
+      ] | unique | join(", ")
+    ' 2>/dev/null)
+    PACK_ACL_SCOPE_LINES=$(echo "$GEN_ACL_CONFIG_JSON" | jq -r '
+      [
+        .[]
+        | . as $r
+        | [ ($r.ops[]? | ascii_upcase) ] as $ops
+        | select(($ops | length) > 0)
+        | ((($r.type // "unknown") | tostring | ascii_upcase) + ":" + ((($r.name // "*") | tostring)) + ":" + ((($r.pattern // "LITERAL") | ascii_upcase)) + " => " + (($ops | unique | join(","))))
+      ] | unique | .[]
+    ' 2>/dev/null)
+else
+    _ops_lc=$(echo "${ACL_OPS:-}" | tr '[:upper:]' '[:lower:]' | tr -d '[:space:]')
+    case ",${_ops_lc}," in
+        *,read,*|*,all,*) PACK_HAS_CONSUME_ACL=true ;;
+    esac
+    PACK_ACL_SCOPE_LINES="TOPIC:$TOPIC_NAME:LITERAL => $(echo "${ACL_OPS:-}" | tr '[:lower:]' '[:upper:]' | sed 's/[[:space:]]//g')"
+    if [ "$PACK_HAS_CONSUME_ACL" = "true" ]; then
+        PACK_ACL_SCOPE_LINES="${PACK_ACL_SCOPE_LINES}
+GROUP:*:LITERAL => READ${GEN_ACL_GROUP_EXTRA:+,$GEN_ACL_GROUP_EXTRA}"
+    fi
+    if [ -n "${ACL_OPS:-}" ]; then
+        _ops_u=$(echo "$ACL_OPS" | tr '[:lower:]' '[:upper:]' | tr -d '[:space:]')
+        case ",${_ops_u}," in
+            *,WRITE,*|*,ALL,*) PACK_ACL_SCOPE_LINES="${PACK_ACL_SCOPE_LINES}
+CLUSTER:kafka-cluster:LITERAL => IDEMPOTENT_WRITE" ;;
+        esac
+    fi
+fi
+
 # 1) credentials.txt — human-readable summary
 cat <<EOF > "$PACK_DIR/credentials.txt"
 =========================================
@@ -2595,6 +2674,37 @@ $BOOTSTRAP_BOTH
 
 Topic       : $TOPIC_NAME
 ACL         : $ACL_DESC — $ACL_WHAT
+
+EOF
+if [ -n "$PACK_ACL_SCOPE_LINES" ]; then
+    {
+        echo "[ACL SUMMARY]"
+        echo "Allowed actions (this user):"
+        while IFS= read -r _acl_line; do
+            [ -z "$_acl_line" ] && continue
+            _acl_scope=${_acl_line%%=>*}
+            _acl_ops=${_acl_line#*=>}
+            echo "  - $(echo "$_acl_scope" | sed 's/[[:space:]]*$//') =>$(echo "$_acl_ops" | sed 's/^[[:space:]]*/ /')"
+        done <<< "$PACK_ACL_SCOPE_LINES"
+        echo ""
+    } >> "$PACK_DIR/credentials.txt"
+fi
+if [ "$PACK_HAS_CONSUME_ACL" = "true" ]; then
+    {
+        echo ""
+        echo "[CONSUMER GROUP]"
+        if [ -n "$PACK_GROUP_ACL_TARGETS" ]; then
+            echo "ACL Group(s) : $PACK_GROUP_ACL_TARGETS"
+        else
+            # Preset ACL path and auto-group path grant Read on group '*'
+            echo "ACL Group(s) : * (LITERAL)"
+        fi
+        echo "Suggested Group ID : $PACK_GROUP_ID_SUGGESTED"
+        echo "Note: Consumers using the same group.id share offsets and rebalance in one consumer group."
+        echo "      You can change group.id (e.g., $PACK_GROUP_ID_SUGGESTED) in client config/app code."
+    } >> "$PACK_DIR/credentials.txt"
+fi
+cat <<EOF >> "$PACK_DIR/credentials.txt"
 
 Generated   : $(date)
 =========================================

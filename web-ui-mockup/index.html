@@ -1746,8 +1746,8 @@
       <h1>Audit Log</h1>
       <p class="lead">Activity log of user and ACL operations. Filter by date range.</p>
       <div class="audit-filter-row">
-        <span><label for="audit-from">From</label> <input type="text" id="audit-from" placeholder="YYYY-MM-DD" lang="en" title="Date from (YYYY-MM-DD)" /></span>
-        <span><label for="audit-to">To</label> <input type="text" id="audit-to" placeholder="YYYY-MM-DD" lang="en" title="Date to (YYYY-MM-DD)" /></span>
+        <span><label for="audit-from">From</label> <input type="date" id="audit-from" placeholder="YYYY-MM-DD" lang="en" title="Date from (YYYY-MM-DD)" /></span>
+        <span><label for="audit-to">To</label> <input type="date" id="audit-to" placeholder="YYYY-MM-DD" lang="en" title="Date to (YYYY-MM-DD)" /></span>
         <button type="button" id="audit-refresh" class="btn btn-primary">Refresh</button>
       </div>
       <div class="audit-table-wrap">
@@ -3486,15 +3486,53 @@
             if (st.resources.some(function (rg) { return rg.type === 'topic' && !rg.readOnlyName; }) && !wtopic) {
               warnings.push('กรอกชื่อ topic ในขั้นก่อนหน้า (หรือช่อง Topic) — ใช้เป็นชื่อ resource อัตโนมัติ');
             }
+            var hasTopicRead = st.resources.some(function (rg) {
+              var ops = (rg.ops || []).map(normalizeAclOperation);
+              return rg.type === 'topic' && (ops.indexOf('READ') !== -1 || ops.indexOf('ALL') !== -1);
+            });
+            var hasGroupRead = st.resources.some(function (rg) {
+              var ops = (rg.ops || []).map(normalizeAclOperation);
+              return rg.type === 'group' && (ops.indexOf('READ') !== -1 || ops.indexOf('ALL') !== -1);
+            });
+            if (hasTopicRead && !hasGroupRead) {
+              warnings.push('มี Topic READ/ALL แต่ยังไม่มี Group READ/ALL — ระบบจะเพิ่ม GROUP:username-cg (LITERAL) ให้อัตโนมัติ (แก้เป็นชื่อ group จริงได้, หรือใส่ * หากต้องการ)');
+            }
             var needCgName = false;
             st.resources.forEach(function (rg) {
               if (rg.type === 'group' && !rg.readOnlyName && !(rg.name || '').trim()) needCgName = true;
             });
             if (needCgName) {
-              warnings.push('กรอก consumer group id ในช่อง GROUP หรือใส่ username เพื่อใช้ค่าเริ่มต้น (ชื่อผู้ใช้-cg)');
+              warnings.push('กรอก consumer group id ในช่อง GROUP (ค่าแนะนำ: username-cg). หากต้องการไม่ล็อกชื่อ ให้ใส่ * ได้');
             }
           }
           return warnings;
+        }
+        function ensureConsumerGroupForRead(suffix) {
+          var st = aclDesignerStates[suffix];
+          if (!st || !Array.isArray(st.resources)) return;
+          var hasTopicRead = st.resources.some(function (r) {
+            var ops = (r.ops || []).map(normalizeAclOperation);
+            return r.type === 'topic' && (ops.indexOf('READ') !== -1 || ops.indexOf('ALL') !== -1);
+          });
+          if (!hasTopicRead) return;
+          var groupIdx = -1;
+          for (var i = 0; i < st.resources.length; i += 1) {
+            if (st.resources[i].type === 'group') { groupIdx = i; break; }
+          }
+          var desiredCg = expectedConsumerGroupFromWizard(suffix) || '*';
+          if (groupIdx === -1) {
+            st.resources.push({ type: 'group', name: desiredCg, pattern: 'LITERAL', ops: ['READ'] });
+            st.consumerGroupUserEdited = false;
+            return;
+          }
+          var grp = st.resources[groupIdx];
+          var gops = (grp.ops || []).map(normalizeAclOperation);
+          if (gops.indexOf('READ') === -1 && gops.indexOf('ALL') === -1) gops.push('READ');
+          grp.ops = gops;
+          if (!grp.readOnlyName && !(grp.name || '').trim()) {
+            grp.name = desiredCg;
+            st.consumerGroupUserEdited = false;
+          }
         }
         function renderAclMetaLineHtml(suffix, r, idx) {
           if (r.type === 'cluster') {
@@ -3632,6 +3670,7 @@
               if (arr.indexOf(op) !== -1) arr = arr.filter(function (x) { return x !== op; });
               else arr.push(op);
               aclDesignerStates[suf].resources[i].ops = arr;
+              ensureConsumerGroupForRead(suf);
               renderAclDesigner(suf);
             });
           });
@@ -3646,6 +3685,17 @@
             return !(r.ops && r.ops.length);
           });
           if (invalid) return 'กรอก topic ในขั้นก่อนหน้า, consumer group (หรือ username เพื่อค่าเริ่มต้น …-cg) และเลือก operation ให้ครบ';
+          var hasTopicRead = st.resources.some(function (r) {
+            var ops = (r.ops || []).map(normalizeAclOperation);
+            return r.type === 'topic' && (ops.indexOf('READ') !== -1 || ops.indexOf('ALL') !== -1);
+          });
+          var hasGroupRead = st.resources.some(function (r) {
+            var ops = (r.ops || []).map(normalizeAclOperation);
+            return r.type === 'group' && (ops.indexOf('READ') !== -1 || ops.indexOf('ALL') !== -1);
+          });
+          if (hasTopicRead && !hasGroupRead) {
+            return 'เมื่อให้สิทธิ์ Topic READ/ALL ต้องมี Group READ/ALL ด้วย (ใส่ group.id จริง หรือใส่ * ได้ถ้าต้องการเปิดกว้าง)';
+          }
           if (st.selectedRole === 'admin' && !st.adminRiskAck) {
             return 'เทมเพลต Topic Admin: ติ๊กยืนยันความเสี่ยง (รวมสิทธิ์ลบ topic / consumer group) ก่อนดำเนินการต่อ';
           }
