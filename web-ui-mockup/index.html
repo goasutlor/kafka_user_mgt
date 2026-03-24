@@ -318,6 +318,37 @@
       margin-left: -3px;
       padding-left: 15px;
     }
+    .home-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 14px;
+      margin-top: 4px;
+    }
+    a.home-tile {
+      display: block;
+      padding: 16px 18px;
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      background: var(--body-bg, #fff);
+      text-decoration: none;
+      color: inherit;
+      transition: box-shadow 0.15s ease, border-color 0.15s ease;
+    }
+    a.home-tile:hover {
+      border-color: var(--link);
+      box-shadow: 0 2px 10px rgba(15, 23, 42, 0.06);
+    }
+    a.home-tile strong {
+      display: block;
+      font-size: 15px;
+      margin-bottom: 6px;
+      color: var(--text);
+    }
+    a.home-tile span {
+      font-size: 13px;
+      color: var(--text-muted);
+      line-height: 1.45;
+    }
     .sidebar-left .sidebar-footer {
       margin-top: auto;
       padding: 16px 12px 20px;
@@ -1161,6 +1192,8 @@
       </div>
     </div>
     <nav class="header-nav" aria-label="Quick links">
+      <a href="#home">Overview</a>
+      <span class="nav-sep" aria-hidden="true"></span>
       <a href="#create-topic-onboard">Create topic</a>
       <a href="#add">Add user</a>
       <a href="#add-acl-existing">Add ACL</a>
@@ -1181,8 +1214,8 @@
 
   <div class="breadcrumb-wrap">
     <div class="breadcrumb" id="breadcrumb-current">
-      <a href="#add">Home</a><span>›</span>
-      <span id="page-title">Add new user</span>
+      <a href="#home">Home</a><span>›</span>
+      <span id="page-title">Home</span>
     </div>
   </div>
 
@@ -1190,9 +1223,11 @@
     <aside class="sidebar-left">
       <div class="version" id="app-version">Loading version…</div>
       <nav>
+        <div class="nav-section">Start</div>
+        <a href="#home" class="nav-page active" data-page="home">Home</a>
         <div class="nav-section">Provisioning</div>
         <a href="#create-topic-onboard" class="nav-page" data-page="create-topic-onboard">Create Topic &amp; Onboard User</a>
-        <a href="#add" class="nav-page active" data-page="add">Add new user</a>
+        <a href="#add" class="nav-page" data-page="add">Add new user</a>
         <a href="#add-acl-existing" class="nav-page" data-page="add-acl-existing">Add ACL to existing user</a>
         <a href="#test" class="nav-page" data-page="test">Test existing user</a>
         <div class="nav-section">User management</div>
@@ -1209,7 +1244,28 @@
     </aside>
 
     <main class="main">
-      <div class="section-card page-card page-visible" id="add">
+      <div class="section-card page-card page-visible" id="home">
+      <h1>Home</h1>
+      <p class="lead" style="margin-bottom:6px;">
+        Provision Confluent Kafka application users, topics, and ACLs — same behaviour as the bundled <span class="term">gen.sh</span> CLI. Pick a task below or use the sidebar.
+      </p>
+      <p class="hint" style="margin-top:0; margin-bottom:16px; font-size:13px; line-height:1.5;">
+        After sign-in you land here. Open a bookmarked link with a hash (e.g. <code>#add-acl-existing</code>) to jump straight to that page. <strong>Setup</strong> / <strong>Reset</strong> in the header are for portal configuration, not Kafka users.
+      </p>
+      <div class="home-grid">
+        <a href="#create-topic-onboard" class="home-tile"><strong>Create topic &amp; onboard</strong><span>New topic, then create user + ACL + pack in one flow.</span></a>
+        <a href="#add" class="home-tile"><strong>Add new user</strong><span>Wizard for an existing topic: credentials, ACL template, encrypted pack.</span></a>
+        <a href="#add-acl-existing" class="home-tile"><strong>Add ACL (existing user)</strong><span>Grant more topic/group permissions without a new password.</span></a>
+        <a href="#test" class="home-tile"><strong>Test existing user</strong><span>Verify auth (and optionally consume) against the cluster.</span></a>
+        <a href="#remove" class="home-tile"><strong>Remove user(s)</strong><span>Remove users from secrets and clean up ACLs.</span></a>
+        <a href="#change-password" class="home-tile"><strong>Change password</strong><span>Rotate password and issue a new download pack.</span></a>
+        <a href="#cleanup" class="home-tile"><strong>Cleanup orphaned ACLs</strong><span>Remove ACLs for principals no longer in plain-users.</span></a>
+        <a href="#audit-log" class="home-tile"><strong>Audit log</strong><span>Who did what and when (portal actions).</span></a>
+        <a href="#download-history" class="home-tile"><strong>Download history</strong><span>Past .enc packs by day.</span></a>
+      </div>
+      </div>
+
+      <div class="section-card page-card" id="add">
       <h1>Add new user</h1>
       <p class="lead">
         Step-by-step: validate each input before continuing. Same result as the <span class="term">shell script</span> (path in config) — user added to plain-users.json (CWDC + TLS2), ACL applied, pack for download.
@@ -1997,6 +2053,7 @@
             if (x.status === 200 && x.body.ok) {
               currentUser = x.body.user;
               showApp();
+              if (typeof window.navigatePortalAfterLogin === 'function') window.navigatePortalAfterLogin();
             } else {
               errEl.textContent = x.body.error || 'Invalid username or password.';
               btn.disabled = false;
@@ -2014,7 +2071,7 @@
         fetchAuth('/api/logout', { method: 'POST' })
           .finally(function () {
             currentUser = null;
-            var url = window.location.pathname + '?logout=1' + (window.location.hash || '#add');
+            var url = window.location.pathname + '?logout=1#home';
             window.location.replace(url);
           });
       });
@@ -2283,7 +2340,14 @@
         });
       })();
       (function () {
-        var pageTitles = { add: 'Add new user', 'create-topic-onboard': 'Create Topic & Onboard User', 'add-acl-existing': 'Add ACL to existing user', test: 'Test existing user', remove: 'Remove user(s) + ACL', 'change-password': 'Change password', cleanup: 'Cleanup orphaned ACLs', 'audit-log': 'Audit Log', 'download-history': 'Download History' };
+        var pageTitles = { home: 'Home', add: 'Add new user', 'create-topic-onboard': 'Create Topic & Onboard User', 'add-acl-existing': 'Add ACL to existing user', test: 'Test existing user', remove: 'Remove user(s) + ACL', 'change-password': 'Change password', cleanup: 'Cleanup orphaned ACLs', 'audit-log': 'Audit Log', 'download-history': 'Download History' };
+        window.navigatePortalAfterLogin = function () {
+          var raw = (location.hash || '').trim().toLowerCase();
+          var p = raw.slice(1);
+          if (!p || !pageTitles[p] || p === 'add') {
+            if (location.hash !== '#home') location.hash = '#home';
+          }
+        };
         function showPage(id) {
           document.querySelectorAll('.section-card.page-card').forEach(function (el) {
             el.classList.toggle('page-visible', el.id === id);
@@ -2309,9 +2373,17 @@
           }
         }
         function applyRoute() {
-          var hash = (location.hash || '#add').trim().toLowerCase();
-          var page = hash.slice(1) || 'add';
-          if (!pageTitles[page]) page = 'add';
+          var raw = (location.hash || '').trim();
+          if (!raw || raw === '#') {
+            history.replaceState(null, '', location.pathname + location.search + '#home');
+            raw = '#home';
+          }
+          var hash = raw.toLowerCase();
+          var page = hash.slice(1) || 'home';
+          if (!pageTitles[page]) {
+            page = 'home';
+            history.replaceState(null, '', location.pathname + location.search + '#home');
+          }
           showPage(page);
         }
         window.addEventListener('hashchange', applyRoute);
