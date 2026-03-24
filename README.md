@@ -12,6 +12,8 @@ docker pull ghcr.io/goasutlor/kafka_user_mgt:latest
 
 Run with Compose (mount `runtime` + `deploy/config`). First start: open `http://<host>:3443/setup.html` to write config into the mounted volume. **Upgrading the image keeps that config** (no re-setup). To wipe and run setup again: **`/reset-config.html`** (Portal user/password + confirmation phrase), or see [UPGRADE-AND-PERSISTENCE.md](UPGRADE-AND-PERSISTENCE.md).
 
+**Universal / no vendor lock-in:** Kafka bootstrap, OpenShift contexts, and namespaces come from **your** `master.config.json` (Setup) and synced `environments.json` — not from hardcoded hostnames in `gen.sh`. The bundled CLI (`gen-in-container.sh`) applies the same defaults as the Portal via `portal-parity-env.sh`. For merged multi-cluster kubeconfigs, set `GEN_KUBECONFIG_MERGE_BOTH=1` to use a sibling `config-both` file if you use that layout.
+
 ### CLI (Portal-parity wrappers)
 
 - `./scripts/gen-in-container.sh` — runs bundled `gen.sh` in the running container with Portal-compatible baseline env (`PATH`, `GEN_OC_PATH`, `KUBECONFIG`, `GEN_BASE_DIR`). Before `gen.sh`, it sources **`portal-parity-env.sh`** inside the container so **default OCP sites / active environment** match the Portal when you have not set `GEN_OCP_SITES` (uses `environments.json` under the runtime mount, else `master.config.json`).

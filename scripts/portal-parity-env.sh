@@ -17,7 +17,7 @@ if [[ -n "${GEN_OCP_SITES:-}" ]]; then
 fi
 
 BASE_DIR="${GEN_BASE_DIR:-/opt/kafka-usermgmt}"
-MASTER="${PORTAL_MASTER_CONFIG:-/app/config/master.config.json}"
+MASTER="${PORTAL_MASTER_CONFIG:-${GEN_MASTER_CONFIG:-/app/config/master.config.json}}"
 ENV_JSON="${GEN_ENVIRONMENTS_JSON:-$BASE_DIR/environments.json}"
 
 if ! command -v jq &>/dev/null; then

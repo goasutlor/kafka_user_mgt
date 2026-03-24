@@ -32,8 +32,12 @@ KUBE=$(jq -r '.gen.kubeconfigPath // empty' "$CONFIG")
 SECRET=$(jq -r '.gen.k8sSecretName // "kafka-server-side-credentials"' "$CONFIG")
 SITES_JSON=$(jq -c '.gen.sites // [{name: "default", namespace: .gen.namespace, ocContext: .gen.ocContext}] | if length == 0 then [{name: "default", namespace: .gen.namespace, ocContext: .gen.ocContext}] else . end' "$CONFIG" 2>/dev/null)
 if [[ -z "$SITES_JSON" || "$SITES_JSON" == "null" ]]; then
-  NS=$(jq -r '.gen.namespace // "esb-prod-cwdc"' "$CONFIG")
-  CTX=$(jq -r '.gen.ocContext // "cwdc"' "$CONFIG")
+  NS=$(jq -r '.gen.namespace // empty' "$CONFIG")
+  CTX=$(jq -r '.gen.ocContext // empty' "$CONFIG")
+  if [[ -z "$NS" || -z "$CTX" ]]; then
+    echo "[FAIL] $CONFIG must define gen.sites[] or both gen.namespace and gen.ocContext (no legacy defaults)."
+    exit 1
+  fi
   SITES_JSON="[{\"name\":\"default\",\"namespace\":\"$NS\",\"ocContext\":\"$CTX\"}]"
 fi
 

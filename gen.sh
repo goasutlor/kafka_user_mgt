@@ -39,6 +39,7 @@
 # 2026-03-22  Setup wizard: truststore can stay on runtime mount only — Web verifies path + keytool -list; GEN_MODE unchanged.
 # 2026-03-23  With GEN_ACTIVE_ENV_ID + environments.json: if admin/client not set in JSON and GEN_ADMIN_CONFIG unset, use kafka-client-master-{id}.properties and kafka-client-{id}.properties (no unsuffixed fallback).
 # 2026-03-23  Per-environment adminPropertiesFile / clientPropertiesFile (or adminConfig / clientConfig) in environments.json — Web sets GEN_ADMIN_CONFIG from session env; CLI can omit GEN_* to resolve from JSON (same truststore/SASL as that cluster).
+# 2026-03-24  Universal deploy: no vendor-specific bootstrap/OCP defaults; fill bootstrap from master.config (Setup) when unset; OCP sites only from GEN_OCP_SITES / environments / explicit OCP_CTX_+NS_ or portal-parity. Optional GEN_KUBECONFIG_MERGE_BOTH=1 uses sibling config-both (replaces old *config-cwdc path hack).
 # 2026-03-21  Web getBaseEnv sets GEN_KAFKA_BOOTSTRAP (same as /api/create-topic); gen.sh applies after env json so add-user topic validation matches portal when environments.json omits bootstrapServers.
 # 2026-03-22  Per-environment Kafka bootstrap: with GEN_ACTIVE_ENV_ID + environments.json, if the active env object has bootstrapServers, override BOOTSTRAP_CWDC/BOTH (parity with Web portal env switch).
 # 2026-03-22  Init Kafka client .properties templates: menu [8] and GEN_MODE=8 — scripts/ensure-kafka-client-props.sh (parity with web setup save; GEN_KAFKA_BOOTSTRAP optional). Full PEM/JKS + SASL materialization (no CHANGE_ME) is via the web setup wizard only — use mount configs/ to adjust later.
@@ -128,16 +129,16 @@ LOCK_FILE="$TMP_DIR/gen_kafka_user.lock"
 # To customize: Edit this regex pattern to match your environment's system users
 SYSTEM_USERS="^(kafka|schema_registry|kafka_connect|control_center|client|admin|user1|user2|an-api-key)$"
 
-# Kafka Bootstrap (both sites - same cluster, resilience if one site down)
-BOOTSTRAP_CWDC="kafka.apps.cwdc.esb-kafka-prod.intra.ais:443"
-BOOTSTRAP_TLS2="kafka.apps.tls2.esb-kafka-prod.intra.ais:443"
-BOOTSTRAP_BOTH="${BOOTSTRAP_CWDC},${BOOTSTRAP_TLS2}"
+# Kafka bootstrap: no vendor defaults — from Portal Setup (master.config), environments.json, or GEN_KAFKA_BOOTSTRAP.
+BOOTSTRAP_CWDC=""
+BOOTSTRAP_TLS2=""
+BOOTSTRAP_BOTH=""
 
-# OCP Context (for oc commands — add secret to every site). Default two sites; override with GEN_OCP_SITES="ctx1:ns1,ctx2:ns2" (context names are not fixed)
-OCP_CTX_CWDC="${OCP_CTX_CWDC:-cwdc}"
-OCP_CTX_TLS2="${OCP_CTX_TLS2:-tls2}"
-NS_CWDC="${NS_CWDC:-esb-prod-cwdc}"
-NS_TLS2="${NS_TLS2:-esb-prod-tls2}"
+# OCP sites: no default context/namespace — use GEN_OCP_SITES, environments.json + GEN_ACTIVE_ENV_ID, master.config (portal-parity), or set OCP_CTX_*/NS_* explicitly.
+OCP_CTX_CWDC="${OCP_CTX_CWDC:-}"
+OCP_CTX_TLS2="${OCP_CTX_TLS2:-}"
+NS_CWDC="${NS_CWDC:-}"
+NS_TLS2="${NS_TLS2:-}"
 KAFKA_CR_NAME="kafka"
 
 # Multi-environment (parity with Web portal): GEN_ACTIVE_ENV_ID + environments.json under BASE_DIR (or GEN_ENVIRONMENTS_JSON).
@@ -179,6 +180,29 @@ if [ -n "${GEN_KAFKA_BOOTSTRAP:-}" ]; then
         BOOTSTRAP_CWDC="$_gkb"
         BOOTSTRAP_TLS2="$_gkb"
         BOOTSTRAP_BOTH="$_gkb"
+    fi
+fi
+# If still empty, read kafka.bootstrapServers from master.config (same source as Web Setup wizard)
+if [ -z "${BOOTSTRAP_CWDC:-}" ]; then
+    _MASTER_CFG="${PORTAL_MASTER_CONFIG:-}"
+    [ -z "$_MASTER_CFG" ] && _MASTER_CFG="${GEN_MASTER_CONFIG:-}"
+    [ -z "$_MASTER_CFG" ] && _MASTER_CFG="/app/config/master.config.json"
+    if [ -f "$_MASTER_CFG" ] && command -v jq >/dev/null 2>&1; then
+        _mbr=$(jq -r '.kafka.bootstrapServers // empty' "$_MASTER_CFG" 2>/dev/null)
+        _mbr=$(echo "$_mbr" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        if [ -n "$_mbr" ]; then
+            _first="${_mbr%%,*}"
+            _first=$(echo "$_first" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+            BOOTSTRAP_CWDC="$_first"
+            if echo "$_mbr" | grep -q ','; then
+                _second=$(echo "$_mbr" | cut -d',' -f2 | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+                BOOTSTRAP_TLS2="$_second"
+                BOOTSTRAP_BOTH="$_mbr"
+            else
+                BOOTSTRAP_TLS2="$_first"
+                BOOTSTRAP_BOTH="$_first"
+            fi
+        fi
     fi
 fi
 # Per-environment Kafka admin/client: optional JSON adminPropertiesFile / adminConfig / client*; else convention
@@ -231,7 +255,7 @@ if [ -n "${GEN_ACTIVE_ENV_ID:-}" ] && [ -f "$ENV_JSON" ] && command -v jq >/dev/
     fi
 fi
 
-# Build site arrays (used throughout script). If GEN_OCP_SITES is unset, use CWDC/TLS2 values above
+# Build site arrays (used throughout script). If GEN_OCP_SITES is unset, use up to two explicit OCP_CTX/NS pairs (only non-empty pairs).
 if [ -n "${GEN_OCP_SITES}" ]; then
     SITE_CTX=()
     SITE_NS=()
@@ -247,11 +271,20 @@ if [ -n "${GEN_OCP_SITES}" ]; then
         SITE_NS+=("$n")
     done <<< "${GEN_OCP_SITES},"
 else
-    SITE_CTX=("$OCP_CTX_CWDC" "$OCP_CTX_TLS2")
-    SITE_NS=("$NS_CWDC" "$NS_TLS2")
+    SITE_CTX=()
+    SITE_NS=()
+    for _pp in "${OCP_CTX_CWDC}:${NS_CWDC}" "${OCP_CTX_TLS2}:${NS_TLS2}"; do
+        _c="${_pp%%:*}"
+        _n="${_pp#*:}"
+        _c=$(echo "$_c" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        _n=$(echo "$_n" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')
+        [ -z "$_c" ] || [ -z "$_n" ] && continue
+        SITE_CTX+=("$_c")
+        SITE_NS+=("$_n")
+    done
 fi
 NUM_SITES=${#SITE_CTX[@]}
-[ "$NUM_SITES" -lt 1 ] && { echo "ERROR: At least one OCP site (context:namespace) required. Set GEN_OCP_SITES or OCP_CTX_/NS_ vars." >&2; exit 1; }
+[ "$NUM_SITES" -lt 1 ] && { echo "ERROR: At least one OCP site (context:namespace) required. Complete Portal Setup (master.config / environments.json), run via gen-in-container (portal-parity), or set GEN_OCP_SITES or OCP_CTX_CWDC+NS_CWDC (and optional second site)." >&2; exit 1; }
 
 # Dual-OCP / cross-region Confluent: same logical cluster, two OpenShift clusters — set GEN_OCP_SITES="ctx1:ns1,ctx2:ns2"
 # and one kubeconfig listing every context (often ~/.kube/config; optional merged file e.g. config-both). Web: /setup.html.
@@ -261,13 +294,11 @@ NUM_SITES=${#SITE_CTX[@]}
 # - If unset, try BASE_DIR/SCRIPT_DIR .kube/config then config-both
 # - If still fails for first site context, try ~/.kube/config (so "oc get node" working in shell => gen.sh can use it)
 if [ -n "${KUBECONFIG:-}" ] && [ -f "${KUBECONFIG}" ]; then
+  _kube_dir="${KUBECONFIG%/*}"
+  if [ "${GEN_KUBECONFIG_MERGE_BOTH:-}" = "1" ] && [ -f "${_kube_dir}/config-both" ]; then
+    export KUBECONFIG="${_kube_dir}/config-both"
+  fi
   case "${KUBECONFIG}" in
-    *config-cwdc|*config-tls2)
-      kube_dir="${KUBECONFIG%/*}"
-      if [ -f "${kube_dir}/config-both" ]; then
-        export KUBECONFIG="${kube_dir}/config-both"
-      fi
-      ;;
     */app/user2/*)
       # Old path: prefer kubeconfig under BASE_DIR (single source of truth, e.g. /opt/kafka-usermgmt)
       for candidate in "$BASE_DIR/.kube/config" "$BASE_DIR/.kube/config-both" "$SCRIPT_DIR/.kube/config" "$SCRIPT_DIR/.kube/config-both"; do
@@ -645,6 +676,7 @@ if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "9" ]; then
 fi
 
 # PRE-CHECK
+[ -z "${BOOTSTRAP_CWDC:-}" ] && error_exit "Kafka bootstrap is not configured. Complete Portal Setup (kafka.bootstrapServers in master.config), set GEN_KAFKA_BOOTSTRAP, or ensure environments.json defines bootstrapServers for the active environment."
 [ ! -f "$CLIENT_CONFIG" ] && error_exit "Config file not found at $CLIENT_CONFIG"
 [ ! -f "$ADMIN_CONFIG" ] && error_exit "Admin config not found at $ADMIN_CONFIG (needed for kafka-acls)"
 command -v jq >/dev/null 2>&1 || error_exit "jq tool is required but not installed."

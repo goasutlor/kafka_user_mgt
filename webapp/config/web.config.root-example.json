@@ -5,14 +5,14 @@
     "ocPath": "/host/usr/bin",
     "logFile": "/tmp/provisioning.log",
     "k8sSecretName": "kafka-server-side-credentials",
-    "bootstrapServers": "kafka.apps.cwdc.esb-kafka-prod.intra.ais:443,kafka.apps.tls2.esb-kafka-prod.intra.ais:443",
+    "bootstrapServers": "kafka-bootstrap-a.example.com:443,kafka-bootstrap-b.example.com:443",
     "kubeconfigPath": "/opt/kafka-usermgmt/.kube/config",
     "sites": [
-      { "name": "cwdc", "namespace": "esb-prod-cwdc", "ocContext": "cwdc" },
-      { "name": "tls2", "namespace": "esb-prod-tls2", "ocContext": "tls2" }
+      { "name": "region-a", "namespace": "kafka-namespace-a", "ocContext": "ocp-region-a" },
+      { "name": "region-b", "namespace": "kafka-namespace-b", "ocContext": "ocp-region-b" }
     ],
-    "namespace": "esb-prod-cwdc",
-    "ocContext": "cwdc"
+    "namespace": "kafka-namespace-a",
+    "ocContext": "ocp-region-a"
   },
   "server": {
     "port": 3443,

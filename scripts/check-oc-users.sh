@@ -11,12 +11,17 @@
 # Multi-cluster: set GEN_SITES_JSON or run per-context (this script checks one context from GEN_NAMESPACE/GEN_OC_CONTEXT).
 
 KUBE="${1:-${KUBECONFIG:-$HOME/.kube/config}}"
-NS="${GEN_NAMESPACE:-esb-prod-cwdc}"
-CTX="${GEN_OC_CONTEXT:-cwdc}"
+NS="${GEN_NAMESPACE:-}"
+CTX="${GEN_OC_CONTEXT:-}"
 SECRET="${GEN_K8S_SECRET:-kafka-server-side-credentials}"
 
 PASS=0
 FAIL=0
+
+if [[ -z "$NS" || -z "$CTX" ]]; then
+  echo "[FAIL] Set GEN_NAMESPACE and GEN_OC_CONTEXT to match your Portal / master.config sites (no baked-in defaults)."
+  exit 1
+fi
 
 echo ""
 echo "--- Check oc / kubeconfig for GET /api/users ---"

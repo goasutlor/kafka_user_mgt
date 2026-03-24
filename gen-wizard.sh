@@ -15,11 +15,15 @@ KAFKA_BIN="${GEN_KAFKA_BIN:-$BASE_DIR/kafka_2.13-3.6.1/bin}"
 CLIENT_CONFIG="${GEN_CLIENT_CONFIG:-$BASE_DIR/configs/kafka-client.properties}"
 ADMIN_CONFIG="${GEN_ADMIN_CONFIG:-$BASE_DIR/configs/kafka-client-master.properties}"
 K8S_SECRET_NAME="${GEN_K8S_SECRET_NAME:-kafka-server-side-credentials}"
-NS_CWDC="${NS_CWDC:-esb-prod-cwdc}"
-NS_TLS2="${NS_TLS2:-esb-prod-tls2}"
-OCP_CTX_CWDC="${OCP_CTX_CWDC:-cwdc}"
-OCP_CTX_TLS2="${OCP_CTX_TLS2:-tls2}"
-BOOTSTRAP_BOTH="${BOOTSTRAP_BOTH:-kafka.apps.cwdc.esb-kafka-prod.intra.ais:443,kafka.apps.tls2.esb-kafka-prod.intra.ais:443}"
+NS_CWDC="${NS_CWDC:-}"
+NS_TLS2="${NS_TLS2:-}"
+OCP_CTX_CWDC="${OCP_CTX_CWDC:-}"
+OCP_CTX_TLS2="${OCP_CTX_TLS2:-}"
+BOOTSTRAP_BOTH="${BOOTSTRAP_BOTH:-}"
+if [[ -z "$BOOTSTRAP_BOTH" ]]; then
+  _WMASTER="${GEN_MASTER_CONFIG:-${PORTAL_MASTER_CONFIG:-/app/config/master.config.json}}"
+  [[ -f "$_WMASTER" ]] && command -v jq &>/dev/null && BOOTSTRAP_BOTH=$(jq -r '.kafka.bootstrapServers // empty' "$_WMASTER" 2>/dev/null)
+fi
 TIMEOUT_SEC="${TIMEOUT_SEC:-20}"
 TMP_DIR="${TMP_DIR:-/tmp}"
 SYSTEM_USERS="^(kafka|schema_registry|kafka_connect|control_center|client|admin|user1|user2|an-api-key)$"
@@ -49,6 +53,8 @@ validate_username() {
 [ ! -f "$ADMIN_CONFIG" ] && { echo "ERROR: Admin config not found at $ADMIN_CONFIG"; exit 1; }
 command -v jq >/dev/null 2>&1 || { echo "ERROR: jq required"; exit 1; }
 command -v oc >/dev/null 2>&1 || { echo "ERROR: oc required"; exit 1; }
+[[ -z "$BOOTSTRAP_BOTH" ]] && { echo "ERROR: Kafka bootstrap not set. Use Portal Setup (master.config kafka.bootstrapServers) or export BOOTSTRAP_BOTH / GEN_MASTER_CONFIG."; exit 1; }
+[[ -z "$NS_CWDC" || -z "$OCP_CTX_CWDC" ]] && { echo "ERROR: OCP site not set. Set NS_CWDC + OCP_CTX_CWDC (and optional second site) to match kubeconfig, or use gen.sh with environments.json."; exit 1; }
 
 clear
 echo -e "${YELLOW}╔═══════════════════════════════════════════════════════════╗${NC}"
