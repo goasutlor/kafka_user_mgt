@@ -10,7 +10,7 @@ RUN npm install --omit=dev --ignore-scripts
 
 FROM node:20-bookworm-slim
 # Semantic app version (shown in UI). Optional GIT_COMMIT for /api/version short hash.
-ARG VERSION=1.0.95
+ARG VERSION=1.0.96
 ARG GIT_COMMIT=
 ENV APP_VERSION=${VERSION}
 ENV GIT_COMMIT=${GIT_COMMIT}
@@ -71,7 +71,7 @@ ENV GEN_BUNDLED_SCRIPT_PATH=/app/bundled-gen/gen.sh
 #   podman cp <name>:/app/host-cli/gen-in-container.sh . && podman cp <name>:/app/host-cli/gen-cli.sh .
 RUN mkdir -p /app/host-cli \
     && chmod 755 /app/host-cli
-COPY scripts/gen-in-container.sh scripts/gen-cli.sh scripts/portal-parity-env.sh /app/host-cli/
+COPY scripts/gen-in-container.sh scripts/gen-cli.sh scripts/gen-cli-aliases.example.sh scripts/portal-parity-env.sh /app/host-cli/
 RUN chmod +x /app/host-cli/gen-in-container.sh /app/host-cli/gen-cli.sh \
     && chmod a+r /app/host-cli/portal-parity-env.sh
 

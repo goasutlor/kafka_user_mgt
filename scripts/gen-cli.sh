@@ -3,11 +3,19 @@
 # - Keeps gen.sh as single engine
 # - Adds guided menu + env selection for operators
 # - Calls scripts/gen-in-container.sh (which injects PATH/KUBECONFIG/GEN_BASE_DIR safely)
+#
+# Usage:
+#   ./scripts/gen-cli.sh              # menu (pick env inside with option 6)
+#   ./scripts/gen-cli.sh dev          # lock to master.config environments[].id == dev, then menu
+#   ./scripts/gen-cli.sh --help
+#
+# Same GEN_* as Portal: GEN_ACTIVE_ENV_ID, GEN_OCP_SITES, GEN_KAFKA_BOOTSTRAP
 
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 RUNNER="$SCRIPT_DIR/gen-in-container.sh"
+MASTER_IN_CONTAINER="${MASTER_IN_CONTAINER:-/app/config/master.config.json}"
 
 if [[ ! -x "$RUNNER" ]]; then
   echo "ERROR: $RUNNER not found or not executable" >&2
@@ -31,9 +39,68 @@ exec_in_container() {
   "$CTR_ENGINE" exec "$CONTAINER_NAME" sh -lc "$1"
 }
 
+usage() {
+  cat <<'EOF'
+Usage: gen-cli.sh [environment-id]
+
+  environment-id  Optional. Must match master.config.json -> environments.environments[].id
+                  (e.g. dev, sit, uat or esb-dev-cwdc). Sets GEN_ACTIVE_ENV_ID, GEN_OCP_SITES,
+                  GEN_KAFKA_BOOTSTRAP the same way as the Portal env switch, then opens the menu.
+
+  With no args: open menu; use option 6 to pick env interactively.
+
+Requires: running container (CONTAINER_NAME), podman|docker, jq inside container, master at
+  /app/config/master.config.json (override with MASTER_IN_CONTAINER on host if needed).
+EOF
+}
+
+list_env_ids_from_master() {
+  exec_in_container "jq -r '.environments.environments[]?.id // empty' '$MASTER_IN_CONTAINER' 2>/dev/null || true" | sed '/^$/d'
+}
+
+# Apply Portal parity env from master.config (same fields as Web session env).
+apply_environment_by_id() {
+  local ENV_ID="$1"
+  local ids sites bootstrap
+
+  ids=$(list_env_ids_from_master || true)
+  if [[ -z "$ids" ]]; then
+    echo "[profile] No environments.environments[] in $MASTER_IN_CONTAINER (skip env lock)." >&2
+    return 1
+  fi
+
+  if ! echo "$ids" | grep -qx "$ENV_ID"; then
+    echo "ERROR: Unknown environment id '$ENV_ID'." >&2
+    echo "Valid ids (from master.config):" >&2
+    echo "$ids" | sed 's/^/  /' >&2
+    return 1
+  fi
+
+  export GEN_ACTIVE_ENV_ID="$ENV_ID"
+
+  sites=$(exec_in_container "jq -r --arg id '$ENV_ID' '.environments.environments[]? | select(.id==\$id) | [.sites[]? | ((.ocContext // \"\") + \":\" + (.namespace // \"\"))] | map(select(. != \":\")) | join(\",\")' '$MASTER_IN_CONTAINER' 2>/dev/null || true") || sites=""
+  bootstrap=$(exec_in_container "jq -r --arg id '$ENV_ID' '.environments.environments[]? | select(.id==\$id) | .bootstrapServers // empty' '$MASTER_IN_CONTAINER' 2>/dev/null || true") || bootstrap=""
+
+  if [[ -n "$sites" ]]; then
+    export GEN_OCP_SITES="$sites"
+  else
+    unset GEN_OCP_SITES 2>/dev/null || true
+  fi
+  if [[ -n "$bootstrap" ]]; then
+    export GEN_KAFKA_BOOTSTRAP="$bootstrap"
+  else
+    unset GEN_KAFKA_BOOTSTRAP 2>/dev/null || true
+  fi
+
+  echo "[profile] GEN_ACTIVE_ENV_ID=$ENV_ID"
+  [[ -n "${GEN_OCP_SITES:-}" ]] && echo "[profile] GEN_OCP_SITES=$GEN_OCP_SITES"
+  [[ -n "${GEN_KAFKA_BOOTSTRAP:-}" ]] && echo "[profile] GEN_KAFKA_BOOTSTRAP=$GEN_KAFKA_BOOTSTRAP"
+  return 0
+}
+
 pick_environment_profile() {
-  local ids id_count chosen
-  ids=$(exec_in_container "jq -r '.environments.environments[]?.id // empty' /app/config/master.config.json 2>/dev/null || true") || ids=""
+  local ids id_count chosen ENV_ID
+  ids=$(list_env_ids_from_master || true)
   id_count=$(echo "$ids" | sed '/^$/d' | wc -l | tr -d ' ')
 
   if [[ "$id_count" -eq 0 ]]; then
@@ -58,22 +125,7 @@ pick_environment_profile() {
   fi
 
   ENV_ID=$(echo "$ids" | sed '/^$/d' | sed -n "${chosen}p")
-  export GEN_ACTIVE_ENV_ID="$ENV_ID"
-
-  local sites bootstrap
-  sites=$(exec_in_container "jq -r --arg id '$ENV_ID' '.environments.environments[]? | select(.id==\$id) | [(.sites[]? | ((.ocContext // \"\") + \":\" + (.namespace // \"\")))] | map(select(. != \":\")) | join(\",\")' /app/config/master.config.json 2>/dev/null || true") || sites=""
-  bootstrap=$(exec_in_container "jq -r --arg id '$ENV_ID' '.environments.environments[]? | select(.id==\$id) | .bootstrapServers // empty' /app/config/master.config.json 2>/dev/null || true") || bootstrap=""
-
-  if [[ -n "$sites" ]]; then
-    export GEN_OCP_SITES="$sites"
-  fi
-  if [[ -n "$bootstrap" ]]; then
-    export GEN_KAFKA_BOOTSTRAP="$bootstrap"
-  fi
-
-  echo "[profile] ENV=$ENV_ID"
-  [[ -n "${GEN_OCP_SITES:-}" ]] && echo "[profile] GEN_OCP_SITES=$GEN_OCP_SITES"
-  [[ -n "${GEN_KAFKA_BOOTSTRAP:-}" ]] && echo "[profile] GEN_KAFKA_BOOTSTRAP=$GEN_KAFKA_BOOTSTRAP"
+  apply_environment_by_id "$ENV_ID"
 }
 
 run_preflight() {
@@ -180,5 +232,15 @@ main_menu() {
     esac
   done
 }
+
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  usage
+  exit 0
+fi
+
+if [[ -n "${1:-}" ]]; then
+  apply_environment_by_id "$1" || exit 1
+  shift
+fi
 
 main_menu
