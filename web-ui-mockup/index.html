@@ -3286,11 +3286,11 @@
         };
         var ACL_ROLE_DEFAULTS = {
           producer: [
-            { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['WRITE', 'DESCRIBE'] },
+            { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['WRITE', 'DESCRIBE', 'DESCRIBE_CONFIGS'] },
             { type: 'cluster', name: 'kafka-cluster', pattern: 'LITERAL', ops: ['IDEMPOTENT_WRITE'] }
           ],
           consumer: [
-            { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['READ', 'DESCRIBE'] },
+            { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['READ', 'DESCRIBE', 'DESCRIBE_CONFIGS'] },
             { type: 'group', name: 'your-consumer-group', pattern: 'LITERAL', ops: ['READ', 'DESCRIBE'] }
           ],
           monitor: [
@@ -3299,14 +3299,14 @@
             { type: 'cluster', name: 'kafka-cluster', pattern: 'LITERAL', ops: ['DESCRIBE', 'DESCRIBE_CONFIGS'] }
           ],
           connector: [
-            { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['READ', 'WRITE', 'DESCRIBE'] },
-            { type: 'topic', name: 'connect-', pattern: 'PREFIXED', ops: ['READ', 'WRITE', 'CREATE', 'DESCRIBE'], readOnlyName: true },
+            { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['READ', 'WRITE', 'DESCRIBE', 'DESCRIBE_CONFIGS'] },
+            { type: 'topic', name: 'connect-', pattern: 'PREFIXED', ops: ['READ', 'WRITE', 'CREATE', 'DESCRIBE', 'DESCRIBE_CONFIGS'], readOnlyName: true },
             { type: 'group', name: 'connect-cluster', pattern: 'LITERAL', ops: ['READ', 'DESCRIBE'], readOnlyName: true },
             { type: 'cluster', name: 'kafka-cluster', pattern: 'LITERAL', ops: ['DESCRIBE', 'CREATE', 'IDEMPOTENT_WRITE'] }
           ],
           streams: [
-            { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['READ', 'WRITE', 'CREATE', 'DELETE', 'DESCRIBE'] },
-            { type: 'topic', name: 'app-id-', pattern: 'PREFIXED', ops: ['READ', 'WRITE', 'CREATE', 'DELETE', 'DESCRIBE'], readOnlyName: true },
+            { type: 'topic', name: 'your-topic', pattern: 'LITERAL', ops: ['READ', 'WRITE', 'CREATE', 'DELETE', 'DESCRIBE', 'DESCRIBE_CONFIGS'] },
+            { type: 'topic', name: 'app-id-', pattern: 'PREFIXED', ops: ['READ', 'WRITE', 'CREATE', 'DELETE', 'DESCRIBE', 'DESCRIBE_CONFIGS'], readOnlyName: true },
             { type: 'group', name: 'app-id-', pattern: 'PREFIXED', ops: ['READ', 'DESCRIBE'], readOnlyName: true },
             { type: 'cluster', name: 'kafka-cluster', pattern: 'LITERAL', ops: ['IDEMPOTENT_WRITE'] }
           ],

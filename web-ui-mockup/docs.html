@@ -338,25 +338,25 @@
           <tr>
             <td><strong>Producer</strong></td>
             <td>Service ที่ส่งข้อมูลเข้า topic อย่างเดียว</td>
-            <td>TOPIC: WRITE, DESCRIBE</td>
-            <td>อย่าให้ READ/GROUP ถ้าไม่ต้อง consume</td>
+            <td>TOPIC: WRITE, DESCRIBE, DESCRIBE_CONFIGS</td>
+            <td>อย่าให้ READ/GROUP ถ้าไม่ต้อง consume — DESCRIBE_CONFIGS ให้สอดคล้องกับ preset Client / kafka-topics --describe บน broker รุ่นใหม่</td>
           </tr>
           <tr>
             <td><strong>Consumer</strong> (ใช้บ่อยที่สุด)</td>
             <td>Service ที่อ่านข้อมูลผ่าน consumer group</td>
-            <td>TOPIC: READ, DESCRIBE<br/>GROUP: READ, DESCRIBE</td>
+            <td>TOPIC: READ, DESCRIBE, DESCRIBE_CONFIGS<br/>GROUP: READ, DESCRIBE</td>
             <td>ควรระบุชื่อ group จริง ไม่ใช้ <span class="term">*</span></td>
           </tr>
           <tr>
             <td><strong>Prosumer</strong></td>
             <td>อ่านจาก topic หนึ่งและเขียนไปอีก topic</td>
-            <td>TOPIC(input): READ, DESCRIBE<br/>TOPIC(output): WRITE, DESCRIBE<br/>GROUP: READ, DESCRIBE</td>
+            <td>TOPIC(input): READ, DESCRIBE, DESCRIBE_CONFIGS<br/>TOPIC(output): WRITE, DESCRIBE, DESCRIBE_CONFIGS<br/>GROUP: READ, DESCRIBE</td>
             <td>แยก input/output ให้ชัด ลดสิทธิ์เกินจำเป็น</td>
           </tr>
           <tr>
             <td><strong>Idempotent Producer</strong></td>
             <td>Producer ที่ต้องการ exactly-once</td>
-            <td>TOPIC: WRITE, DESCRIBE<br/>CLUSTER: IDEMPOTENT_WRITE</td>
+            <td>TOPIC: WRITE, DESCRIBE, DESCRIBE_CONFIGS<br/>CLUSTER: IDEMPOTENT_WRITE</td>
             <td>ถ้าขาด IDEMPOTENT_WRITE แอปจะ error ตอน startup</td>
           </tr>
           <tr>
@@ -368,13 +368,13 @@
           <tr>
             <td><strong>Kafka Connect</strong></td>
             <td>Source/Sink connector และ internal topic</td>
-            <td>TOPIC(data): READ, WRITE, DESCRIBE<br/>TOPIC(connect-*, PREFIXED): READ, WRITE, CREATE, DESCRIBE<br/>GROUP: READ, DESCRIBE<br/>CLUSTER: DESCRIBE, CREATE</td>
+            <td>TOPIC(data): READ, WRITE, DESCRIBE, DESCRIBE_CONFIGS<br/>TOPIC(connect-*, PREFIXED): READ, WRITE, CREATE, DESCRIBE, DESCRIBE_CONFIGS<br/>GROUP: READ, DESCRIBE<br/>CLUSTER: DESCRIBE, CREATE</td>
             <td>ควรใช้ PREFIXED สำหรับ internal topic</td>
           </tr>
           <tr>
             <td><strong>Kafka Streams App</strong></td>
             <td>Streams app ที่มี changelog/repartition topic</td>
-            <td>TOPIC(input/output): READ/WRITE + DESCRIBE<br/>TOPIC(app-id-*, PREFIXED): READ, WRITE, CREATE, DELETE, DESCRIBE<br/>GROUP(app-id-*, PREFIXED): READ, DESCRIBE</td>
+            <td>TOPIC(input/output): READ/WRITE + DESCRIBE + DESCRIBE_CONFIGS<br/>TOPIC(app-id-*, PREFIXED): READ, WRITE, CREATE, DELETE, DESCRIBE, DESCRIBE_CONFIGS<br/>GROUP(app-id-*, PREFIXED): READ, DESCRIBE</td>
             <td>ต้องใช้ PREFIXED ตาม app-id เพื่อรองรับ internal topics</td>
           </tr>
           <tr>
