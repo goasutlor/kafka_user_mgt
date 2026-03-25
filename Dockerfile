@@ -10,7 +10,7 @@ RUN npm install --omit=dev --ignore-scripts
 
 FROM node:20-bookworm-slim
 # Semantic app version (shown in UI). Optional GIT_COMMIT for /api/version short hash.
-ARG VERSION=1.0.92
+ARG VERSION=1.0.95
 ARG GIT_COMMIT=
 ENV APP_VERSION=${VERSION}
 ENV GIT_COMMIT=${GIT_COMMIT}
@@ -25,7 +25,7 @@ ARG KAFKA_LINK_NAME=kafka_2.13-3.6.1
 # Tarball lives OUTSIDE /opt/kafka-usermgmt so a host bind-mount on runtime does not hide CLI tools.
 ENV KAFKA_TOOLS_BIN=/opt/apache-kafka/kafka_2.13-3.6.1/bin
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    bash jq openjdk-17-jre-headless ca-certificates-java curl ca-certificates \
+    bash jq openjdk-17-jre-headless ca-certificates-java curl ca-certificates procps \
     && rm -rf /var/lib/apt/lists/*
 COPY kafka/ /tmp/kafka-vendor/
 RUN mkdir -p /opt/apache-kafka \

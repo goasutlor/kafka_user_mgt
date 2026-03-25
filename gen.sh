@@ -341,7 +341,8 @@ NC='\033[0m'
 # UI Functions
 spinner() {
     local pid=$1; local delay=0.1; local spinstr='|/-\'
-    while [ "$(ps a | awk '{print $1}' | grep $pid)" ]; do
+    # Use kill -0 instead of ps: slim images often lack libprocps.so (ps fails in container).
+    while kill -0 "$pid" 2>/dev/null; do
         local temp=${spinstr#?}; printf " [%c] " "$spinstr"; local spinstr=$temp${spinstr%"$temp"}; sleep $delay; printf "\b\b\b\b\b"
     done; printf "    \b\b\b\b"
 }
