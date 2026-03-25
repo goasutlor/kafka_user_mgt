@@ -14,18 +14,18 @@
     "kubeconfigPath": "/opt/kafka-usermgmt/.kube/config",
     "sites": [
       {
-        "name": "cwdc",
-        "namespace": "esb-prod-cwdc",
-        "ocContext": "cwdc"
+        "name": "region-a",
+        "namespace": "kafka-namespace-a",
+        "ocContext": "ocp-region-a"
       },
       {
-        "name": "tls2",
-        "namespace": "esb-prod-tls2",
-        "ocContext": "tls2"
+        "name": "region-b",
+        "namespace": "kafka-namespace-b",
+        "ocContext": "ocp-region-b"
       }
     ],
-    "namespace": "esb-prod-cwdc",
-    "ocContext": "cwdc"
+    "namespace": "kafka-namespace-a",
+    "ocContext": "ocp-region-a"
   },
   "server": {
     "port": 3443,

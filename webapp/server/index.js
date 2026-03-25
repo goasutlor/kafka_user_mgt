@@ -1159,6 +1159,13 @@ function getBaseEnv(req) {
     env.GEN_USER_OUTPUT_DIR = path.join(baseDirAbs, 'user_output');
   }
   if (req && req.requestId) env.GEN_REQUEST_ID = String(req.requestId);
+  // Portal audit / download-history paths — gen.sh appends only when GEN_WEB_INVOCATION is unset (CLI).
+  const dataDirForAudit = getDataDir(req);
+  if (dataDirForAudit) {
+    env.GEN_PORTAL_AUDIT_LOG = path.join(dataDirForAudit, 'audit.log');
+    env.GEN_PORTAL_DOWNLOAD_HISTORY_JSON = path.join(dataDirForAudit, 'download-history.json');
+  }
+  env.GEN_WEB_INVOCATION = req ? '1' : '';
   return env;
 }
 
@@ -1770,6 +1777,9 @@ function normalizeAuditEntries(raw) {
     return [{ time, action, who, system: null, topic: t, target: t, ...envRow }];
   }
   if (action === 'remove-user' && Array.isArray(d.users) && d.users.length > 0) {
+    return d.users.map((u) => ({ time, action, who, system: null, topic: null, target: String(u), ...envRow }));
+  }
+  if (action === 'cleanup-acl' && Array.isArray(d.users) && d.users.length > 0) {
     return d.users.map((u) => ({ time, action, who, system: null, topic: null, target: String(u), ...envRow }));
   }
   if (action === 'add-acl-existing' && (d.username != null || d.topic != null)) {

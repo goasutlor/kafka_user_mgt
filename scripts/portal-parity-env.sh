@@ -10,9 +10,11 @@
 # Do not `set -e` — this file is sourced.
 
 if [[ -n "${GEN_SKIP_PORTAL_PARITY:-}" ]]; then
+  __pp_set_audit_paths
   return 0 2>/dev/null || exit 0
 fi
 if [[ -n "${GEN_OCP_SITES:-}" ]]; then
+  __pp_set_audit_paths
   return 0 2>/dev/null || exit 0
 fi
 
@@ -26,6 +28,24 @@ if ! command -v jq &>/dev/null; then
 fi
 
 __pp_msg() { echo "[portal-parity] $*" >&2; }
+
+# Same audit.log + download-history.json as Web (under config dir or config/environments/{id}/).
+__pp_set_audit_paths() {
+  [[ -n "${GEN_PORTAL_AUDIT_LOG:-}" ]] && return 0
+  local m="${PORTAL_MASTER_CONFIG:-${GEN_MASTER_CONFIG:-/app/config/master.config.json}}"
+  [[ -f "$m" ]] || return 0
+  local cfgdir env_on id
+  cfgdir=$(dirname "$m")
+  env_on=$(jq -r '.environments.enabled // false' "$m" 2>/dev/null)
+  id="${GEN_ACTIVE_ENV_ID:-}"
+  if [[ "$env_on" == "true" ]] && [[ -n "$id" ]]; then
+    export GEN_PORTAL_AUDIT_LOG="$cfgdir/environments/$id/audit.log"
+    export GEN_PORTAL_DOWNLOAD_HISTORY_JSON="$cfgdir/environments/$id/download-history.json"
+  else
+    export GEN_PORTAL_AUDIT_LOG="$cfgdir/audit.log"
+    export GEN_PORTAL_DOWNLOAD_HISTORY_JSON="$cfgdir/download-history.json"
+  fi
+}
 
 # --- environments.json (Portal syncs this when multi-env is enabled) ---
 if [[ -f "$ENV_JSON" ]]; then
@@ -49,6 +69,7 @@ if [[ -f "$ENV_JSON" ]]; then
         export GEN_USER_OUTPUT_DIR="${BASE_DIR}/user_output/${GEN_ACTIVE_ENV_ID}"
       fi
     fi
+    __pp_set_audit_paths
     return 0 2>/dev/null || exit 0
   fi
   __pp_msg "environments.json has enabled:false — using master.config for OCP sites"
@@ -103,6 +124,7 @@ if [[ "$env_on" == "true" ]]; then
   else
     __pp_msg "master env '$def' has no resolvable sites[] — check master.config"
   fi
+  __pp_set_audit_paths
   return 0 2>/dev/null || exit 0
 fi
 
@@ -124,4 +146,5 @@ else
   __pp_msg "no fallbackSites in master — gen.sh built-in defaults apply"
 fi
 
+__pp_set_audit_paths
 return 0 2>/dev/null || exit 0

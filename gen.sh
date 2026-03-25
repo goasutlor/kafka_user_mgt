@@ -53,6 +53,7 @@
 # 2026-03-15  PARITY note in header: every feature must exist in both CLI (gen.sh) and GUI/API (100%).
 # 2026-02-xx  Multi-site (names not fixed): GEN_OCP_SITES="ctx1:ns1,ctx2:ns2" for multiple OCP clusters; if unset use OCP_CTX_CWDC/NS_CWDC + OCP_CTX_TLS2/NS_TLS2. All flows (Add/Remove/Change password/Verify) iterate SITE_CTX/SITE_NS; revert previous site if a patch fails.
 # 2026-02-xx  All script output files (.enc packs) go to user_output in the same path as the script (USER_OUTPUT_DIR=$SCRIPT_DIR/user_output). Override with GEN_USER_OUTPUT_DIR. GEN_PACK_DIR echoes this so Web/download can find files.
+# 2026-03-25  CLI → Portal audit: when GEN_PORTAL_AUDIT_LOG is set and GEN_WEB_INVOCATION is unset, append JSON lines (same shape as Web) to audit.log; optional download-history.json for .enc packs. Web sets GEN_WEB_INVOCATION=1 + paths via getBaseEnv to avoid duplicate rows. portal-parity-env.sh sets audit paths for podman/gen-cli.
 # 2026-03-23  Web multi-env: getBaseEnv sets GEN_USER_OUTPUT_DIR=$GEN_BASE_DIR/user_output/{environmentId} so .enc packs do not mix across Dev/SIT/UAT (parity with per-env audit.log under config/environments/{id}/).
 # 2026-02-19  Non-interactive Add user / Change password: GEN_PASSPHRASE for .enc file; script echoes GEN_PACK_FILE= and GEN_PACK_NAME= for Web download and decrypt instructions.
 # 2026-02-19  Non-interactive (Web): GEN_MODE=2 (Test user), GEN_MODE=3 with GEN_ACTION=1|2|3 (Remove, Change password, Cleanup ACL). Env: GEN_KAFKA_USER, GEN_TEST_PASS, GEN_TOPIC_NAME; GEN_USERS; GEN_CHANGE_USER, GEN_NEW_PASSWORD.
@@ -572,6 +573,50 @@ log_action() {
     echo "[$now] action=$rest | operator=$who | host=$host" >> "$LOG_FILE"
 }
 
+# Portal audit.log / download-history.json (JSON) — same files as Web appendAuditLog / appendDownloadHistory.
+# Web sets GEN_WEB_INVOCATION=1 so we do not duplicate lines; CLI omits it and writes here.
+portal_audit_append_json() {
+    [ -n "${GEN_PORTAL_AUDIT_LOG:-}" ] || return 0
+    [ -z "${GEN_WEB_INVOCATION:-}" ] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    local action="$1"
+    local detail_json="${2:-{}}"
+    local line dir
+    dir=$(dirname "$GEN_PORTAL_AUDIT_LOG")
+    mkdir -p "$dir" 2>/dev/null || return 0
+    line=$(jq -cn \
+        --arg t "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
+        --arg a "$action" \
+        --argjson d "$detail_json" \
+        --arg env "${GEN_ACTIVE_ENV_ID:-}" \
+        --arg cli "CLI" \
+        '{time:$t,action:$a,user:$cli,detail:$d} | if ($env|length)>0 then .environmentId=$env else . end') || return 0
+    printf '%s\n' "$line" >> "$GEN_PORTAL_AUDIT_LOG" 2>/dev/null || true
+}
+
+portal_download_history_append_enc() {
+    [ -n "${GEN_PORTAL_AUDIT_LOG:-}" ] || return 0
+    [ -z "${GEN_WEB_INVOCATION:-}" ] || return 0
+    command -v jq >/dev/null 2>&1 || return 0
+    local enc_path="$1"
+    [ -f "$enc_path" ] || return 0
+    local f dir bn pack dt dshort new_entry
+    dir=$(dirname "$GEN_PORTAL_AUDIT_LOG")
+    f="${GEN_PORTAL_DOWNLOAD_HISTORY_JSON:-$dir/download-history.json}"
+    bn=$(basename "$enc_path")
+    pack="${bn%.enc}"
+    dt=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+    dshort="${dt:0:10}"
+    new_entry=$(jq -cn --arg dt "$dt" --arg d "$dshort" --arg fn "$bn" --arg pn "$pack" --arg cli "CLI" \
+        '{date:$d,datetime:$dt,filename:$fn,packName:$pn,user:$cli}') || return 0
+    mkdir -p "$(dirname "$f")" 2>/dev/null || true
+    if [ -f "$f" ]; then
+        jq --argjson ne "$new_entry" 'if type == "array" then . + [$ne] else [$ne] end' "$f" 2>/dev/null > "${f}.tmp" && mv "${f}.tmp" "$f" 2>/dev/null || true
+    else
+        jq -n --argjson ne "$new_entry" '[$ne]' > "$f" 2>/dev/null || true
+    fi
+}
+
 # Exit codes: 0=success/cancel, 1=error (used by error_exit)
 EXIT_SUCCESS=0
 EXIT_ERROR=1
@@ -796,6 +841,7 @@ if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "2" ]; then
     SAFE_PASS="${TEST_PASS//\"/\\\"}"
     TEMP_CFG="$TMP_DIR/gen_test_$$.properties"
     echo -e "\n   ${CYAN}Testing auth with User:$KAFKA_USER on each bootstrap...${NC}"
+    _test_all_ok=true
     for entry in "$BOOTSTRAP_CWDC:1" "$BOOTSTRAP_TLS2:2"; do
         label="site${entry##*:}"
         bootstrap="${entry%:*}"
@@ -803,11 +849,15 @@ if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "2" ]; then
         status_msg "Auth test ($label)"
         out=$(timeout $TIMEOUT_SEC $KAFKA_BIN/kafka-topics.sh --bootstrap-server "$bootstrap" --command-config "$TEMP_CFG" --describe --topic "$TOPIC_NAME" 2>&1)
         rc=$?
-        if [ $rc -eq 0 ]; then done_msg; echo -e "   ${GREEN}User $KAFKA_USER: AUTH OK on $label${NC}"; else echo -e "\n   ${RED}AUTH FAILED on $label (exit $rc)${NC}"; echo "$out" | sed 's/^/   /'; fi
+        if [ $rc -eq 0 ]; then done_msg; echo -e "   ${GREEN}User $KAFKA_USER: AUTH OK on $label${NC}"; else _test_all_ok=false; echo -e "\n   ${RED}AUTH FAILED on $label (exit $rc)${NC}"; echo "$out" | sed 's/^/   /'; fi
     done
     acl_list=$($KAFKA_BIN/kafka-acls.sh --bootstrap-server $BOOTSTRAP_CWDC --command-config $ADMIN_CONFIG --list --principal "User:$KAFKA_USER" </dev/null 2>&1)
     [ -n "$acl_list" ] && echo "$acl_list" | sed 's/^/   /'
     echo -e "\n${CYAN}Test complete.${NC}"
+    if [ "$_test_all_ok" = "true" ]; then
+        _td=$(jq -nc --arg u "$KAFKA_USER" --arg t "$TOPIC_NAME" '{username:$u,topic:$t}' 2>/dev/null) || _td="{}"
+        portal_audit_append_json test-user "$_td"
+    fi
     exit 0
 fi
 
@@ -860,6 +910,8 @@ if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "4" ]; then
         done_msg
         echo -e "   ${GREEN}Topic '$CREATE_TOPIC_NAME' created.${NC}"
         log_action "CREATE_TOPIC | topic=$CREATE_TOPIC_NAME"
+        _cd=$(jq -nc --arg t "$CREATE_TOPIC_NAME" '{topic:$t}' 2>/dev/null) || _cd="{}"
+        portal_audit_append_json create-topic "$_cd"
     else
         echo "$create_out" | sed 's/^/   /'
         error_exit "CREATE_TOPIC" "Create topic failed (exit $rc). Topic may already exist."
@@ -892,6 +944,8 @@ if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "5" ]; then
         fi
         done_msg
         log_action "ADD_ACL_EXISTING | user=$KAFKA_USER | resources=$_res_count | permission=$_ptype | host=$_acl_host"
+        _ad=$(jq -nc --arg u "$KAFKA_USER" --arg n "${_res_count:-0}" '{username:$u,resourcesCount:($n|tonumber? // 0)}' 2>/dev/null) || _ad="{}"
+        portal_audit_append_json add-acl-existing "$_ad"
         echo -e "   ${GREEN}ACL config applied for User:$KAFKA_USER (${_res_count} resource item(s))${NC}"
         exit 0
     fi
@@ -926,6 +980,8 @@ if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "5" ]; then
         done_msg
     fi
     log_action "ADD_ACL_EXISTING | user=$KAFKA_USER | topic=$TOPIC_NAME"
+    _ad=$(jq -nc --arg u "$KAFKA_USER" --arg t "$TOPIC_NAME" '{username:$u,topic:$t}' 2>/dev/null) || _ad="{}"
+    portal_audit_append_json add-acl-existing "$_ad"
     echo -e "   ${GREEN}ACL added for User:$KAFKA_USER on topic $TOPIC_NAME${NC}"
     exit 0
 fi
@@ -1014,6 +1070,8 @@ while true; do
         done_msg
     fi
     log_action "ADD_ACL_EXISTING | user=$KAFKA_USER | topic=$TOPIC_NAME"
+    _ad=$(jq -nc --arg u "$KAFKA_USER" --arg t "$TOPIC_NAME" '{username:$u,topic:$t}' 2>/dev/null) || _ad="{}"
+    portal_audit_append_json add-acl-existing "$_ad"
     echo -e "   ${GREEN}ACL added for User:$KAFKA_USER on topic $TOPIC_NAME${NC}"
     echo -e "\n   ${CYAN}[M] Main menu  [Q] Quit${NC}"
     read -p "   Your choice [M/Q]: " ADD_ACL_CHOICE
@@ -1118,6 +1176,8 @@ while true; do
         done_msg
         echo -e "   ${GREEN}Topic '$CREATE_TOPIC_NAME' created. Use mode [1] to add a user for this topic.${NC}"
         log_action "CREATE_TOPIC | topic=$CREATE_TOPIC_NAME"
+        _cd=$(jq -nc --arg t "$CREATE_TOPIC_NAME" '{topic:$t}' 2>/dev/null) || _cd="{}"
+        portal_audit_append_json create-topic "$_cd"
     else
         echo "$create_out" | sed 's/^/   /'
         echo -e "   ${RED}Create topic failed (exit $rc). Topic may already exist.${NC}"
@@ -1154,6 +1214,7 @@ while true; do
     SAFE_PASS="${TEST_PASS//\"/\\\"}"
     TEMP_CFG="$TMP_DIR/gen_test_$$.properties"
 
+    _test_all_ok=true
     for entry in "$BOOTSTRAP_CWDC:1" "$BOOTSTRAP_TLS2:2"; do
         label="bootstrap${entry##*:}"
         bootstrap="${entry%:*}"
@@ -1171,6 +1232,7 @@ while true; do
             done_msg
             echo -e "   ${GREEN}User $KAFKA_USER: AUTH OK on $label${NC}"
         else
+            _test_all_ok=false
             echo -e "\n   ${RED}User $KAFKA_USER: AUTH FAILED on $label (exit $rc)${NC}"
             echo "$out" | sed 's/^/   /'
         fi
@@ -1225,6 +1287,10 @@ while true; do
     fi
 
         echo -e "\n${CYAN}Test complete.${NC}"
+        if [ "$_test_all_ok" = "true" ]; then
+            _td=$(jq -nc --arg u "$KAFKA_USER" --arg t "$TOPIC_NAME" '{username:$u,topic:$t}' 2>/dev/null) || _td="{}"
+            portal_audit_append_json test-user "$_td"
+        fi
         [ "${GEN_NONINTERACTIVE}" = "1" ] && exit 0
         echo -e "\n   ${CYAN}Options:${NC}"
         echo "   [M] Main menu"
@@ -1561,7 +1627,9 @@ while true; do
             done
             done_msg
             log_action "DELETE | what=remove_users_and_ACLs | users=${SELECTED_USERS[*]} | namespaces=${SITE_NS[*]} | secret=$K8S_SECRET_NAME"
-            
+            _rm=$(jq -n '$ARGS.positional | {users:.}' --args -- "${SELECTED_USERS[@]}" 2>/dev/null) || _rm="{}"
+            portal_audit_append_json remove-user "$_rm"
+
             echo -e "\n${GREEN}✅ ${#SELECTED_USERS[@]} user(s) and all ACLs removed successfully!${NC}"
             echo -e "   ${CYAN}Removed users: ${SELECTED_USERS[*]}${NC}"
             echo -e "   ${CYAN}Note: CFK will hot-reload credentials (~30-60s). Users will be inaccessible after reload.${NC}"
@@ -1998,7 +2066,10 @@ EOF
             echo -n "$PASS1" | openssl enc -aes-256-cbc -salt -pbkdf2 -pass stdin -in "$RAW_FILE" -out "$ENC_FILE"
             rm -f "$RAW_FILE"
             log_action "CHANGE_PASSWORD | what=change_password_pack | user=$CHANGE_USER | file=$ENC_FILE | namespaces=${SITE_NS[*]} | secret=$K8S_SECRET_NAME"
-            
+            _cp=$(jq -nc --arg u "$CHANGE_USER" --arg pf "$(basename "$ENC_FILE")" '{username:$u,packFile:$pf}' 2>/dev/null) || _cp="{}"
+            portal_audit_append_json change-password "$_cp"
+            portal_download_history_append_enc "$ENC_FILE"
+
             echo -e "\n${GREEN}✔ PASSWORD CHANGE SUCCESSFUL!${NC}"
             echo -e "-------------------------------------------------------"
             echo -e " User       : $CHANGE_USER"
@@ -2228,7 +2299,9 @@ EOF
             
             # Log cleanup operation
             log_action "CLEANUP_ORPHANED_ACLs | what=remove_orphaned_ACLs | users=${ORPHANED_USERS[*]} | count=${#ORPHANED_USERS[@]} | namespaces=${SITE_NS[*]} | secret=$K8S_SECRET_NAME"
-            
+            _cl=$(jq -n '$ARGS.positional | {users:.}' --args -- "${ORPHANED_USERS[@]}" 2>/dev/null) || _cl="{}"
+            portal_audit_append_json cleanup-acl "$_cl"
+
             [ "${GEN_MANAGE_ONCE}" = "1" ] && { GEN_MANAGE_ONCE=""; exit 0; }
             echo -e "\n   ${CYAN}Press Enter to continue...${NC}"
             read
@@ -2818,6 +2891,9 @@ rm -rf "$PACK_DIR"
 
 # Logging
 log_action "GEN | what=add_user_and_pack | system=$SYSTEM_NAME | user=$KAFKA_USER | topic=$TOPIC_NAME | sites=$NUM_SITES | file=$ENC_FILE | namespaces=${SITE_NS[*]} | secret=$K8S_SECRET_NAME"
+_au=$(jq -nc --arg u "$KAFKA_USER" --arg s "$SYSTEM_NAME" --arg t "$TOPIC_NAME" --arg pf "$(basename "$ENC_FILE")" '{username:$u,systemName:$s,topic:$t,packFile:$pf,packReady:true}' 2>/dev/null) || _au="{}"
+portal_audit_append_json add-user "$_au"
+portal_download_history_append_enc "$ENC_FILE"
 
 # 6. FINAL SUCCESS & DECRYPT GUIDE
 clear
