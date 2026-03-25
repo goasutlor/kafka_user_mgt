@@ -31,7 +31,13 @@ __pp_msg() { echo "[portal-parity] $*" >&2; }
 
 # Same audit.log + download-history.json as Web (under config dir or config/environments/{id}/).
 __pp_set_audit_paths() {
-  [[ -n "${GEN_PORTAL_AUDIT_LOG:-}" ]] && return 0
+  # If audit path was pre-exported (e.g. host env), still align download-history sibling unless set.
+  if [[ -n "${GEN_PORTAL_AUDIT_LOG:-}" ]]; then
+    if [[ -z "${GEN_PORTAL_DOWNLOAD_HISTORY_JSON:-}" ]]; then
+      export GEN_PORTAL_DOWNLOAD_HISTORY_JSON="$(dirname "$GEN_PORTAL_AUDIT_LOG")/download-history.json"
+    fi
+    return 0
+  fi
   local m="${PORTAL_MASTER_CONFIG:-${GEN_MASTER_CONFIG:-/app/config/master.config.json}}"
   [[ -f "$m" ]] || return 0
   local cfgdir env_on id

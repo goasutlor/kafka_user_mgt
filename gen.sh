@@ -53,6 +53,7 @@
 # 2026-03-15  PARITY note in header: every feature must exist in both CLI (gen.sh) and GUI/API (100%).
 # 2026-02-xx  Multi-site (names not fixed): GEN_OCP_SITES="ctx1:ns1,ctx2:ns2" for multiple OCP clusters; if unset use OCP_CTX_CWDC/NS_CWDC + OCP_CTX_TLS2/NS_TLS2. All flows (Add/Remove/Change password/Verify) iterate SITE_CTX/SITE_NS; revert previous site if a patch fails.
 # 2026-02-xx  All script output files (.enc packs) go to user_output in the same path as the script (USER_OUTPUT_DIR=$SCRIPT_DIR/user_output). Override with GEN_USER_OUTPUT_DIR. GEN_PACK_DIR echoes this so Web/download can find files.
+# 2026-03-25  portal_audit_append_json: build detail with ($d|fromjson) try/catch (not --argjson) so one bad detail never drops the row; stderr if jq/append fails.
 # 2026-03-25  CLI → Portal audit: when GEN_PORTAL_AUDIT_LOG is set and GEN_WEB_INVOCATION is unset, append JSON lines (same shape as Web) to audit.log; optional download-history.json for .enc packs. Web sets GEN_WEB_INVOCATION=1 + paths via getBaseEnv to avoid duplicate rows. portal-parity-env.sh sets audit paths for podman/gen-cli.
 # 2026-03-23  Web multi-env: getBaseEnv sets GEN_USER_OUTPUT_DIR=$GEN_BASE_DIR/user_output/{environmentId} so .enc packs do not mix across Dev/SIT/UAT (parity with per-env audit.log under config/environments/{id}/).
 # 2026-02-19  Non-interactive Add user / Change password: GEN_PASSPHRASE for .enc file; script echoes GEN_PACK_FILE= and GEN_PACK_NAME= for Web download and decrypt instructions.
@@ -580,18 +581,23 @@ portal_audit_append_json() {
     [ -z "${GEN_WEB_INVOCATION:-}" ] || return 0
     command -v jq >/dev/null 2>&1 || return 0
     local action="$1"
-    local detail_json="${2:-{}}"
+    # Use --arg + fromjson (not --argjson): malformed/partial JSON from upstream jq must not skip the whole audit line.
+    local detail_raw="${2:-{}}"
     local line dir
     dir=$(dirname "$GEN_PORTAL_AUDIT_LOG")
-    mkdir -p "$dir" 2>/dev/null || return 0
+    mkdir -p "$dir" 2>/dev/null || { echo "[portal-audit] mkdir failed: $dir" >&2; return 0; }
     line=$(jq -cn \
         --arg t "$(date -u +"%Y-%m-%dT%H:%M:%SZ")" \
         --arg a "$action" \
-        --argjson d "$detail_json" \
+        --arg d "$detail_raw" \
         --arg env "${GEN_ACTIVE_ENV_ID:-}" \
         --arg cli "CLI" \
-        '{time:$t,action:$a,user:$cli,detail:$d} | if ($env|length)>0 then .environmentId=$env else . end') || return 0
-    printf '%s\n' "$line" >> "$GEN_PORTAL_AUDIT_LOG" 2>/dev/null || true
+        '{time:$t,action:$a,user:$cli,detail:(try ($d|fromjson) catch {})} | if ($env|length)>0 then .environmentId=$env else . end') \
+        || { echo "[portal-audit] jq build failed action=$action" >&2; return 0; }
+    [ -n "$line" ] || { echo "[portal-audit] empty json line action=$action" >&2; return 0; }
+    if ! printf '%s\n' "$line" >> "$GEN_PORTAL_AUDIT_LOG" 2>/dev/null; then
+        echo "[portal-audit] append failed (permissions?): $GEN_PORTAL_AUDIT_LOG" >&2
+    fi
 }
 
 portal_download_history_append_enc() {
