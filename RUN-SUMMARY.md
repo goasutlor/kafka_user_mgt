@@ -39,7 +39,7 @@ podman run -d --name kafka-user-web --userns=keep-id --security-opt label=disabl
 
 **4) เปิดใช้**
 
-เปิดเบราว์เซอร์: **https://\<IP-เครื่อง>** (เช่น https://10.235.160.31)
+เปิดเบราว์เซอร์: **https://\<IP-เครื่อง>** (เช่น https://<portal-host>)
 
 **5) หยุด / ดู log**
 ```bash
@@ -80,7 +80,7 @@ cd /app/user2/kotestkafka   # โฟลเดอร์ที่มี gen.sh
 รันสคริปต์เช็คให้ครบ **11/11** ก่อน:
 
 ```bash
-./scripts/check-deployment.sh https://10.235.160.31
+./scripts/check-deployment.sh https://<portal-host>
 ```
 
 ครบแล้วค่อย deploy จริง

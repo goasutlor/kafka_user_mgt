@@ -570,9 +570,9 @@ async function runSetupPreview(body, configAbsPath, options) {
           const sole = present[0];
           const soleEsc = sole.replace(/"/g, '\\"');
           diag +=
-            ` Common case: OpenShift created a long default NAME; your Portal still says cwdc-dev style aliases. ` +
+            ` Common case: OpenShift created a long default NAME; your Portal still uses short aliases. ` +
             `Either paste that exact NAME into each site's ocContext (allowed when namespaces differ per env), ` +
-            `or on the host: oc config rename-context "${soleEsc}" cwdc-dev (then oc login / merge for sit-uat if those are other clusters).`;
+            `or on the host: oc config rename-context "${soleEsc}" <your-short-alias> (then oc login / merge for other clusters).`;
         }
         if (gr.status !== 0) {
           const ge = ((gr.stderr || gr.stdout || '') + '').trim().slice(0, 220);

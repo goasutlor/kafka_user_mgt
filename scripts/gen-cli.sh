@@ -44,7 +44,7 @@ usage() {
 Usage: gen-cli.sh [environment-id]
 
   environment-id  Optional. Must match master.config.json -> environments.environments[].id
-                  (e.g. dev, sit, uat or esb-dev-cwdc). Sets GEN_ACTIVE_ENV_ID, GEN_OCP_SITES,
+                  (e.g. dev, sit, uat or your environment id). Sets GEN_ACTIVE_ENV_ID, GEN_OCP_SITES,
                   GEN_KAFKA_BOOTSTRAP the same way as the Portal env switch, then opens the menu.
 
   With no args: open menu; use option 6 to pick env interactively.

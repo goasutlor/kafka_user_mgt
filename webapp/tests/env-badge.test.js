@@ -5,9 +5,9 @@ const { describe, it } = require('node:test');
 const { shortEnvBadge, detectEnvTier } = require('../server/lib/env-badge');
 
 describe('env-badge', () => {
-  it('detects UAT from esb-uat-cwdc style namespace', () => {
-    assert.strictEqual(detectEnvTier('esb-uat-cwdc'), 'UAT');
-    assert.strictEqual(shortEnvBadge('esb-uat-cwdc', '', ''), 'UAT');
+  it('detects UAT from namespace containing uat tier token', () => {
+    assert.strictEqual(detectEnvTier('kafka-uat-demo-ns'), 'UAT');
+    assert.strictEqual(shortEnvBadge('kafka-uat-demo-ns', '', ''), 'UAT');
   });
   it('detects DEV/SIT/PROD', () => {
     assert.strictEqual(shortEnvBadge('proj-dev-ns', '', ''), 'DEV');

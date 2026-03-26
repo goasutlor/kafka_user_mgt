@@ -1,7 +1,7 @@
 #!/bin/bash
 # Smoke test — call API from CLI (lab check that server is up and accepts requests)
 # Usage: ./scripts/smoke-test.sh [BASE_URL]
-# Example: ./scripts/smoke-test.sh https://10.235.160.31
+# Example: ./scripts/smoke-test.sh https://<portal-host>:3443
 #          ./scripts/smoke-test.sh http://localhost:3000
 
 BASE_URL="${1:-http://localhost:3000}"

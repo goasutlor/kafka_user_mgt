@@ -1,1 +1,1 @@
-{"runtimeRoot":"/opt/kafka-US","kafka":{"bootstrapServers":"b:9092"},"portal":{"port":3000,"auth":{"enabled":false,"credentialsFile":"c.json"}},"environments":{"enabled":true,"defaultEnvironmentId":"dev","environments":[{"id":"dev","sites":[{"ocContext":"cwdc","namespace":"ns1"}]}]}}
+{"runtimeRoot":"/opt/kafka-US","kafka":{"bootstrapServers":"b:9092"},"portal":{"port":3000,"auth":{"enabled":false,"credentialsFile":"c.json"}},"environments":{"enabled":true,"defaultEnvironmentId":"dev","environments":[{"id":"dev","sites":[{"ocContext":"ocp-dev","namespace":"ns1"}]}]}}

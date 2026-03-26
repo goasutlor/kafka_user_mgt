@@ -2,6 +2,8 @@
 
 Web UI + `gen.sh` for Confluent Kafka user / topic / ACL operations against OpenShift-hosted clusters.
 
+**Public docs:** [FEATURES.md](FEATURES.md) (capability overview) · [HANDOVER.md](HANDOVER.md) (operator handover) · [SECURITY.md](SECURITY.md) (no secrets in git).
+
 ## Container image (GHCR)
 
 After CI runs on `main`, pull:

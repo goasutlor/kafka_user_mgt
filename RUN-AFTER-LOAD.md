@@ -221,7 +221,7 @@ podman run -d --name kafka-user-web --userns=keep-id --security-opt label=disabl
 5. **เช็คก่อน deploy:** รันสคริปต์ตรวจด้วย **user2** จะได้ context ตรงกับใน container:
    ```bash
    ./scripts/check-oc-users.sh /app/user2/.kube/config
-   ./scripts/check-deployment.sh https://10.235.160.31
+   ./scripts/check-deployment.sh https://<portal-host>
    ```
 
 ---

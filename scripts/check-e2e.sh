@@ -2,7 +2,7 @@
 # E2E test — Add user / Remove with real data (lab check before production deploy)
 # Requires: an existing topic, a username not yet in the system, passphrase for pack
 # Usage: export TEST_SYSTEM=TestE2E TEST_TOPIC=your_topic TEST_USER=testuser999 TEST_PASSPHRASE=secret123
-#        ./scripts/check-e2e.sh https://10.235.160.31
+#        ./scripts/check-e2e.sh https://<portal-host>:3443
 # Tries Add user → on success tries Remove (or reports only)
 
 BASE_URL="${1:-http://localhost:3000}"
@@ -16,7 +16,7 @@ TEST_PASSPHRASE="${TEST_PASSPHRASE:-}"
 
 if [[ -z "$TEST_TOPIC" || -z "$TEST_USER" || -z "$TEST_PASSPHRASE" ]]; then
   echo "Usage: export TEST_TOPIC=<existing topic> TEST_USER=<unused username> TEST_PASSPHRASE=<passphrase for .enc>"
-  echo "       ./scripts/check-e2e.sh https://10.235.160.31"
+  echo "       ./scripts/check-e2e.sh https://<portal-host>:3443"
   echo "Optional: TEST_SYSTEM=TestE2E (default)"
   exit 1
 fi

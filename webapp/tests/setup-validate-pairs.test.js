@@ -8,14 +8,14 @@ describe('collectOcContextNamespacePairs', () => {
   it('uses environments only when enabled with sites (mirror fallbackSites must not double-count)', () => {
     const master = {
       fallbackSites: [
-        { ocContext: 'cwdc-dev', namespace: 'esb-dev-cwdc' },
-        { ocContext: 'cwdc-sit', namespace: 'esb-sit-cwdc' },
+        { ocContext: 'ocp-dev', namespace: 'kafka-namespace-dev' },
+        { ocContext: 'ocp-sit', namespace: 'kafka-namespace-sit' },
       ],
       environments: {
         enabled: true,
         environments: [
-          { id: 'dev', sites: [{ ocContext: 'cwdc-dev', namespace: 'esb-dev-cwdc' }] },
-          { id: 'sit', sites: [{ ocContext: 'cwdc-sit', namespace: 'esb-sit-cwdc' }] },
+          { id: 'dev', sites: [{ ocContext: 'ocp-dev', namespace: 'kafka-namespace-dev' }] },
+          { id: 'sit', sites: [{ ocContext: 'ocp-sit', namespace: 'kafka-namespace-sit' }] },
         ],
       },
     };

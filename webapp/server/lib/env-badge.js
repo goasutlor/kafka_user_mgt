@@ -16,7 +16,7 @@ const MAX_BADGE = 14;
 
 /**
  * Short header badge: prefer DEV/SIT/UAT/PROD when present in namespace/label/id;
- * otherwise use a readable slice (not 4 chars — that produced "ESB-" for esb-uat-cwdc).
+ * otherwise use a readable slice (not 4 chars — avoids misleading short prefixes).
  */
 function shortEnvBadge(namespace, label, id) {
   const ns = String(namespace || '').trim();

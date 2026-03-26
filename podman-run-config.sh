@@ -34,8 +34,8 @@ export AUTH_ENABLED="${AUTH_ENABLED:-0}"
 # Optional: for Auto OC Login — .kube must be mounted writable (not :ro)
 # Method 1 (recommended): in config — set gen.ocLoginUser, gen.ocLoginPassword, gen.ocLoginServers in web.config.json (see OC-AUTO-LOGIN.md); no need to export
 # Method 2: pass via env (or uncomment below and set values)
-# export OC_LOGIN_USER="ocpadmin"
-# export OC_LOGIN_PASSWORD="ocp@dmin!"
+# export OC_LOGIN_USER="example-oc-user"
+# export OC_LOGIN_PASSWORD="REPLACE_ME"
 # Or use token: export OC_LOGIN_TOKEN="sha256~..." or OC_LOGIN_TOKEN_CWDC / OC_LOGIN_TOKEN_TLS2
 
 # --- Podman run (full command) ---

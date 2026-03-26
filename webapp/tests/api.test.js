@@ -104,8 +104,8 @@ describe('API', () => {
         kafkaBootstrap: 'broker1:443,broker2:443',
         ocTopology: 'dual',
         ocSites: [
-          { ocContext: 'cwdc', namespace: 'esb-prod-cwdc', apiServer: 'https://api.cwdc.example:6443' },
-          { ocContext: 'tls2', namespace: 'esb-prod-tls2', apiServer: 'https://api.tls2.example:6443' },
+          { ocContext: 'region-a', namespace: 'kafka-namespace-region-a', apiServer: 'https://api.region-a.example:6443' },
+          { ocContext: 'region-b', namespace: 'kafka-namespace-region-b', apiServer: 'https://api.region-b.example:6443' },
         ],
         ocAutoLogin: true,
         ocLoginUser: 'svc_ocp',
@@ -560,7 +560,7 @@ describe('Auth hash (Portal) and OC encrypt', () => {
   it('OC encrypt/decrypt roundtrip', () => {
     const key = Buffer.alloc(32, 1);
     const keyHex = key.toString('hex');
-    const plain = 'ocp@dmin!';
+    const plain = 'TestPassword123!';
     const enc = encrypt(plain, keyHex);
     assert.ok(enc && enc.startsWith('enc:'));
     const dec = decrypt(enc, keyHex);
@@ -591,14 +591,14 @@ describe('master.config', () => {
       environments: {
         enabled: true,
         defaultEnvironmentId: 'dev',
-        environments: [{ id: 'dev', sites: [{ ocContext: 'cwdc', namespace: 'ns1' }] }],
+        environments: [{ id: 'dev', sites: [{ ocContext: 'ocp-dev', namespace: 'ns1' }] }],
       },
     }));
     const legacy = expandMasterToLegacy(JSON.parse(fs.readFileSync(p, 'utf8')), p);
     assert.strictEqual(legacy.gen.baseDir, path.normalize('/opt/kafka-US'));
     assert.strictEqual(legacy.gen.bootstrapServers, 'b:9092');
     assert.strictEqual(legacy.gen.sites.length, 1);
-    assert.strictEqual(legacy.gen.sites[0].ocContext, 'cwdc');
+    assert.strictEqual(legacy.gen.sites[0].ocContext, 'ocp-dev');
     assert.strictEqual(legacy.gen.sites[0].namespace, 'ns1');
     assert.strictEqual(legacy.server.port, 3000);
     assert.ok(legacy.server.environments.inlineData);

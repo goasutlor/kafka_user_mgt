@@ -4,7 +4,7 @@
  * Encrypt OC login password for use in web.config.json (gen.ocLoginPassword).
  * Usage:
  *   export OC_CREDENTIALS_KEY="64-char-hex-or-32-byte-base64"
- *   node encrypt-oc-password.js "ocp@dmin!"
+ *   node encrypt-oc-password.js "ExamplePassword123!"
  * Output: enc:xxxx — put this in gen.ocLoginPassword. Keep OC_CREDENTIALS_KEY in env when running the server.
  */
 const { encrypt, getKey } = require('../server/lib/oc-encrypt');

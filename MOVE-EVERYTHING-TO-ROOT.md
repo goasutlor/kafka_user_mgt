@@ -159,8 +159,8 @@ cp -a "$OLD_ROOT/Docker/ssl/"* "$NEW_ROOT/Docker/ssl/" 2>/dev/null || true
     "bootstrapServers": "host1:443,host2:443",
     "k8sSecretName": "kafka-server-side-credentials",
     "sites": [
-      {"name": "cwdc", "namespace": "esb-prod-cwdc", "ocContext": "cwdc"},
-      {"name": "tls2", "namespace": "esb-prod-tls2", "ocContext": "tls2"}
+      {"name": "region-a", "namespace": "kafka-namespace-region-a", "ocContext": "ocp-context-a"},
+      {"name": "region-b", "namespace": "kafka-namespace-region-b", "ocContext": "ocp-context-b"}
     ]
   },
   "server": {

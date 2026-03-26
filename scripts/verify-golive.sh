@@ -13,7 +13,7 @@
 #        ./scripts/verify-golive.sh --from-gen-env
 #
 #   3) Set env yourself (same helper node as gen.sh):
-#        export GEN_BASE_DIR=/opt/kafka-usermgmt GEN_OCP_SITES=cwdc:ns1,tls2:ns2
+#        export GEN_BASE_DIR=/opt/kafka-usermgmt GEN_OCP_SITES=ctx-a:ns-a,ctx-b:ns-b
 #        export GEN_CLIENT_CONFIG=... GEN_ADMIN_CONFIG=... GEN_K8S_SECRET_NAME=...
 #        ./scripts/verify-golive.sh
 #

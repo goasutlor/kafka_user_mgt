@@ -3,8 +3,8 @@
 # Recommended first: ./scripts/verify-golive.sh --config /path/to/master.config.json [--portal-url https://host:3443]
 # Then use this script to test HTTP + gen.sh from the backend
 # Usage: ./scripts/check-deployment.sh [BASE_URL]
-# Examples (HTTPS): ./scripts/check-deployment.sh https://10.235.160.31
-#                    ./scripts/check-deployment.sh https://10.235.160.31:443
+# Examples (HTTPS): ./scripts/check-deployment.sh https://<portal-host>:3443
+#                    ./scripts/check-deployment.sh https://<portal-host>:443
 # For HTTP: ./scripts/check-deployment.sh http://localhost:3000
 # URLs starting with https use -k automatically (self-signed certs)
 

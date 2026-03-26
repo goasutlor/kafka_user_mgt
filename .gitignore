@@ -28,3 +28,8 @@ kafka_from_host/
 kafka.tar.gz
 *.enc
 clarify_folder.txt
+
+# Ad-hoc local / customer config copies — never publish
+*.fixed
+Docker-web.config.json.fixed
+*_code_review.html

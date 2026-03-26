@@ -36,7 +36,7 @@ podman logs --tail 100 kafka-user-web
 - **ดึง user ไม่ได้:** API เรียก `oc get secret` ต่อ **ทุก site** ที่ตั้งใน gen.sites — ต้องมี **oc** ใน PATH (gen.ocPath), **gen.kubeconfigPath** และ **gen.sites** (หรือ legacy: gen.namespace + gen.ocContext) ให้ตรงกับ OCP **ทุก cluster** ที่ใช้ (ต้องเข้าได้ครบทุกที่)
 - หน้า Web จะแสดงข้อความ error จาก backend (ดึง topic ไม่ได้: ... / ดึง user ไม่ได้: ...) ใช้ข้อความนั้นไล่แก้
 
-### อาการ: `the server has asked for the client to provide credentials` (ดึง user ไม่ได้ — cwdc/tls2 ขึ้น credentials)
+### อาการ: `the server has asked for the client to provide credentials` (ดึง user ไม่ได้ — บาง context ขึ้น credentials)
 
 - **สาเหตุ:** Token ใน kubeconfig หมดอายุหรือไม่ถูกต้อง — container ใช้ไฟล์ kubeconfig ที่ mount จาก host แต่ token ข้างในหมดอายุหรือเป็นของ user อื่น
 - **เทสบน host ก่อน deploy (ไม่ต้องรัน container):** รันสคริปต์นี้บนเครื่องที่จะ mount .kube (ต้องมี oc + jq) — ถ้า PASS แปลว่า credentials ใช้ได้ พอ deploy/restart แล้ว GET /api/users ควรได้
@@ -45,11 +45,11 @@ podman logs --tail 100 kafka-user-web
   # หรือส่ง path config: ./scripts/check-oc-users-from-config.sh /opt/kafka-usermgmt/Docker/web.config.json
   ```
 - **แก้ให้ตรงจุด:**
-  1. **บน host (user ที่เป็นเจ้าของไฟล์ .kube ที่ mount เข้า container)** รัน `oc login` ใหม่ให้ครบ **ทุก cluster** ที่ใช้ใน gen.sites (cwdc, tls2 ฯลฯ) — ให้ใช้ไฟล์ kubeconfig ชุดเดียวกับที่ชี้ใน gen.kubeconfigPath (เช่น `/opt/kafka-usermgmt/.kube/config-both`)
+  1. **บน host (user ที่เป็นเจ้าของไฟล์ .kube ที่ mount เข้า container)** รัน `oc login` ใหม่ให้ครบ **ทุก cluster** ที่ใช้ใน gen.sites — ให้ใช้ไฟล์ kubeconfig ชุดเดียวกับที่ชี้ใน gen.kubeconfigPath (เช่น `/opt/kafka-usermgmt/.kube/config-both`)
   2. ตรวจว่า login ผ่าน: รัน `./scripts/check-oc-users-from-config.sh` อีกครั้ง ต้อง PASS อย่างน้อย 1 site
   3. **Restart container** เพื่อให้อ่าน kubeconfig ใหม่: `podman restart kafka-user-web`
 - ถ้า login บน host ผ่านแต่ใน container ยัง fail: ตรวจว่า mount ถูกไฟล์จริง (ไม่ใช่โฟลเดอร์เปล่าหรือคนละไฟล์) และ path ใน config ตรงกับ path ใน container
-- **ถ้า helper ที่รัน gen.sh บน host เข้าได้ทั้ง cwdc/tls2 ปกติ แต่ Web (ใน container) ขึ้น credentials:** container ใช้ไฟล์ kubeconfig ชุดเดียวกับที่ mount จาก host — แปลว่า (1) path ใน **gen.kubeconfigPath** ต้องชี้ไปที่ไฟล์นั้นจริงใน container (เช่น `$ROOT/.kube/config-both` ถ้า mount เป็น `-v "$ROOT:$ROOT:z"`) และ (2) token ในไฟล์อาจหมดอายุระหว่างที่ helper รันกับที่ container อ่าน → บน host รัน `oc login` ใหม่ให้ครบทุก context ที่ใช้ (cwdc, tls2) แล้ว **restart container** หรือเปิดใช้ **ocAutoLogin** (ดู `OC-AUTO-LOGIN.md`) ให้แอปรัน oc login เองเมื่อ token หมดอายุ
+- **ถ้า helper ที่รัน gen.sh บน host เข้าได้ทุก context ปกติ แต่ Web (ใน container) ขึ้น credentials:** container ใช้ไฟล์ kubeconfig ชุดเดียวกับที่ mount จาก host — แปลว่า (1) path ใน **gen.kubeconfigPath** ต้องชี้ไปที่ไฟล์นั้นจริงใน container (เช่น `$ROOT/.kube/config-both` ถ้า mount เป็น `-v "$ROOT:$ROOT:z"`) และ (2) token ในไฟล์อาจหมดอายุระหว่างที่ helper รันกับที่ container อ่าน → บน host รัน `oc login` ใหม่ให้ครบทุก context ที่ใช้ แล้ว **restart container** หรือเปิดใช้ **ocAutoLogin** (ดู `OC-AUTO-LOGIN.md`) ให้แอปรัน oc login เองเมื่อ token หมดอายุ
 
 ### อาการ: `error: context "..." does not exist` (ดึง user ไม่ได้ไม่หาย)
 

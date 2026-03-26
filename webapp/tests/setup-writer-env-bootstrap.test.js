@@ -23,14 +23,14 @@ describe('buildFilesFromSetupBody environment bootstrap overrides', () => {
             label: 'Dev',
             shortLabel: 'DEV',
             badgeColor: '#238636',
-            sites: [{ name: 'cwdc', ocContext: 'cwdc', namespace: 'esb-dev-cwdc' }],
+            sites: [{ name: 'site-a', ocContext: 'ocp-dev', namespace: 'kafka-namespace-dev' }],
           },
           {
             id: 'sit',
             label: 'SIT',
             shortLabel: 'SIT',
             badgeColor: '#9e6a03',
-            sites: [{ name: 'cwdc', ocContext: 'cwdc', namespace: 'esb-sit-cwdc' }],
+            sites: [{ name: 'site-a', ocContext: 'ocp-sit', namespace: 'kafka-namespace-sit' }],
           },
         ],
         environmentBootstrapOverrides: {
@@ -99,17 +99,17 @@ describe('buildFilesFromSetupBody environment bootstrap overrides', () => {
         kafkaBootstrap: 'kafka-dev.example.com:443',
         ocTopology: 'single',
         ocSites: [
-          { ocContext: 'cwdc-dev', namespace: 'esb-dev-cwdc', apiServer: 'https://api.example:6443' },
-          { ocContext: 'cwdc-sit', namespace: 'esb-sit-cwdc', apiServer: 'https://api.example:6443' },
-          { ocContext: 'cwdc-uat', namespace: 'esb-uat-cwdc', apiServer: 'https://api.example:6443' },
+          { ocContext: 'ocp-dev', namespace: 'app-dev-ns', apiServer: 'https://api.example:6443' },
+          { ocContext: 'ocp-sit', namespace: 'app-sit-ns', apiServer: 'https://api.example:6443' },
+          { ocContext: 'ocp-uat', namespace: 'app-uat-ns', apiServer: 'https://api.example:6443' },
         ],
       },
       configAbs,
     );
     assert.strictEqual(built.master.environments.enabled, true);
-    assert.strictEqual(built.master.environments.defaultEnvironmentId, 'esb-dev-cwdc');
+    assert.strictEqual(built.master.environments.defaultEnvironmentId, 'app-dev-ns');
     const ids = built.master.environments.environments.map((e) => e.id).sort();
-    assert.deepStrictEqual(ids, ['esb-dev-cwdc', 'esb-sit-cwdc', 'esb-uat-cwdc'].sort());
+    assert.deepStrictEqual(ids, ['app-dev-ns', 'app-sit-ns', 'app-uat-ns'].sort());
   });
 
   it('does not infer multi-env for dual topology (two regions, one bootstrap)', () => {

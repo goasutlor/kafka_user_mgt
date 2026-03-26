@@ -85,7 +85,7 @@ fi
 
 # --- master.config.json only ---
 if [[ ! -f "$MASTER" ]]; then
-  __pp_msg "master.config not at $MASTER — gen.sh will use built-in cwdc/tls2 defaults"
+  __pp_msg "master.config not at $MASTER — gen.sh will use generic built-in defaults"
   return 0 2>/dev/null || exit 0
 fi
 

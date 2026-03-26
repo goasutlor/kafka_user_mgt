@@ -8,7 +8,7 @@
  * Usage:
  *   1. Start the server: npm start  (or node server/index.js)
  *   2. Run: node scripts/test-apis.js
- *   Or with custom URL: BASE_URL=https://10.235.160.31:3443 node scripts/test-apis.js
+ *   Or with custom URL: BASE_URL=https://<portal-host>:3443 node scripts/test-apis.js
  *
  * For HTTPS with self-signed cert: NODE_TLS_REJECT_UNAUTHORIZED=0 node scripts/test-apis.js
  */

@@ -37,8 +37,8 @@
    ```
    ถ้า server อยู่คนละเครื่อง:
    ```bash
-   BASE_URL=https://10.235.160.31 npm run test:api
-   NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=https://10.235.160.31 npm run test:api   # ถ้า HTTPS self-signed
+   BASE_URL=https://<portal-host> npm run test:api
+   NODE_TLS_REJECT_UNAUTHORIZED=0 BASE_URL=https://<portal-host> npm run test:api   # ถ้า HTTPS self-signed
    ```
 
 3. **ดูผล:** จะได้ `[PASS]`/`[FAIL]` ต่อรายการ และสรุป **x/16 passed** (11 smoke + 5 ทุก Function เรียก gen.sh ได้จริง)  
@@ -52,7 +52,7 @@
 ```bash
 cd /path/to/gen-kafka-user
 chmod +x scripts/check-deployment.sh
-./scripts/check-deployment.sh https://10.235.160.31
+./scripts/check-deployment.sh https://<portal-host>
 ```
 
 **ถ้าเปิดด้วย HTTPS** ใช้ `https://<IP>` (หรือ `https://<IP>:443`). สคริปต์จะใช้ `-k` อัตโนมัติเมื่อ URL ขึ้นต้นด้วย https (รองรับ self-signed cert).  
@@ -80,7 +80,7 @@ chmod +x scripts/check-deployment.sh
 export TEST_TOPIC=your_topic_ที่มีจริง
 export TEST_USER=testuser999
 export TEST_PASSPHRASE=secret123
-./scripts/check-e2e.sh https://10.235.160.31
+./scripts/check-e2e.sh https://<portal-host>
 ```
 
 สคริปต์จะลอง **Add user** แล้ว **Remove user นั้น** — ถ้าผ่านแปลว่า Function Add/Remove ทำงานได้จริง
@@ -142,8 +142,8 @@ docker run -d --name kafka-user-web -p 3443:3443 ...
 ใช้เทสว่า server ตอบและรับ API ได้ (ไม่ต้องเปิด browser):
 
 ```bash
-# ตั้ง BASE_URL ตรงกับ Lab (เช่น https://10.235.160.31 หรือ http://Lab-IP:3000)
-BASE_URL="https://10.235.160.31"
+# ตั้ง BASE_URL ตรงกับ Lab (เช่น https://<portal-host> หรือ http://Lab-IP:3000)
+BASE_URL="https://<portal-host>"
 # ถ้า self-signed cert เพิ่ม -k เพื่อข้ามการตรวจสอบ cert
 CURL_OPTS="-k -s"
 

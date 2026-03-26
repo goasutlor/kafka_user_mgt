@@ -66,7 +66,7 @@ export OC_CREDENTIALS_KEY="<64 ตัว hex>"
 podman run --rm \
   -e OC_CREDENTIALS_KEY="$OC_CREDENTIALS_KEY" \
   confluent-kafka-user-management:latest \
-  node scripts/encrypt-oc-password.js "ocp@dmin!"
+  node scripts/encrypt-oc-password.js "ExamplePassword123!"
 ```
 
 ได้บรรทัด `enc:xxx` ไปใส่ใน `Docker/web.config.json` แล้วตั้ง `OC_CREDENTIALS_KEY` ตอนรัน container หลักตามเดิม
@@ -148,8 +148,8 @@ cd <path-ที่เก็บโปรเจกต์>/gen-kafka-user/webapp
 # ตั้ง key ที่สร้างจาก Step 2.1
 export OC_CREDENTIALS_KEY="<ใส่ 64 ตัว hex ที่ได้จาก openssl rand -hex 32>"
 
-# แปลงรหัส OC เป็น ciphertext (แทนที่ "ocp@dmin!" ด้วยรหัสจริง)
-node scripts/encrypt-oc-password.js "ocp@dmin!"
+# แปลงรหัส OC เป็น ciphertext (แทนที่ด้วยรหัสจริงของคุณ — อย่า commit รหัสจริง)
+node scripts/encrypt-oc-password.js "ExamplePassword123!"
 ```
 
 จะได้บรรทัดขึ้นต้นด้วย `enc:` — **copy ทั้งบรรทัด** (เช่น `enc:KEdsTpBw...`)
@@ -159,7 +159,7 @@ node scripts/encrypt-oc-password.js "ocp@dmin!"
 - เปิด `$ROOT/Docker/web.config.json` (เช่น `/opt/kafka-usermgmt/Docker/web.config.json`)
 - ใน `gen` หา `ocLoginPassword`
 - **เปลี่ยนจาก plaintext เป็นค่า enc:**
-  - เดิม: `"ocLoginPassword": "ocp@dmin!"`
+  - เดิม: `"ocLoginPassword": "plaintext-or-use-encrypt-script"`
   - ใหม่: `"ocLoginPassword": "enc:xxxx..."` (ใส่ค่าที่ได้จาก Step 2.2)
 - **เก็บ `ocLoginUser` ไว้เหมือนเดิม** (user ไม่ต้อง encrypt ก็ได้)
 - Save ไฟล์
@@ -210,7 +210,7 @@ podman build -t confluent-kafka-user-management:latest .
 ### Step 3.3 ตรวจสอบ
 
 1. **Portal:** เปิดเว็บ → Login ด้วย user (เช่น admin) + รหัสที่ตั้งใน Step 1.2 → ต้องเข้าได้
-2. **OC:** ดู log container ควรเห็น `[oc-auto-login] cwdc OK (user/password)` (หรือ tls2 OK) ไม่มีข้อความ "ไม่สามารถถอดรหัส"
+2. **OC:** ดู log container ควรเห็น `[oc-auto-login] <context> OK (user/password)` ต่อ context ไม่มีข้อความ "ไม่สามารถถอดรหัส"
 
 ---
 

@@ -145,8 +145,8 @@ NS_TLS2="${NS_TLS2:-}"
 KAFKA_CR_NAME="kafka"
 
 # Multi-environment (parity with Web portal): GEN_ACTIVE_ENV_ID + environments.json under BASE_DIR (or GEN_ENVIRONMENTS_JSON).
-# ocContext = exact NAME from `oc config get-contexts` in the kubeconfig you use (app does not create contexts). One OCP cluster may use different contexts per namespace (e.g. cwdc-dev / cwdc-sit / cwdc-uat).
-# File shape: { "environments": [ { "id": "dev", "sites": [ { "ocContext": "cwdc-dev", "namespace": "esb-dev-cwdc" }, ... ] } ] } — multiple sites = multi-region for that environment (GEN_OCP_SITES becomes ctx1:ns1,ctx2:ns2).
+# ocContext = exact NAME from `oc config get-contexts` in the kubeconfig you use (app does not create contexts). One OCP cluster may use different contexts per namespace (e.g. ocp-dev / ocp-sit / ocp-uat).
+# File shape: { "environments": [ { "id": "dev", "sites": [ { "ocContext": "ocp-dev", "namespace": "kafka-namespace-dev" }, ... ] } ] } — multiple sites = multi-region for that environment (GEN_OCP_SITES becomes ctx1:ns1,ctx2:ns2).
 ENV_JSON="${GEN_ENVIRONMENTS_JSON:-$BASE_DIR/environments.json}"
 if [ -z "${GEN_OCP_SITES:-}" ] && [ -n "${GEN_ACTIVE_ENV_ID:-}" ] && [ -f "$ENV_JSON" ] && command -v jq >/dev/null 2>&1; then
     _pairs=$(jq -r --arg id "$GEN_ACTIVE_ENV_ID" '
@@ -320,7 +320,7 @@ elif [ -z "${KUBECONFIG:-}" ]; then
     fi
   done
 fi
-# If KUBECONFIG is set but fails for cwdc, try BASE_DIR/.kube then default ~/.kube/config
+# If KUBECONFIG is set but fails for a context, try BASE_DIR/.kube then default ~/.kube/config
 if [ -n "${KUBECONFIG:-}" ]; then
   if ! timeout 5 oc get nodes --context "${SITE_CTX[0]}" &>/dev/null; then
     for fallback in "$BASE_DIR/.kube/config" "$BASE_DIR/.kube/config-both" "${HOME:-/tmp}/.kube/config"; do

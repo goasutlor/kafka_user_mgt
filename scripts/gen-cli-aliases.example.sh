@@ -15,5 +15,5 @@ alias kgen-dev='bash "$KGEN_REPO/scripts/gen-cli.sh" dev'
 alias kgen-sit='bash "$KGEN_REPO/scripts/gen-cli.sh" sit'
 alias kgen-uat='bash "$KGEN_REPO/scripts/gen-cli.sh" uat'
 
-# If your master.config uses full ids (e.g. esb-dev-cwdc), add matching aliases:
-# alias kgen-dev='bash "$KGEN_REPO/scripts/gen-cli.sh" esb-dev-cwdc'
+# If your master.config uses full ids (e.g. my-env-dev), add matching aliases:
+# alias kgen-dev='bash "$KGEN_REPO/scripts/gen-cli.sh" my-env-dev'
