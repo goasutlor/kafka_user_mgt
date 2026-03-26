@@ -1194,7 +1194,7 @@
     <nav class="header-nav" aria-label="Quick links">
       <a href="#home">Overview</a>
       <span class="nav-sep" aria-hidden="true"></span>
-      <a href="#create-topic-onboard">Create topic</a>
+      <a href="#create-topic-onboard">New topic</a>
       <a href="#add">Add user</a>
       <a href="#add-acl-existing">Add ACL</a>
       <a href="#test">Test</a>
@@ -1226,7 +1226,7 @@
         <div class="nav-section">Start</div>
         <a href="#home" class="nav-page active" data-page="home">Home</a>
         <div class="nav-section">Provisioning</div>
-        <a href="#create-topic-onboard" class="nav-page" data-page="create-topic-onboard">Create Topic &amp; Onboard User</a>
+        <a href="#create-topic-onboard" class="nav-page" data-page="create-topic-onboard">Create New Topic</a>
         <a href="#add" class="nav-page" data-page="add">Add new user</a>
         <a href="#add-acl-existing" class="nav-page" data-page="add-acl-existing">Add ACL to existing user</a>
         <a href="#test" class="nav-page" data-page="test">Test existing user</a>
@@ -1253,7 +1253,7 @@
         After sign-in you land here. Open a bookmarked link with a hash (e.g. <code>#add-acl-existing</code>) to jump straight to that page. <strong>Setup</strong> / <strong>Reset</strong> in the header are for portal configuration, not Kafka users.
       </p>
       <div class="home-grid">
-        <a href="#create-topic-onboard" class="home-tile"><strong>Create topic &amp; onboard</strong><span>New topic, then create user + ACL + pack in one flow.</span></a>
+        <a href="#create-topic-onboard" class="home-tile"><strong>Create New Topic</strong><span>Create a Kafka topic; optionally continue to onboard a user (ACL + .enc pack).</span></a>
         <a href="#add" class="home-tile"><strong>Add new user</strong><span>Wizard for an existing topic: credentials, ACL template, encrypted pack.</span></a>
         <a href="#add-acl-existing" class="home-tile"><strong>Add ACL (existing user)</strong><span>Grant more topic/group permissions without a new password.</span></a>
         <a href="#test" class="home-tile"><strong>Test existing user</strong><span>Verify auth (and optionally consume) against the cluster.</span></a>
@@ -1441,18 +1441,18 @@
       </div>
 
       <div class="section-card page-card" id="create-topic-onboard">
-      <h1>Create Topic &amp; Onboard User</h1>
+      <h1>Create New Topic</h1>
       <p class="lead">
-        End-to-end flow: create a new Kafka topic first, then onboard a user for that topic. Step 1 creates the topic; steps 2–6 are the same as Add user (system, username, ACL, passphrase, execute).
+        <strong>Step 1</strong> creates the Kafka topic only (broker defaults for partitions/replication). After success, choose <strong>Finish</strong> if you only need the topic, or <strong>Continue to onboard user</strong> to add credentials, ACLs, and an encrypted pack (same wizard as Add user).
       </p>
       <div class="wizard-wrap wizard-wrap-acl-wide" id="wizard-wrap-ct">
         <div class="wizard-steps" role="tablist" id="wizard-steps-ct">
           <div class="wizard-step active" data-step="1" id="ct-wizard-tab-1">1. Create Topic</div>
-          <div class="wizard-step" data-step="2" id="ct-wizard-tab-2">2. Identification</div>
-          <div class="wizard-step" data-step="3" id="ct-wizard-tab-3">3. Username</div>
-          <div class="wizard-step" data-step="4" id="ct-wizard-tab-4">4. Permission</div>
-          <div class="wizard-step" data-step="5" id="ct-wizard-tab-5">5. Passphrase</div>
-          <div class="wizard-step" data-step="6" id="ct-wizard-tab-6">6. Execute</div>
+          <div class="wizard-step ct-step-onboard" data-step="2" id="ct-wizard-tab-2" style="display:none;">2. Identification</div>
+          <div class="wizard-step ct-step-onboard" data-step="3" id="ct-wizard-tab-3" style="display:none;">3. Username</div>
+          <div class="wizard-step ct-step-onboard" data-step="4" id="ct-wizard-tab-4" style="display:none;">4. Permission</div>
+          <div class="wizard-step ct-step-onboard" data-step="5" id="ct-wizard-tab-5" style="display:none;">5. Passphrase</div>
+          <div class="wizard-step ct-step-onboard" data-step="6" id="ct-wizard-tab-6" style="display:none;">6. Execute</div>
         </div>
         <div class="wizard-panel active" id="ct-wizard-panel-1" data-step="1">
           <h3>Create new Kafka topic</h3>
@@ -1467,6 +1467,14 @@
             <span class="step-error" id="ct-step1-error"></span>
           </div>
           <div id="ct-create-topic-result" class="form-group" style="display:none; margin-top:1rem;"></div>
+          <div id="ct-onboard-panel" class="form-group" style="display:none; margin-top:1.25rem; padding:14px 16px; border:1px solid var(--border); border-radius:8px; background:var(--body-bg);">
+            <p style="margin:0 0 10px; font-weight:600; font-size:14px;">Optional — onboard application user</p>
+            <p class="hint" style="margin:0 0 12px; line-height:1.5;">Add a Kafka user, ACLs, and download an <code>.enc</code> pack for this topic (same steps as <strong>Add new user</strong>).</p>
+            <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+              <button type="button" id="btn-ct-continue-onboard" class="btn btn-primary">Continue to onboard user →</button>
+              <button type="button" id="btn-ct-topic-only-done" class="btn btn-secondary">Finish (topic only)</button>
+            </div>
+          </div>
         </div>
         <div class="wizard-panel" id="ct-wizard-panel-2" data-step="2">
           <h3>Identification &amp; Topic</h3>
@@ -1584,7 +1592,7 @@
           <div id="ct-api-download-block" class="form-group" style="display:none; margin-top:1rem;"></div>
         </div>
       </div>
-      <p class="footer-note">Topic is created via <code>kafka-topics.sh --create</code>. User onboarding uses the same backend as Add user.</p>
+      <p class="footer-note">Topic is created via <code>kafka-topics.sh --create</code>. Onboarding (steps 2–6) uses the same backend as <strong>Add new user</strong>.</p>
       </div>
 
       <div class="section-card page-card" id="add-acl-existing">
@@ -2352,7 +2360,7 @@
         });
       })();
       (function () {
-        var pageTitles = { home: 'Home', add: 'Add new user', 'create-topic-onboard': 'Create Topic & Onboard User', 'add-acl-existing': 'Add ACL to existing user', test: 'Test existing user', remove: 'Remove user(s) + ACL', 'change-password': 'Change password', cleanup: 'Cleanup orphaned ACLs', 'audit-log': 'Audit Log', 'download-history': 'Download History' };
+        var pageTitles = { home: 'Home', add: 'Add new user', 'create-topic-onboard': 'Create New Topic', 'add-acl-existing': 'Add ACL to existing user', test: 'Test existing user', remove: 'Remove user(s) + ACL', 'change-password': 'Change password', cleanup: 'Cleanup orphaned ACLs', 'audit-log': 'Audit Log', 'download-history': 'Download History' };
         window.navigatePortalAfterLogin = function () {
           var raw = (location.hash || '').trim().toLowerCase();
           var p = raw.slice(1);
@@ -2953,11 +2961,18 @@
         document.getElementById('filter-topics').addEventListener('input', renderTopicsFiltered);
         document.getElementById('filter-users').addEventListener('input', renderUsersFiltered);
 
-        // ——— Create Topic & Onboard User wizard (6 steps) ———
+        // ——— Create New Topic wizard: step 1 = topic only; steps 2–6 = optional onboard ———
         var ctCurrentStep = 1;
         var ctTotalSteps = 6;
+        var ctTopicCreatedName = '';
         var cachedCTUsersList = [];
         function escapeHtmlCt(s) { var d = document.createElement('div'); if (s == null) return ''; d.textContent = s; return d.innerHTML; }
+        function updateCtOnboardTabsVisibility() {
+          var show = ctCurrentStep >= 2;
+          document.querySelectorAll('#wizard-steps-ct .ct-step-onboard').forEach(function (el) {
+            el.style.display = show ? '' : 'none';
+          });
+        }
         function showStepCT(step) {
           ctCurrentStep = step;
           var wrap = document.getElementById('wizard-steps-ct');
@@ -2970,6 +2985,13 @@
           document.querySelectorAll('#create-topic-onboard .wizard-panel').forEach(function (el) {
             el.classList.toggle('active', parseInt(el.getAttribute('data-step'), 10) === step);
           });
+          var op = document.getElementById('ct-onboard-panel');
+          if (op) {
+            if (step >= 2) op.style.display = 'none';
+            else if (step === 1 && ctTopicCreatedName) op.style.display = 'block';
+            else op.style.display = 'none';
+          }
+          updateCtOnboardTabsVisibility();
           if (step === 4 && typeof syncWizardFieldsIntoAclDesigner === 'function') {
             syncWizardFieldsIntoAclDesigner('ct');
             renderAclDesigner('ct');
@@ -2999,8 +3021,10 @@
             var j = await res.json();
             if (j.ok) {
               document.getElementById('ct-topic').value = topicName;
+              ctTopicCreatedName = topicName;
               errEl.innerHTML = '<span style="color:var(--success)">Topic created: ' + escapeHtmlCt(topicName) + '</span>';
-              showStepCT(2);
+              errEl.style.display = 'block';
+              showStepCT(1);
             } else {
               var errMsg = (j.error || 'Create topic failed');
               if (j.detail) errMsg += ': ' + escapeHtmlCt(String(j.detail).slice(0, 200));
@@ -3010,6 +3034,21 @@
             errEl.innerHTML = '<span style="color:var(--danger)">Request failed: ' + (e.message || e) + '</span>';
           }
           btn.disabled = false;
+        });
+        document.getElementById('btn-ct-continue-onboard').addEventListener('click', function () {
+          if (!ctTopicCreatedName) return;
+          showStepCT(2);
+        });
+        document.getElementById('btn-ct-topic-only-done').addEventListener('click', function () {
+          ctTopicCreatedName = '';
+          document.getElementById('ct-topic-name').value = '';
+          document.getElementById('ct-topic').value = '';
+          var errEl = document.getElementById('ct-create-topic-result');
+          errEl.style.display = 'none';
+          errEl.innerHTML = '';
+          document.getElementById('ct-onboard-panel').style.display = 'none';
+          setCTStepError('ct-step1-error', '');
+          showStepCT(1);
         });
         document.getElementById('ct-wizard-back-2').addEventListener('click', function () { showStepCT(1); });
         document.getElementById('ct-wizard-next-2').addEventListener('click', function () {
@@ -3237,6 +3276,7 @@
                   });
                 });
                 downloadBlock.querySelector('.btn-ct-another').addEventListener('click', function () {
+                  ctTopicCreatedName = '';
                   document.getElementById('ct-topic-name').value = '';
                   document.getElementById('ct-system').value = '';
                   document.getElementById('ct-topic').value = '';
@@ -3244,6 +3284,8 @@
                   document.getElementById('ct-passphrase').value = '';
                   document.getElementById('ct-passphrase-confirm').value = '';
                   document.getElementById('ct-create-topic-result').style.display = 'none';
+                  document.getElementById('ct-create-topic-result').innerHTML = '';
+                  document.getElementById('ct-onboard-panel').style.display = 'none';
                   ctCurrentStep = 1;
                   showStepCT(1);
                   resultEl.style.display = 'none';
@@ -3254,7 +3296,7 @@
               }
             } else {
               if (j && j.tasks && j.tasks.length) applyTasklogStepsList(stepsListEl, j.tasks, escapeHtmlCt);
-              if (j) renderAddUserError(resultEl, formatApiError(j), getPlainErrorFromApi(j), j, 'Create topic & onboard');
+              if (j) renderAddUserError(resultEl, formatApiError(j), getPlainErrorFromApi(j), j, 'Create New Topic');
               else resultEl.innerHTML = '<span style="color:var(--danger)">Failed</span>';
             }
           } catch (e) {
