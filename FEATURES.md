@@ -40,6 +40,10 @@ Interactive menu and **non-interactive** mode via environment variables (`GEN_MO
 | Client property templates | Helper to scaffold Kafka client/admin property files (full TLS/SASL materialization via Setup where applicable). |
 | Config reset | CLI helper for portal config wipe (when auth requirements are met). |
 
+### How to run the CLI (supported)
+
+Use **`podman exec`** (or `docker exec`) into the running app container — **not** a copy of scripts taken out of the image to random host paths. From a git checkout, prefer **`scripts/podman-gen.sh`** (interactive `gen.sh`) or **`scripts/podman-gen-cli.sh`** (menu + optional environment id). See **`README.md`** for the full table and a one-liner if you have no clone.
+
 ---
 
 ## OpenShift / Kubernetes integration

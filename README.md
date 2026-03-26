@@ -16,22 +16,43 @@ Run with Compose (mount `runtime` + `deploy/config`). First start: open `http://
 
 **Universal / no vendor lock-in:** Kafka bootstrap, OpenShift contexts, and namespaces come from **your** `master.config.json` (Setup) and synced `environments.json` — not from hardcoded hostnames in `gen.sh`. The bundled CLI (`gen-in-container.sh`) applies the same defaults as the Portal via `portal-parity-env.sh`. For merged multi-cluster kubeconfigs, set `GEN_KUBECONFIG_MERGE_BOTH=1` to use a sibling `config-both` file if you use that layout.
 
-### CLI (Portal-parity wrappers)
+### CLI (Podman `exec` — supported path)
 
-- `./scripts/gen-in-container.sh` — runs bundled `gen.sh` in the running container with Portal-compatible baseline env (`PATH`, `GEN_OC_PATH`, `KUBECONFIG`, `GEN_BASE_DIR`). Before `gen.sh`, it sources **`portal-parity-env.sh`** inside the container so **default OCP sites / active environment** match the Portal when you have not set `GEN_OCP_SITES` (uses `environments.json` under the runtime mount, else `master.config.json`).
-- `./scripts/gen-cli.sh` — guided menu wrapper for common non-interactive flows (preflight, test user, add ACL existing, guided add user) and environment profile selection from `master.config`.
+Automation always runs **inside the running container** via `podman exec` (or `docker exec`). The helper scripts live in **this repository** and call `podman exec` for you with the correct `PATH`, `GEN_BASE_DIR`, `KUBECONFIG`, and `portal-parity-env.sh` — the same baseline the Portal uses.
 
-**VM / host without a git checkout:** the same two scripts ship in the image under `/app/host-cli/`. Copy both to the same directory on the host, then run from there (example: container name `kafka-user-mgmt`):
+**Do not** copy `gen-in-container.sh` / `gen-cli.sh` out of the image onto arbitrary host directories. That creates drift (image vs copied file), is hard to control in reviews, and is **not** the supported workflow.
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/podman-gen.sh` | **Recommended (Podman).** Interactive `gen.sh` with portal parity. |
+| `scripts/podman-gen-cli.sh` | **Recommended (Podman).** Menu + optional `[environment-id]` (matches `master.config` → `environments.environments[].id`), then `gen.sh`. |
+| `scripts/gen-in-container.sh` | Same as `podman-gen.sh`, but auto-detects **Podman or Docker** (`CTR_ENGINE`). |
+| `scripts/gen-cli.sh` | Same as `podman-gen-cli.sh`, but auto-detects Podman or Docker. |
+
+From a **git clone** on your workstation (Linux / WSL / Git Bash), with the app container already running (e.g. `CONTAINER_NAME=kafka-user-mgmt`):
 
 ```bash
-podman cp kafka-user-mgmt:/app/host-cli/gen-in-container.sh ~/kafka-cli/
-podman cp kafka-user-mgmt:/app/host-cli/gen-cli.sh ~/kafka-cli/
-chmod +x ~/kafka-cli/gen-in-container.sh ~/kafka-cli/gen-cli.sh
-export CTR_ENGINE=podman CONTAINER_NAME=kafka-user-mgmt
-~/kafka-cli/gen-cli.sh
+chmod +x scripts/podman-gen.sh scripts/podman-gen-cli.sh scripts/gen-in-container.sh scripts/gen-cli.sh
+./scripts/podman-gen.sh
+# or
+./scripts/podman-gen-cli.sh your-env-id
 ```
 
-**Upgrades / full reset:** Pulling a newer image does not wipe bind-mounted host config. For a clean reinstall (drop old `master.config` / kubeconfig paths), see [UPGRADE-AND-PERSISTENCE.md](UPGRADE-AND-PERSISTENCE.md) — section *รีเซ็ตเริ่มใหม่ทั้งหมด* (Thai + English).
+Optional: `CONTAINER_NAME`, `KUBECONFIG` (path **inside** the container), `GEN_BASE_DIR` — see `scripts/gen-in-container.sh` header.
+
+**Without a git clone:** use a single `podman exec` (no file copy). Replace `<container>` with your container name:
+
+```bash
+podman exec -it \
+  -e PATH=/usr/local/bin:/usr/bin:/bin:/host/usr/bin \
+  -e GEN_OC_PATH=/host/usr/bin/oc \
+  -e KUBECONFIG=/opt/kafka-usermgmt/.kube/config \
+  -e GEN_BASE_DIR=/opt/kafka-usermgmt \
+  <container> \
+  bash -lc 'source /app/host-cli/portal-parity-env.sh 2>/dev/null || true; exec /app/bundled-gen/gen.sh'
+```
+
+**Upgrades / full reset:** Pulling a newer image does not wipe bind-mounted host config. For a clean reinstall (drop old `master.config` / kubeconfig paths), see [UPGRADE-AND-PERSISTENCE.md](UPGRADE-AND-PERSISTENCE.md) (full reset section).
 
 **Topology:** Dual DC / dual OpenShift with **one** Confluent Kafka cluster — production fit and “universal portal” limits — see [PRODUCTION-TOPOLOGY-2DC-1-KAFKA.md](PRODUCTION-TOPOLOGY-2DC-1-KAFKA.md).
 
@@ -41,14 +62,14 @@ The directory `kafka_from_host/` (if present locally) is only a host mirror and 
 
 If the package is **private**, authenticate: `echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin`
 
-### หลัง push — รอให้ CI build GHCR เสร็จ / Wait until GHCR build finishes
+### After push — wait for GHCR image build
 
-หลัง `git push` ไป `main` (หรือ `master`) workflow จะ build ที่ GitHub Actions ถ้าต้องการรอจนเสร็จแล้วเห็นผลสำเร็จ/ล้มเหลวในเทอร์มินัล:
+After `git push` to `main` (or your release branch), GitHub Actions builds the image. To wait until the run finishes:
 
 - **PowerShell (Windows):** `.\scripts\wait-ghcr-build.ps1`
 - **Bash / Git Bash / WSL:** `./scripts/wait-ghcr-build.sh`
 
-ต้องติดตั้ง [GitHub CLI](https://cli.github.com/) และล็อกอินแล้ว (`gh auth login`) ถ้าเป็น fork ให้ตั้ง `GITHUB_REPO=owner/name` ก่อนรันสคริปต์ bash หรือ `$env:GITHUB_REPO = "owner/name"` ใน PowerShell
+Requires [GitHub CLI](https://cli.github.com/) (`gh auth login`). For a fork, set `GITHUB_REPO=owner/name` before running the bash script, or `$env:GITHUB_REPO = "owner/name"` in PowerShell.
 
 ## Build locally
 

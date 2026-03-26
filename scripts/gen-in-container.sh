@@ -7,8 +7,9 @@
 #   -v /usr/bin:/host/usr/bin:ro   (host oc)
 #   - runtime -> /opt/kafka-usermgmt
 #
-# Usage (from host):
-#   ./scripts/gen-in-container.sh
+# Usage (from host, with a git checkout — recommended):
+#   ./scripts/podman-gen.sh              # Podman only
+#   ./scripts/gen-in-container.sh        # Podman or Docker (auto)
 #   GEN_NONINTERACTIVE=1 GEN_MODE=2 GEN_KAFKA_USER=u GEN_TEST_PASS=p GEN_TOPIC_NAME=t \
 #     ./scripts/gen-in-container.sh
 #

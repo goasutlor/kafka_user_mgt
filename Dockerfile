@@ -10,7 +10,7 @@ RUN npm install --omit=dev --ignore-scripts
 
 FROM node:20-bookworm-slim
 # Semantic app version (shown in UI). Optional GIT_COMMIT for /api/version short hash.
-ARG VERSION=1.0.98
+ARG VERSION=1.0.99
 ARG GIT_COMMIT=
 ENV APP_VERSION=${VERSION}
 ENV GIT_COMMIT=${GIT_COMMIT}
@@ -67,12 +67,15 @@ COPY scripts/verify-golive.sh /app/bundled-gen/verify-golive.sh
 COPY scripts/ensure-kafka-client-props.sh /app/bundled-gen/ensure-kafka-client-props.sh
 RUN chmod +x /app/bundled-gen/gen.sh /app/bundled-gen/verify-golive.sh /app/bundled-gen/ensure-kafka-client-props.sh
 ENV GEN_BUNDLED_SCRIPT_PATH=/app/bundled-gen/gen.sh
-# Host-side helpers: copy onto the VM (no git clone). Same dir on host — gen-cli calls gen-in-container.
-#   podman cp <name>:/app/host-cli/gen-in-container.sh . && podman cp <name>:/app/host-cli/gen-cli.sh .
+# Host-side helpers (run on the operator workstation — same files as in this repo). Prefer a git clone and
+# ./scripts/podman-gen.sh / ./scripts/podman-gen-cli.sh; do not copy scripts out of the image to random paths.
+# Optional: bind-mount this repo over /app/host-cli for development only.
 RUN mkdir -p /app/host-cli \
     && chmod 755 /app/host-cli
-COPY scripts/gen-in-container.sh scripts/gen-cli.sh scripts/gen-cli-aliases.example.sh scripts/portal-parity-env.sh /app/host-cli/
+COPY scripts/gen-in-container.sh scripts/gen-cli.sh scripts/gen-cli-aliases.example.sh scripts/portal-parity-env.sh \
+    scripts/podman-gen.sh scripts/podman-gen-cli.sh /app/host-cli/
 RUN chmod +x /app/host-cli/gen-in-container.sh /app/host-cli/gen-cli.sh \
+    /app/host-cli/podman-gen.sh /app/host-cli/podman-gen-cli.sh \
     && chmod a+r /app/host-cli/portal-parity-env.sh
 
 EXPOSE 3443

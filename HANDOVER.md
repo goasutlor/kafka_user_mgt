@@ -60,7 +60,7 @@ Configuration is **not hard-coded to vendor hostnames**: Kafka bootstrap URLs, O
 ### 2.7 CLI parity
 
 - **Same engine** — `gen.sh` (bundled in the image) backs both Portal API calls and CLI entry points.
-- **Helper scripts** (`gen-in-container.sh`, `gen-cli.sh`) — Run the bundled script from the **host** with `PATH`, `KUBECONFIG`, `GEN_BASE_DIR`, and **portal-parity** environment so defaults match the **Portal** (active environment, OCP sites, audit paths when applicable).
+- **Helper scripts** (run from a **git checkout** on the workstation) call **`podman exec`** / **`docker exec`** into the running container with `PATH`, `KUBECONFIG`, `GEN_BASE_DIR`, and **portal-parity** so defaults match the **Portal**. Prefer **`podman-gen.sh`** / **`podman-gen-cli.sh`** for Podman. **Do not** copy scripts out of the image to unmanaged host paths — that is unsupported and causes version drift. See **`README.md`** for the supported commands and a one-liner when no clone is available.
 
 ### 2.8 Explicit non-goals / limits
 

@@ -5,7 +5,8 @@
 # - Calls scripts/gen-in-container.sh (which injects PATH/KUBECONFIG/GEN_BASE_DIR safely)
 #
 # Usage:
-#   ./scripts/gen-cli.sh              # menu (pick env inside with option 6)
+#   ./scripts/podman-gen-cli.sh       # Podman only (recommended when using Podman)
+#   ./scripts/gen-cli.sh              # menu (pick env inside with option 6); Podman or Docker
 #   ./scripts/gen-cli.sh dev          # lock to master.config environments[].id == dev, then menu
 #   ./scripts/gen-cli.sh --help
 #
