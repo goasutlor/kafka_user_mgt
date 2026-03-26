@@ -2,7 +2,19 @@
 
 Web UI + `gen.sh` for Confluent Kafka user / topic / ACL operations against OpenShift-hosted clusters.
 
-**Public docs:** [FEATURES.md](FEATURES.md) (capability overview) · [HANDOVER.md](HANDOVER.md) (operator handover) · [SECURITY.md](SECURITY.md) (no secrets in git).
+**Public docs:** [FEATURES.md](FEATURES.md) (full feature list) · [HANDOVER.md](HANDOVER.md) (operator handover) · [SECURITY.md](SECURITY.md) (no secrets in git).
+
+### What the Web Portal does
+
+The browser UI is the primary way to operate the tool after deployment. In short, it lets you:
+
+- **Configure** the platform (first-time **Setup** wizard → `master.config.json`, Kafka client/admin files, kubeconfig paths, OpenShift sites, optional HTTPS and portal login).
+- **Target an environment** (when multi-env is enabled: pick Dev / SIT / UAT-style **environment** so Kafka files and namespaces match that selection).
+- **Provision Kafka users and ACLs**: add users with encrypted **client packs** (`.enc`), create topics, add ACLs for existing users, **create topic and onboard a user** in one guided flow.
+- **Operate users**: test credentials against a topic, change passwords, remove users and their ACLs, **clean up orphaned ACLs**.
+- **Governance**: **Audit log** (who did what), **Download history** for packs, optional **user list / topic list** helpers from the cluster.
+
+Details, page-by-page behaviour, and CLI parity are in **[FEATURES.md](FEATURES.md)** — not only run instructions.
 
 ## Container image (GHCR)
 
