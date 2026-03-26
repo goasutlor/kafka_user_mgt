@@ -49,7 +49,8 @@
 # 2026-03-21  Preflight / Kafka admin list: menu [6] and GEN_NONINTERACTIVE=1 GEN_MODE=6 — kafka-topics.sh --list (parity with web setup Verify deep check). Web setup: deep verify runs same + oc whoami.
 # 2026-03-18  Add ACL for existing user: GEN_MODE=5 (CLI menu [5] + non-interactive). No new credential; add topic ACL + consumer group for user already in secret. Web: Add ACL to existing user (summary + confirm). Audit: create-topic label + add-acl-existing.
 # 2026-03-15  Create topic: use broker default for partitions and replication factor (rack-aware placement). No GEN_PARTITIONS/GEN_REPLICATION_FACTOR; kafka-topics.sh --create without --partitions/--replication-factor so broker default.num.partitions and default.replication.factor apply. CLI and Web parity.
-# 2026-03-15  Create topic (CLI + Web parity): GEN_MODE=4 — interactive menu [4] Create new topic; non-interactive env GEN_TOPIC_NAME (or GEN_TOPIC) only. validate_topic_name(); kafka-topics.sh --create; log CREATE_TOPIC to provisioning.log.
+# 2026-03-15  Create topic (CLI + Web parity): GEN_MODE=4 — interactive menu [4] Create new topic; non-interactive env GEN_TOPIC_NAME (or GEN_TOPIC) or GEN_TOPIC_NAMES (space-separated, multiple creates — no onboard in same run). validate_topic_name(); kafka-topics.sh --create; log CREATE_TOPIC to provisioning.log.
+# 2026-03-26  GEN_TOPIC_NAMES for GEN_MODE=4 non-interactive: create each topic in sequence (onboarding user is a separate flow). Interactive menu [4]: after each success, optional "Create another topic? (y/n)" before returning to M/Q.
 # 2026-03-15  PARITY note in header: every feature must exist in both CLI (gen.sh) and GUI/API (100%).
 # 2026-02-xx  Multi-site (names not fixed): GEN_OCP_SITES="ctx1:ns1,ctx2:ns2" for multiple OCP clusters; if unset use OCP_CTX_CWDC/NS_CWDC + OCP_CTX_TLS2/NS_TLS2. All flows (Add/Remove/Change password/Verify) iterate SITE_CTX/SITE_NS; revert previous site if a patch fails.
 # 2026-02-xx  All script output files (.enc packs) go to user_output in the same path as the script (USER_OUTPUT_DIR=$SCRIPT_DIR/user_output). Override with GEN_USER_OUTPUT_DIR. GEN_PACK_DIR echoes this so Web/download can find files.
@@ -902,8 +903,33 @@ fi
 
 # Non-interactive Mode 4: Create Kafka topic (broker default partitions/replication — rack-aware)
 if [ "${GEN_NONINTERACTIVE}" = "1" ] && [ "${GEN_MODE}" = "4" ]; then
+    if [ -n "${GEN_TOPIC_NAMES:-}" ]; then
+        # Space-separated — same semantics as Portal multi-topic (create only; use GEN_MODE=1 separately to onboard).
+        for CREATE_TOPIC_NAME in $GEN_TOPIC_NAMES; do
+            CREATE_TOPIC_NAME=$(trim_ws "$CREATE_TOPIC_NAME")
+            [ -z "$CREATE_TOPIC_NAME" ] && continue
+            validate_topic_name "$CREATE_TOPIC_NAME"
+            status_msg "Creating topic '$CREATE_TOPIC_NAME' (broker default partitions/replication)"
+            create_out=$($KAFKA_BIN/kafka-topics.sh --create \
+                --topic "$CREATE_TOPIC_NAME" \
+                --bootstrap-server "$BOOTSTRAP_BOTH" \
+                --command-config "$ADMIN_CONFIG" 2>&1)
+            rc=$?
+            if [ $rc -eq 0 ]; then
+                done_msg
+                echo -e "   ${GREEN}Topic '$CREATE_TOPIC_NAME' created.${NC}"
+                log_action "CREATE_TOPIC | topic=$CREATE_TOPIC_NAME"
+                _cd=$(jq -nc --arg t "$CREATE_TOPIC_NAME" '{topic:$t}' 2>/dev/null) || _cd="{}"
+                portal_audit_append_json create-topic "$_cd"
+            else
+                echo "$create_out" | sed 's/^/   /'
+                error_exit "CREATE_TOPIC" "Create topic failed (exit $rc) for '$CREATE_TOPIC_NAME'. Topic may already exist."
+            fi
+        done
+        exit 0
+    fi
     CREATE_TOPIC_NAME="${GEN_TOPIC_NAME:-${GEN_TOPIC}}"
-    [ -z "$CREATE_TOPIC_NAME" ] && error_exit "GEN_TOPIC_NAME or GEN_TOPIC required for create-topic."
+    [ -z "$CREATE_TOPIC_NAME" ] && error_exit "GEN_TOPIC_NAME or GEN_TOPIC required for create-topic (or set GEN_TOPIC_NAMES for multiple)."
     CREATE_TOPIC_NAME=$(trim_ws "$CREATE_TOPIC_NAME")
     validate_topic_name "$CREATE_TOPIC_NAME"
     status_msg "Creating topic '$CREATE_TOPIC_NAME' (broker default partitions/replication)"
@@ -1169,6 +1195,8 @@ while true; do
     echo "  CREATE NEW KAFKA TOPIC"
     echo "-------------------------------------------------------"
     echo "   Partitions and replication factor use broker default (rack-aware)."
+    echo "   After each success you can create another topic, or return to the menu."
+    while true; do
     read -p "   Enter Topic Name: " CREATE_TOPIC_INPUT
     CREATE_TOPIC_NAME=$(trim_ws "$CREATE_TOPIC_INPUT")
     validate_topic_name "$CREATE_TOPIC_NAME"
@@ -1184,10 +1212,14 @@ while true; do
         log_action "CREATE_TOPIC | topic=$CREATE_TOPIC_NAME"
         _cd=$(jq -nc --arg t "$CREATE_TOPIC_NAME" '{topic:$t}' 2>/dev/null) || _cd="{}"
         portal_audit_append_json create-topic "$_cd"
+        read -p "   Create another topic? (y/n): " ANOTHER_CT
+        [[ "$ANOTHER_CT" =~ ^[Yy]$ ]] && continue
     else
         echo "$create_out" | sed 's/^/   /'
         echo -e "   ${RED}Create topic failed (exit $rc). Topic may already exist.${NC}"
     fi
+    break
+    done
     echo -e "\n   ${CYAN}Options: [M] Main menu  [Q] Quit${NC}"
     read -p "   Your choice [M/Q]: " CREATE_CHOICE
     [[ "$CREATE_CHOICE" =~ ^[Qq]$ ]] && { echo -e "   ${CYAN}Exiting...${NC}"; exit 0; }

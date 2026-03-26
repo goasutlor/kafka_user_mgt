@@ -1253,7 +1253,7 @@
         After sign-in you land here. Open a bookmarked link with a hash (e.g. <code>#add-acl-existing</code>) to jump straight to that page. <strong>Setup</strong> / <strong>Reset</strong> in the header are for portal configuration, not Kafka users.
       </p>
       <div class="home-grid">
-        <a href="#create-topic-onboard" class="home-tile"><strong>Create New Topic</strong><span>Create a Kafka topic; optionally continue to onboard a user (ACL + .enc pack).</span></a>
+        <a href="#create-topic-onboard" class="home-tile"><strong>Create New Topic</strong><span>One or more Kafka topics; onboard (ACL + .enc) only when you create a single topic in step 1.</span></a>
         <a href="#add" class="home-tile"><strong>Add new user</strong><span>Wizard for an existing topic: credentials, ACL template, encrypted pack.</span></a>
         <a href="#add-acl-existing" class="home-tile"><strong>Add ACL (existing user)</strong><span>Grant more topic/group permissions without a new password.</span></a>
         <a href="#test" class="home-tile"><strong>Test existing user</strong><span>Verify auth (and optionally consume) against the cluster.</span></a>
@@ -1443,7 +1443,7 @@
       <div class="section-card page-card" id="create-topic-onboard">
       <h1>Create New Topic</h1>
       <p class="lead">
-        <strong>Step 1</strong> creates the Kafka topic only (broker defaults for partitions/replication). After success, choose <strong>Finish</strong> if you only need the topic, or <strong>Continue to onboard user</strong> to add credentials, ACLs, and an encrypted pack (same wizard as Add user).
+        <strong>Step 1</strong> creates one or more Kafka topics (broker defaults for partitions/replication). Use <strong>+ Add topic</strong> for more names. After success with <strong>exactly one</strong> topic, you can choose <strong>Finish</strong> or <strong>Continue to onboard user</strong> (ACL + <code>.enc</code> pack). If you add <strong>multiple topics</strong> in one go, this step only creates topics — onboarding in the same flow is not offered (too complex).
       </p>
       <div class="wizard-wrap wizard-wrap-acl-wide" id="wizard-wrap-ct">
         <div class="wizard-steps" role="tablist" id="wizard-steps-ct">
@@ -1456,14 +1456,23 @@
         </div>
         <div class="wizard-panel active" id="ct-wizard-panel-1" data-step="1">
           <h3>Create new Kafka topic</h3>
-          <p class="step-desc">Topic name only. Partitions and replication factor use broker default (rack-aware placement). Topic must not already exist.</p>
+          <p class="step-desc">Topic name(s) only. Partitions and replication factor use broker default (rack-aware placement). Each topic must not already exist.</p>
           <div class="form-group">
-            <label for="ct-topic-name">Topic name</label>
-            <input type="text" id="ct-topic-name" placeholder="e.g. my-new-topic" />
+            <label>Topic name(s)</label>
+            <div id="ct-topic-rows" style="display:flex; flex-direction:column; gap:10px;">
+              <div class="ct-topic-row" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                <input type="text" id="ct-topic-name" class="ct-topic-input" placeholder="e.g. my-new-topic" style="flex:1; min-width:200px;" />
+                <button type="button" class="btn btn-secondary btn-ct-remove-topic" style="display:none;" title="Remove">−</button>
+              </div>
+            </div>
+            <button type="button" id="btn-ct-add-topic" class="btn btn-secondary" style="margin-top:8px;">+ Add topic</button>
             <span class="hint">Letters, numbers, dots, underscores, hyphens only.</span>
+            <p id="ct-multi-topic-note" class="hint" style="display:none; margin-top:10px; padding:10px 12px; border:1px solid var(--border); border-radius:8px; background:var(--code-bg); line-height:1.5;">
+              <strong>Note:</strong> When you add more than one topic here, this run will <strong>only create topics</strong>. You cannot combine multiple topic creation with <strong>onboard user</strong> in the same wizard (that flow is limited to one topic). To onboard a user with ACL + pack, use a single topic name above, or use <strong>Add new user</strong> after topics exist.
+            </p>
           </div>
           <div class="wizard-actions">
-            <button type="button" id="btn-ct-create-topic" class="btn btn-primary">Create topic</button>
+            <button type="button" id="btn-ct-create-topic" class="btn btn-primary">Create topic(s)</button>
             <span class="step-error" id="ct-step1-error"></span>
           </div>
           <div id="ct-create-topic-result" class="form-group" style="display:none; margin-top:1rem;"></div>
@@ -1592,7 +1601,7 @@
           <div id="ct-api-download-block" class="form-group" style="display:none; margin-top:1rem;"></div>
         </div>
       </div>
-      <p class="footer-note">Topic is created via <code>kafka-topics.sh --create</code>. Onboarding (steps 2–6) uses the same backend as <strong>Add new user</strong>.</p>
+      <p class="footer-note">Topic(s) are created via <code>kafka-topics.sh --create</code> (one call per name). Onboarding (steps 2–6) uses the same backend as <strong>Add new user</strong> and is available only when you create a single topic in step 1.</p>
       </div>
 
       <div class="section-card page-card" id="add-acl-existing">
@@ -2967,6 +2976,69 @@
         var ctTopicCreatedName = '';
         var cachedCTUsersList = [];
         function escapeHtmlCt(s) { var d = document.createElement('div'); if (s == null) return ''; d.textContent = s; return d.innerHTML; }
+        function syncCtFirstTopicInputId() {
+          document.querySelectorAll('#ct-topic-rows .ct-topic-input').forEach(function (inp, i) {
+            if (i === 0) { inp.id = 'ct-topic-name'; } else { inp.removeAttribute('id'); }
+          });
+        }
+        function updateCtTopicRowUi() {
+          var rows = document.querySelectorAll('#ct-topic-rows .ct-topic-row');
+          var n = rows.length;
+          rows.forEach(function (row) {
+            var btn = row.querySelector('.btn-ct-remove-topic');
+            if (btn) btn.style.display = n > 1 ? '' : 'none';
+          });
+          var note = document.getElementById('ct-multi-topic-note');
+          if (note) note.style.display = n > 1 ? 'block' : 'none';
+          syncCtFirstTopicInputId();
+        }
+        function collectCtTopicNamesStrict() {
+          var rows = document.querySelectorAll('#ct-topic-rows .ct-topic-row');
+          var names = [];
+          var re = /^[a-zA-Z0-9._-]+$/;
+          for (var i = 0; i < rows.length; i++) {
+            var inp = rows[i].querySelector('.ct-topic-input');
+            var t = (inp && inp.value || '').trim();
+            if (rows.length > 1) {
+              if (!t) return { error: 'Fill every topic name or remove empty rows.' };
+              names.push(t);
+            } else if (t) {
+              names.push(t);
+            }
+          }
+          if (names.length === 0) return { error: 'Please enter at least one topic name.' };
+          for (var j = 0; j < names.length; j++) {
+            if (!re.test(names[j])) return { error: 'Invalid topic: ' + names[j] + ' — only letters, numbers, dots, underscores, hyphens.' };
+          }
+          var seen = {};
+          for (var k = 0; k < names.length; k++) {
+            if (seen[names[k]]) return { error: 'Duplicate topic name: ' + names[k] };
+            seen[names[k]] = true;
+          }
+          return { names: names };
+        }
+        function resetCtTopicRows() {
+          var container = document.getElementById('ct-topic-rows');
+          if (!container) return;
+          container.innerHTML = '<div class="ct-topic-row" style="display:flex; flex-wrap:wrap; gap:8px; align-items:center;"><input type="text" id="ct-topic-name" class="ct-topic-input" placeholder="e.g. my-new-topic" style="flex:1; min-width:200px;" /><button type="button" class="btn btn-secondary btn-ct-remove-topic" style="display:none;" title="Remove">−</button></div>';
+          updateCtTopicRowUi();
+        }
+        document.getElementById('btn-ct-add-topic').addEventListener('click', function () {
+          var container = document.getElementById('ct-topic-rows');
+          var row = document.createElement('div');
+          row.className = 'ct-topic-row';
+          row.style.cssText = 'display:flex; flex-wrap:wrap; gap:8px; align-items:center;';
+          row.innerHTML = '<input type="text" class="ct-topic-input" placeholder="e.g. another-topic" style="flex:1; min-width:200px;" /><button type="button" class="btn btn-secondary btn-ct-remove-topic" title="Remove">−</button>';
+          container.appendChild(row);
+          updateCtTopicRowUi();
+        });
+        document.getElementById('ct-topic-rows').addEventListener('click', function (e) {
+          if (!e.target.closest('.btn-ct-remove-topic')) return;
+          if (document.querySelectorAll('#ct-topic-rows .ct-topic-row').length <= 1) return;
+          e.target.closest('.ct-topic-row').remove();
+          updateCtTopicRowUi();
+        });
+        updateCtTopicRowUi();
         function updateCtOnboardTabsVisibility() {
           var show = ctCurrentStep >= 2;
           document.querySelectorAll('#wizard-steps-ct .ct-step-onboard').forEach(function (el) {
@@ -2991,6 +3063,8 @@
             else if (step === 1 && ctTopicCreatedName) op.style.display = 'block';
             else op.style.display = 'none';
           }
+          var addTopicBtn = document.getElementById('btn-ct-add-topic');
+          if (addTopicBtn) addTopicBtn.disabled = !!(step === 1 && ctTopicCreatedName);
           updateCtOnboardTabsVisibility();
           if (step === 4 && typeof syncWizardFieldsIntoAclDesigner === 'function') {
             syncWizardFieldsIntoAclDesigner('ct');
@@ -3002,36 +3076,67 @@
           if (el) { el.textContent = msg || ''; el.style.visibility = msg ? 'visible' : 'hidden'; }
         }
         document.getElementById('btn-ct-create-topic').addEventListener('click', async function () {
-          var topicName = (document.getElementById('ct-topic-name').value || '').trim();
           setCTStepError('ct-step1-error', '');
           var errEl = document.getElementById('ct-create-topic-result');
           errEl.style.display = 'none';
-          if (!topicName) { setCTStepError('ct-step1-error', 'Please enter topic name.'); return; }
-          if (!/^[a-zA-Z0-9._-]+$/.test(topicName)) { setCTStepError('ct-step1-error', 'Topic: only letters, numbers, dots, underscores, hyphens.'); return; }
+          var collected = collectCtTopicNamesStrict();
+          if (collected.error) { setCTStepError('ct-step1-error', collected.error); return; }
+          var names = collected.names;
           var btn = document.getElementById('btn-ct-create-topic');
           btn.disabled = true;
           errEl.style.display = 'block';
-          errEl.innerHTML = 'Creating topic (broker default partitions/replication)...';
+          errEl.innerHTML = names.length > 1
+            ? ('Creating ' + names.length + ' topics (broker default partitions/replication)...')
+            : 'Creating topic (broker default partitions/replication)...';
           try {
-            var res = await fetch('/api/create-topic', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ topic: topicName })
-            });
-            var j = await res.json();
-            if (j.ok) {
-              document.getElementById('ct-topic').value = topicName;
-              ctTopicCreatedName = topicName;
-              errEl.innerHTML = '<span style="color:var(--success)">Topic created: ' + escapeHtmlCt(topicName) + '</span>';
-              errEl.style.display = 'block';
-              showStepCT(1);
+            if (names.length === 1) {
+              var topicName = names[0];
+              var res = await fetch('/api/create-topic', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ topic: topicName })
+              });
+              var j = await res.json();
+              if (j.ok) {
+                document.getElementById('ct-topic').value = topicName;
+                ctTopicCreatedName = topicName;
+                errEl.innerHTML = '<span style="color:var(--success)">Topic created: ' + escapeHtmlCt(topicName) + '</span>';
+                errEl.style.display = 'block';
+                showStepCT(1);
+              } else {
+                var errMsg = (j.error || 'Create topic failed');
+                if (j.detail) errMsg += ': ' + escapeHtmlCt(String(j.detail).slice(0, 200));
+                errEl.innerHTML = '<span style="color:var(--danger)">' + errMsg + '</span>';
+              }
             } else {
-              var errMsg = (j.error || 'Create topic failed');
-              if (j.detail) errMsg += ': ' + escapeHtmlCt(String(j.detail).slice(0, 200));
-              errEl.innerHTML = '<span style="color:var(--danger)">' + errMsg + '</span>';
+              var parts = [];
+              for (var i = 0; i < names.length; i++) {
+                var tn = names[i];
+                try {
+                  var resM = await fetch('/api/create-topic', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ topic: tn })
+                  });
+                  var jm = await resM.json();
+                  if (jm.ok) {
+                    parts.push('<span style="color:var(--success)">✓ ' + escapeHtmlCt(tn) + '</span>');
+                  } else {
+                    var em = (jm.error || 'Create topic failed') + (jm.detail ? ': ' + escapeHtmlCt(String(jm.detail).slice(0, 160)) : '');
+                    parts.push('<span style="color:var(--danger)">✗ ' + escapeHtmlCt(tn) + ' — ' + em + '</span>');
+                  }
+                } catch (ex) {
+                  parts.push('<span style="color:var(--danger)">✗ ' + escapeHtmlCt(tn) + ' — Request failed: ' + escapeHtmlCt(ex.message || ex) + '</span>');
+                }
+              }
+              errEl.innerHTML = '<div style="line-height:1.75;">' + parts.join('<br/>') + '</div>';
+              ctTopicCreatedName = '';
+              document.getElementById('ct-topic').value = '';
+              document.getElementById('ct-onboard-panel').style.display = 'none';
+              showStepCT(1);
             }
           } catch (e) {
-            errEl.innerHTML = '<span style="color:var(--danger)">Request failed: ' + (e.message || e) + '</span>';
+            errEl.innerHTML = '<span style="color:var(--danger)">Request failed: ' + escapeHtmlCt(e.message || e) + '</span>';
           }
           btn.disabled = false;
         });
@@ -3041,7 +3146,7 @@
         });
         document.getElementById('btn-ct-topic-only-done').addEventListener('click', function () {
           ctTopicCreatedName = '';
-          document.getElementById('ct-topic-name').value = '';
+          resetCtTopicRows();
           document.getElementById('ct-topic').value = '';
           var errEl = document.getElementById('ct-create-topic-result');
           errEl.style.display = 'none';
@@ -3277,7 +3382,7 @@
                 });
                 downloadBlock.querySelector('.btn-ct-another').addEventListener('click', function () {
                   ctTopicCreatedName = '';
-                  document.getElementById('ct-topic-name').value = '';
+                  resetCtTopicRows();
                   document.getElementById('ct-system').value = '';
                   document.getElementById('ct-topic').value = '';
                   document.getElementById('ct-username').value = '';
